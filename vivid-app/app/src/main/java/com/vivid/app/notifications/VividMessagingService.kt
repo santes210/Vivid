@@ -1,0 +1,135 @@
+package com.vivid.app.notifications
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
+import com.vivid.app.MainActivity
+import com.vivid.app.R
+
+class VividMessagingService : FirebaseMessagingService() {
+
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        super.onMessageReceived(remoteMessage)
+
+        val title = remoteMessage.notification?.title ?: "Vivid"
+        val body = remoteMessage.notification?.body ?: "Tienes una nueva notificación"
+        val type = remoteMessage.data["type"] ?: "general"
+        val chatId = remoteMessage.data["chatId"]
+
+        when (type) {
+            "message" -> showMessageNotification(title, body, chatId)
+            "like" -> showLikeNotification(title, body)
+            "follow" -> showFollowNotification(title, body)
+            else -> showGeneralNotification(title, body)
+        }
+    }
+
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        // Aquí puedes enviar el token a tu servidor si es necesario
+    }
+
+    private fun showMessageNotification(title: String, body: String, chatId: String?) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("openChat", true)
+            putExtra("chatId", chatId ?: "")
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(this, "messages_channel")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun showLikeNotification(title: String, body: String) {
+        val notification = NotificationCompat.Builder(this, "interactions_channel")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun showFollowNotification(title: String, body: String) {
+        val notification = NotificationCompat.Builder(this, "interactions_channel")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun showGeneralNotification(title: String, body: String) {
+        val notification = NotificationCompat.Builder(this, "general_channel")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannels()
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channels = listOf(
+                NotificationChannel(
+                    "messages_channel",
+                    "Mensajes",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Notificaciones de mensajes directos"
+                },
+                NotificationChannel(
+                    "interactions_channel",
+                    "Interacciones",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Likes, comentarios y seguidores"
+                },
+                NotificationChannel(
+                    "general_channel",
+                    "General",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                )
+            )
+
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            channels.forEach { manager.createNotificationChannel(it) }
+        }
+    }
+}

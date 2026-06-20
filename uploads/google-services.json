@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "952899444057",
+    "project_id": "verigram-c58a6",
+    "storage_bucket": "verigram-c58a6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:952899444057:android:8825dfb5de0fb1bc8e0048",
+        "android_client_info": {
+          "package_name": "com.vivid.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEC51d0IBQ_DdTKQgT4HFSL7gg7LuIU1o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
