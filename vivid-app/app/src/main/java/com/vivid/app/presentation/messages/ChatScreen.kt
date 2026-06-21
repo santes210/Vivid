@@ -26,6 +26,7 @@ fun ChatScreen(
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val messages by viewModel.messages.collectAsState()
+    val canMessage by viewModel.canMessage.collectAsState()
 
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -43,7 +44,26 @@ fun ChatScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(title = { Text(otherUserName) })
 
-        if (messages.isEmpty()) {
+        if (!canMessage) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "No puedes enviar mensajes",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Esta cuenta es privada y no la sigues.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else if (messages.isEmpty()) {
             Box(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
                 contentAlignment = Alignment.Center
@@ -70,31 +90,33 @@ fun ChatScreen(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = messageText,
-                onValueChange = { messageText = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Escribe un mensaje...") },
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(
-                enabled = messageText.isNotBlank() && receiverId.isNotBlank(),
-                onClick = {
-                    val text = messageText.trim()
-                    if (text.isNotBlank()) {
-                        viewModel.sendMessage(chatId, text, receiverId)
-                        messageText = ""
-                    }
-                }
+        if (canMessage) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Enviar")
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Escribe un mensaje...") },
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    enabled = messageText.isNotBlank() && receiverId.isNotBlank(),
+                    onClick = {
+                        val text = messageText.trim()
+                        if (text.isNotBlank()) {
+                            viewModel.sendMessage(chatId, text, receiverId)
+                            messageText = ""
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = "Enviar")
+                }
             }
         }
     }

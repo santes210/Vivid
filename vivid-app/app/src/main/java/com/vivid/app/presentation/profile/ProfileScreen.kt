@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,7 +45,8 @@ data class ProfilePost(
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
-    onEditProfile: () -> Unit = {}
+    onEditProfile: () -> Unit = {},
+    onSettings: () -> Unit = {}
 ) {
     val auth = FirebaseAuth.getInstance()
     val user = auth.currentUser
@@ -111,6 +113,9 @@ fun ProfileScreen(
         TopAppBar(
             title = { Text("Perfil") },
             actions = {
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+                }
                 IconButton(onClick = {
                     auth.signOut()
                     onLogout()
@@ -143,13 +148,21 @@ fun ProfileScreen(
             ) {
                 ProfileStat(profile.postsCount.toString(), "Posts")
                 ProfileStat(profile.followersCount.toString(), "Seguidores")
-                ProfileStat(profile.followingCount.toString(), "Seguidos")
+                ProfileStat(profile.followingCount.toString(), "Siguiendo")
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(onClick = onEditProfile, modifier = Modifier.fillMaxWidth(0.6f)) {
-                Text("Editar perfil")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                Button(onClick = onEditProfile, modifier = Modifier.weight(1f)) {
+                    Text("Editar perfil")
+                }
+                OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f)) {
+                    Text("Ajustes")
+                }
             }
         }
 
