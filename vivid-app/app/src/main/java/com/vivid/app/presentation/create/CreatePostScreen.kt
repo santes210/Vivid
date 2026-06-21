@@ -355,14 +355,21 @@ private suspend fun uploadPostWithCompression(
         onProgress("Imagen comprimida: ${base64SizeKB}KB")
 
         // Paso 2: Preparar datos
+        val db = FirebaseFirestore.getInstance()
+        val userSnapshot = db.collection("users").document(user.uid).get().await()
         val postId = UUID.randomUUID().toString()
-        val username = user.displayName ?: user.email?.substringBefore("@") ?: "usuario"
-        val profilePic = user.photoUrl?.toString() ?: ""
+        val username = userSnapshot.getString("username")
+            ?: user.displayName
+            ?: user.email?.substringBefore("@")
+            ?: "usuario"
+        val profilePic = userSnapshot.getString("avatarUrl") ?: user.photoUrl?.toString().orEmpty()
+        val profilePicBase64 = userSnapshot.getString("avatarBase64").orEmpty()
 
         val postData = hashMapOf(
             "userId" to user.uid,
             "username" to username,
             "userProfilePicture" to profilePic,
+            "userProfilePictureBase64" to profilePicBase64,
             "imageBase64" to compressedBase64,
             "caption" to caption,
             "likesCount" to 0,
@@ -373,7 +380,6 @@ private suspend fun uploadPostWithCompression(
         // Paso 3: Subir a Firestore (SIN Firebase Storage!)
         onProgress("Guardando en la nube...")
         return@withContext try {
-            val db = FirebaseFirestore.getInstance()
             val task = db.collection("posts").document(postId).set(postData)
             
             // Esperar a que Firestore confirme

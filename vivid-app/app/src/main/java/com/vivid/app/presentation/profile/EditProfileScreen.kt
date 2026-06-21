@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,8 @@ fun EditProfileScreen(
     var bio by remember { mutableStateOf("") }
     var username by remember { mutableStateOf(user?.email?.substringBefore("@") ?: "") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
+    var currentAvatarUrl by remember { mutableStateOf(user?.photoUrl?.toString().orEmpty()) }
+    var currentAvatarBase64 by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -52,6 +55,8 @@ fun EditProfileScreen(
                     if (!existingUsername.isNullOrBlank()) username = existingUsername
                     val existingName = doc.getString("displayName")
                     if (!existingName.isNullOrBlank()) displayName = existingName
+                    currentAvatarUrl = doc.getString("avatarUrl").orEmpty()
+                    currentAvatarBase64 = doc.getString("avatarBase64").orEmpty()
                 }
         }
     }
@@ -86,7 +91,8 @@ fun EditProfileScreen(
                 // Show current from Firestore or fallback
                 ProfileAvatarPreview(
                     displayName = displayName,
-                    currentUser = user
+                    avatarUrl = currentAvatarUrl,
+                    avatarBase64 = currentAvatarBase64
                 )
             }
             FloatingActionButton(
@@ -180,8 +186,29 @@ fun EditProfileScreen(
 }
 
 @Composable
-private fun ProfileAvatarPreview(displayName: String, currentUser: com.google.firebase.auth.FirebaseUser?) {
-    val avatarUrl = currentUser?.photoUrl?.toString().orEmpty()
+private fun ProfileAvatarPreview(displayName: String, avatarUrl: String, avatarBase64: String) {
+    if (avatarBase64.isNotBlank()) {
+        var bitmap by remember(avatarBase64) { mutableStateOf<android.graphics.Bitmap?>(null) }
+        LaunchedEffect(avatarBase64) {
+            bitmap = try {
+                val bytes = android.util.Base64.decode(avatarBase64, android.util.Base64.NO_WRAP)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        if (bitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
     if (avatarUrl.isNotBlank()) {
         AsyncImage(
             model = avatarUrl,
@@ -253,13 +280,13 @@ private suspend fun saveProfile(
 
             db.collection("users").document(user.uid)
                 .set(baseData, com.google.firebase.firestore.SetOptions.merge())
-                .addOnSuccessListener { onSuccess() }
-                .addOnFailureListener { e -> onError(e.message ?: "No se pudo guardar el perfil") }
+                .await()
+            onSuccess()
         } else {
             db.collection("users").document(user.uid)
                 .set(baseData, com.google.firebase.firestore.SetOptions.merge())
-                .addOnSuccessListener { onSuccess() }
-                .addOnFailureListener { e -> onError(e.message ?: "No se pudo guardar el perfil") }
+                .await()
+            onSuccess()
         }
     } catch (e: Exception) {
         onError(e.message ?: "Error al guardar")

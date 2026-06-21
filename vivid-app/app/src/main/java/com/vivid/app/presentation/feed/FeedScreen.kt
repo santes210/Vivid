@@ -35,6 +35,7 @@ data class PostData(
     val userId: String,
     val username: String,
     val userProfilePicture: String,
+    val userProfilePictureBase64: String = "",
     val imageUrl: String = "",
     val imageBase64: String = "",
     val caption: String,
@@ -142,6 +143,7 @@ private fun loadPostsFromFirebase(
                     userId = doc.getString("userId") ?: "",
                     username = doc.getString("username") ?: "usuario",
                     userProfilePicture = doc.getString("userProfilePicture") ?: "",
+                    userProfilePictureBase64 = doc.getString("userProfilePictureBase64") ?: "",
                     imageUrl = doc.getString("imageUrl") ?: "",
                     imageBase64 = doc.getString("imageBase64") ?: "",
                     caption = doc.getString("caption") ?: "",
@@ -180,30 +182,7 @@ fun PostItem(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (post.userProfilePicture.isNotBlank()) {
-                AsyncImage(
-                    model = post.userProfilePicture,
-                    contentDescription = "Avatar",
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
+            PostAuthorAvatar(post = post)
             Spacer(modifier = Modifier.width(12.dp))
             Text(post.username, style = MaterialTheme.typography.titleMedium)
         }
@@ -419,6 +398,57 @@ private fun PostCommentsSheet(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun PostAuthorAvatar(post: PostData) {
+    if (post.userProfilePictureBase64.isNotBlank()) {
+        var bitmap by remember(post.userProfilePictureBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(post.userProfilePictureBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(post.userProfilePictureBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = "Avatar",
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
+
+    if (post.userProfilePicture.isNotBlank()) {
+        AsyncImage(
+            model = post.userProfilePicture,
+            contentDescription = "Avatar",
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
         }
     }
 }

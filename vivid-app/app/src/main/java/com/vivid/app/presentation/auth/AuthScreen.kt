@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
@@ -41,7 +42,7 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Error al iniciar sesión"
+                    error = e.toReadableAuthMessage()
                 )
             }
         }
@@ -64,7 +65,7 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Error al registrarse"
+                    error = e.toReadableAuthMessage()
                 )
             }
         }
@@ -111,6 +112,13 @@ data class AuthUiState(
     val isSuccess: Boolean = false,
     val error: String? = null
 )
+
+private fun Exception.toReadableAuthMessage(): String {
+    return when (this) {
+        is FirebaseNetworkException -> "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
+        else -> message ?: "Ocurrió un error de autenticación."
+    }
+}
 
 @Composable
 fun AuthScreen(
