@@ -62,13 +62,23 @@ fun ProfileScreen(
     val currentUserId = auth.currentUser?.uid.orEmpty()
     val isOwnProfile = userId == currentUserId
     val db = FirebaseFirestore.getInstance()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
     val isFollowing by viewModel.isFollowing.collectAsState()
+    val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
+    val followActionError by viewModel.followActionError.collectAsState()
 
     LaunchedEffect(userId) {
         viewModel.checkFollowStatus(userId)
+    }
+
+    LaunchedEffect(followActionError) {
+        followActionError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearFollowActionError()
+        }
     }
 
     DisposableEffect(userId) {
@@ -112,107 +122,125 @@ fun ProfileScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(if (isOwnProfile) "Mi Perfil" else "@${profile.username}") },
-            navigationIcon = {
-                if (!isOwnProfile) {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text(if (isOwnProfile) "Mi Perfil" else "@${profile.username}") },
+                navigationIcon = {
+                    if (!isOwnProfile) {
+                        IconButton(onClick = onLogout) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        }
+                    }
+                },
+                actions = {
+                    if (isOwnProfile) {
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+                        }
+                        IconButton(onClick = {
+                            auth.signOut()
+                            onLogout()
+                        }) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión")
+                        }
                     }
                 }
-            },
-            actions = {
-                if (isOwnProfile) {
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Ajustes")
-                    }
-                    IconButton(onClick = {
-                        auth.signOut()
-                        onLogout()
-                    }) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión")
-                    }
-                }
-            }
-        )
-
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = profile.displayName,
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Text("@${profile.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                modifier = Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                ProfileStat(profile.postsCount.toString(), "Posts")
-                ProfileStat(profile.followersCount.toString(), "Seguidores")
-                ProfileStat(profile.followingCount.toString(), "Siguiendo")
-            }
+                ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = profile.displayName,
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text("@${profile.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            if (isOwnProfile) {
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Button(onClick = onEditProfile, modifier = Modifier.weight(1f)) {
-                        Text("Editar perfil")
-                    }
-                    OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f)) {
-                        Text("Ajustes")
-                    }
+                    ProfileStat(profile.postsCount.toString(), "Posts")
+                    ProfileStat(profile.followersCount.toString(), "Seguidores")
+                    ProfileStat(profile.followingCount.toString(), "Siguiendo")
                 }
-            } else {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth(0.8f)
-                ) {
-                    Button(
-                        onClick = { viewModel.toggleFollow(userId) },
-                        modifier = Modifier.weight(1f),
-                        colors = if (isFollowing) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.buttonColors()
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (isOwnProfile) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth(0.8f)
                     ) {
-                        Text(if (isFollowing) "Siguiendo" else "Seguir")
+                        Button(onClick = onEditProfile, modifier = Modifier.weight(1f)) {
+                            Text("Editar perfil")
+                        }
+                        OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f)) {
+                            Text("Ajustes")
+                        }
                     }
-                    
-                    if (!profile.isPrivate || isFollowing) {
-                        OutlinedButton(
-                            onClick = {
-                                val chatId = ChatRepository.buildChatId(currentUserId, userId)
-                                onNavigateToChat(chatId, userId, profile.displayName)
-                            }, 
-                            modifier = Modifier.weight(1f)
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth(0.8f)
+                    ) {
+                        Button(
+                            onClick = { viewModel.toggleFollow(userId) },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isFollowActionLoading,
+                            colors = if (isFollowing) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.buttonColors()
                         ) {
-                            Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Mensaje")
+                            if (isFollowActionLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            } else {
+                                Text(if (isFollowing) "Siguiendo" else "Seguir")
+                            }
+                        }
+
+                        if (!profile.isPrivate || isFollowing) {
+                            OutlinedButton(
+                                onClick = {
+                                    val chatId = ChatRepository.buildChatId(currentUserId, userId)
+                                    onNavigateToChat(chatId, userId, profile.displayName)
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Mensaje")
+                            }
                         }
                     }
                 }
             }
-        }
 
-        HorizontalDivider()
+            HorizontalDivider()
 
-        if (profile.isPrivate && !isOwnProfile && !isFollowing) {
-            PrivateAccountOverlay()
-        } else {
-            ProfilePostsGrid(posts)
+            if (profile.isPrivate && !isOwnProfile && !isFollowing) {
+                PrivateAccountOverlay()
+            } else {
+                ProfilePostsGrid(posts)
+            }
         }
     }
 }
