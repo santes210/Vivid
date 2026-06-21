@@ -25,8 +25,10 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-    val messages by viewModel.messages.collectAsState()
-    val canMessage by viewModel.canMessage.collectAsState()
+
+    // Explicit initial values to fix Kotlin type inference for collectAsState
+    val messages: List<Message> by viewModel.messages.collectAsState(initial = emptyList())
+    val canMessage: Boolean by viewModel.canMessage.collectAsState(initial = true)
 
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
