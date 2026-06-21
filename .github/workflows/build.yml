@@ -3,11 +3,20 @@ name: Build Vivid APK
 on:
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Refuerza la memoria aunque Gradle no alcance a leer gradle.properties.
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC"
+      JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
 
     steps:
       - name: Checkout code
@@ -22,28 +31,25 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 35 + Build Tools
+      - name: Install Android SDK packages
         run: |
-          sdkmanager "platforms;android-35" "build-tools;34.0.0"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
-      - name: Setup Gradle
+      - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.9
-
-      - name: Accept licenses
-        run: |
-          yes | sdkmanager --licenses || true
 
       - name: Build Debug APK
+        working-directory: vivid-app
         run: |
-          cd vivid-app
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --max-workers=2 --stacktrace
+          ./gradlew --version
+          ./gradlew clean assembleDebug --no-daemon --max-workers=1 --stacktrace
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: vivid-debug-apk
-          path: vivid-app/app/build/outputs/apk/debug/app-debug.apk
+          path: vivid-app/app/build/outputs/apk/debug/*.apk
           retention-days: 30
