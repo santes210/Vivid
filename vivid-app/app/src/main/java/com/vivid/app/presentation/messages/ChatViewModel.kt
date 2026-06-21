@@ -1,5 +1,6 @@
 package com.vivid.app.presentation.messages
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vivid.app.data.local.entity.ChatEntity
@@ -11,7 +12,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     val chats: StateFlow<List<ChatEntity>> = chatRepository.getChatsFlow()
@@ -24,7 +26,9 @@ class ChatViewModel @Inject constructor(
 
     fun openChat(chatId: String, receiverId: String, receiverName: String) {
         viewModelScope.launch {
-            chatRepository.ensureChatExists(chatId, receiverId, receiverName, "")
+            val avatarBase64 = savedStateHandle.get<String>("avatarBase64") ?: ""
+            val avatarUrl = savedStateHandle.get<String>("avatarUrl") ?: ""
+            chatRepository.ensureChatExists(chatId, receiverId, receiverName, avatarUrl, avatarBase64)
         }
         loadMessages(chatId)
     }

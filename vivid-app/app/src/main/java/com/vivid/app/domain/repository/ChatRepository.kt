@@ -28,13 +28,13 @@ class ChatRepository @Inject constructor(
 
     fun getChatsFlow(): Flow<List<ChatEntity>> = chatDao.getAllChats()
 
-    suspend fun createOrGetChat(otherUserId: String, otherUserName: String, avatarUrl: String): String {
+    suspend fun createOrGetChat(otherUserId: String, otherUserName: String, avatarUrl: String, avatarBase64: String = ""): String {
         val chatId = buildChatId(currentUserId, otherUserId)
-        ensureChatExists(chatId, otherUserId, otherUserName, avatarUrl)
+        ensureChatExists(chatId, otherUserId, otherUserName, avatarUrl, avatarBase64)
         return chatId
     }
 
-    suspend fun ensureChatExists(chatId: String, otherUserId: String, otherUserName: String, avatarUrl: String) {
+    suspend fun ensureChatExists(chatId: String, otherUserId: String, otherUserName: String, avatarUrl: String, avatarBase64: String = "") {
         if (currentUserId.isBlank() || otherUserId.isBlank()) return
 
         val currentUser = auth.currentUser
@@ -42,6 +42,7 @@ class ChatRepository @Inject constructor(
             ?: currentUser?.email?.substringBefore("@")
             ?: "Usuario"
         val currentAvatar = currentUser?.photoUrl?.toString().orEmpty()
+        val currentBase64 = ""  // can fetch from Firestore if needed in future
 
         val now = System.currentTimeMillis()
         chatDao.insertOrUpdateChat(
@@ -65,6 +66,10 @@ class ChatRepository @Inject constructor(
                 "participantAvatars" to mapOf(
                     currentUserId to currentAvatar,
                     otherUserId to avatarUrl
+                ),
+                "participantAvatarBase64s" to mapOf(
+                    currentUserId to currentBase64,
+                    otherUserId to avatarBase64
                 ),
                 "createdAt" to now,
                 "updatedAt" to now

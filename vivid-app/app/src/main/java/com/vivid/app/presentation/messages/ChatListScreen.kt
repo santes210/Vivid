@@ -1,5 +1,9 @@
 package com.vivid.app.presentation.messages
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -26,7 +31,8 @@ data class ChatPreview(
     val otherUserName: String,
     val lastMessage: String,
     val timestamp: Long,
-    val avatarUrl: String = ""
+    val avatarUrl: String = "",
+    val avatarBase64: String = ""
 )
 
 @Composable
@@ -64,6 +70,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
 
                         val participantNames = doc.get("participantNames") as? Map<*, *>
                         val participantAvatars = doc.get("participantAvatars") as? Map<*, *>
+                        val participantAvatarBase64s = doc.get("participantAvatarBase64s") as? Map<*, *>
 
                         ChatPreview(
                             chatId = doc.id,
@@ -71,7 +78,8 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                             otherUserName = participantNames?.get(otherUserId) as? String ?: "Usuario",
                             lastMessage = doc.getString("lastMessage").orEmpty(),
                             timestamp = doc.getLong("lastTimestamp") ?: 0L,
-                            avatarUrl = participantAvatars?.get(otherUserId) as? String ?: ""
+                            avatarUrl = participantAvatars?.get(otherUserId) as? String ?: "",
+                            avatarBase64 = participantAvatarBase64s?.get(otherUserId) as? String ?: ""
                         )
                     }
                     chats = previews.sortedByDescending { it.timestamp }
@@ -148,30 +156,7 @@ fun ChatPreviewItem(chat: ChatPreview, onClick: () -> Unit) {
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (chat.avatarUrl.isNotBlank()) {
-            AsyncImage(
-                model = chat.avatarUrl,
-                contentDescription = chat.otherUserName,
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    chat.otherUserName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-        }
+        AvatarForChat(chat)
 
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -188,6 +173,54 @@ fun ChatPreviewItem(chat: ChatPreview, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun AvatarForChat(chat: ChatPreview) {
+    if (chat.avatarBase64.isNotBlank()) {
+        var bitmap by remember(chat.avatarBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(chat.avatarBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(chat.avatarBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) { null }
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = chat.otherUserName,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
+    if (chat.avatarUrl.isNotBlank()) {
+        AsyncImage(
+            model = chat.avatarUrl,
+            contentDescription = chat.otherUserName,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                chat.otherUserName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
     }
 }
 

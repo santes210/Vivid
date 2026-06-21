@@ -143,7 +143,11 @@ fun VividNavigation(navController: NavHostController) {
                 val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
                 val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""
                 val receiverName = backStackEntry.arguments?.getString("receiverName") ?: "Usuario"
-                ChatScreen(chatId = chatId, receiverId = receiverId, otherUserName = receiverName)
+                ChatScreen(
+                    chatId = chatId, 
+                    receiverId = receiverId, 
+                    otherUserName = receiverName
+                )
             }
             composable("story_viewer/{index}") { backStackEntry ->
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 0
@@ -158,5 +162,8 @@ private fun NavHostController.openChatWithUser(user: SearchUser) {
     if (currentUserId.isBlank() || user.uid.isBlank()) return
     val chatId = ChatRepository.buildChatId(currentUserId, user.uid)
     val name = user.displayName.ifBlank { user.username.ifBlank { "Usuario" } }
+    // Store avatarBase64 and avatarUrl so ChatViewModel/ChatScreen can use it if needed
+    previousBackStackEntry?.savedStateHandle?.set("avatarBase64", user.avatarBase64)
+    previousBackStackEntry?.savedStateHandle?.set("avatarUrl", user.avatarUrl)
     navigate("chat/${Uri.encode(chatId)}/${Uri.encode(user.uid)}/${Uri.encode(name)}")
 }

@@ -29,6 +29,7 @@ data class ProfileUiState(
     val username: String = "vivid_user",
     val displayName: String = "Usuario Vivid",
     val avatarUrl: String = "",
+    val avatarBase64: String = "",
     val postsCount: Int = 0,
     val followersCount: Int = 0,
     val followingCount: Int = 0
@@ -73,6 +74,7 @@ fun ProfileScreen(
                         username = data["username"] as? String ?: user?.email?.substringBefore("@") ?: "vivid_user",
                         displayName = data["displayName"] as? String ?: user?.displayName ?: "Usuario Vivid",
                         avatarUrl = data["avatarUrl"] as? String ?: user?.photoUrl?.toString().orEmpty(),
+                        avatarBase64 = data["avatarBase64"] as? String ?: "",
                         postsCount = (data["postsCount"] as? Long)?.toInt() ?: (data["postsCount"] as? Int ?: 0),
                         followersCount = (data["followersCount"] as? Long)?.toInt() ?: (data["followersCount"] as? Int ?: 0),
                         followingCount = (data["followingCount"] as? Long)?.toInt() ?: (data["followingCount"] as? Int ?: 0)
@@ -124,7 +126,7 @@ fun ProfileScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ProfileAvatar(profile.displayName, profile.avatarUrl)
+            ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -184,8 +186,28 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileAvatar(displayName: String, avatarUrl: String) {
-    if (avatarUrl.isNotBlank()) {
+private fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64: String) {
+    if (avatarBase64.isNotBlank()) {
+        var bitmap by remember(avatarBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(avatarBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(avatarBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) { null }
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            fallbackAvatar(displayName)
+        }
+    } else if (avatarUrl.isNotBlank()) {
         AsyncImage(
             model = avatarUrl,
             contentDescription = "Foto de perfil",
@@ -195,19 +217,24 @@ private fun ProfileAvatar(displayName: String, avatarUrl: String) {
             contentScale = ContentScale.Crop
         )
     } else {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
+        fallbackAvatar(displayName)
+    }
+}
+
+@Composable
+private fun fallbackAvatar(displayName: String) {
+    Box(
+        modifier = Modifier
+            .size(120.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
+            style = MaterialTheme.typography.displayMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
     }
 }
 

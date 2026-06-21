@@ -1,5 +1,9 @@
 package com.vivid.app.presentation.search
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -26,7 +31,8 @@ data class SearchUser(
     val uid: String,
     val username: String,
     val displayName: String,
-    val avatarUrl: String,
+    val avatarUrl: String = "",
+    val avatarBase64: String = "",
     val isFollowing: Boolean = false
 )
 
@@ -72,6 +78,7 @@ fun SearchScreen(
                     username = doc.getString("username") ?: "usuario",
                     displayName = doc.getString("displayName") ?: doc.getString("username") ?: "Usuario",
                     avatarUrl = doc.getString("avatarUrl").orEmpty(),
+                    avatarBase64 = doc.getString("avatarBase64").orEmpty(),
                     isFollowing = false
                 )
             }
@@ -149,30 +156,7 @@ fun UserSearchItem(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (user.avatarUrl.isNotBlank()) {
-            AsyncImage(
-                model = user.avatarUrl,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    user.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-        }
+        AvatarForSearch(user)
 
         Spacer(modifier = Modifier.width(16.dp))
 
@@ -188,6 +172,54 @@ fun UserSearchItem(
             Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("Mensaje")
+        }
+    }
+}
+
+@Composable
+private fun AvatarForSearch(user: SearchUser) {
+    if (user.avatarBase64.isNotBlank()) {
+        var bitmap by remember(user.avatarBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(user.avatarBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(user.avatarBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) { null }
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
+    if (user.avatarUrl.isNotBlank()) {
+        AsyncImage(
+            model = user.avatarUrl,
+            contentDescription = null,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                user.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.titleMedium
+            )
         }
     }
 }

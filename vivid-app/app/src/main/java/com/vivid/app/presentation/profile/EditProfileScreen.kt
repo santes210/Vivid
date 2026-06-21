@@ -1,5 +1,6 @@
 package com.vivid.app.presentation.profile
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,25 +15,46 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.vivid.app.util.ImageCompressor
+import kotlinx.coroutines.launch
 
 @Composable
 fun EditProfileScreen(
     onSave: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val user = FirebaseAuth.getInstance().currentUser
+
     var displayName by remember { mutableStateOf(user?.displayName ?: user?.email?.substringBefore("@") ?: "") }
     var bio by remember { mutableStateOf("") }
     var username by remember { mutableStateOf(user?.email?.substringBefore("@") ?: "") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Load existing bio if present
+    LaunchedEffect(user?.uid) {
+        user?.uid?.let { uid ->
+            FirebaseFirestore.getInstance().collection("users").document(uid)
+                .get()
+                .addOnSuccessListener { doc ->
+                    bio = doc.getString("bio") ?: ""
+                    val existingUsername = doc.getString("username")
+                    if (!existingUsername.isNullOrBlank()) username = existingUsername
+                    val existingName = doc.getString("displayName")
+                    if (!existingName.isNullOrBlank()) displayName = existingName
+                }
+        }
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -51,9 +73,9 @@ fun EditProfileScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Box(contentAlignment = Alignment.BottomEnd) {
-            if (profileImageUri != null || user?.photoUrl != null) {
+            if (profileImageUri != null) {
                 AsyncImage(
-                    model = profileImageUri ?: user?.photoUrl?.toString(),
+                    model = profileImageUri,
                     contentDescription = "Foto de perfil",
                     modifier = Modifier
                         .size(120.dp)
@@ -61,25 +83,18 @@ fun EditProfileScreen(
                     contentScale = ContentScale.Crop
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
-                        style = MaterialTheme.typography.displayMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                // Show current from Firestore or fallback
+                ProfileAvatarPreview(
+                    displayName = displayName,
+                    currentUser = user
+                )
             }
             FloatingActionButton(
                 onClick = { imagePicker.launch("image/*") },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(36.dp),
+                containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Edit, contentDescription = null)
+                Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
 
@@ -136,17 +151,20 @@ fun EditProfileScreen(
                 onClick = {
                     isSaving = true
                     errorMessage = null
-                    saveProfile(
-                        displayName = displayName.trim(),
-                        bio = bio.trim(),
-                        username = username.trim(),
-                        imageUri = profileImageUri,
-                        onSuccess = onSave,
-                        onError = { message ->
-                            errorMessage = message
-                            isSaving = false
-                        }
-                    )
+                    scope.launch {
+                        saveProfile(
+                            context = context,
+                            displayName = displayName.trim(),
+                            bio = bio.trim(),
+                            username = username.trim(),
+                            imageUri = profileImageUri,
+                            onSuccess = onSave,
+                            onError = { message ->
+                                errorMessage = message
+                                isSaving = false
+                            }
+                        )
+                    }
                 },
                 modifier = Modifier.weight(1f),
                 enabled = !isSaving && displayName.isNotBlank() && username.isNotBlank()
@@ -161,7 +179,37 @@ fun EditProfileScreen(
     }
 }
 
-private fun saveProfile(
+@Composable
+private fun ProfileAvatarPreview(displayName: String, currentUser: com.google.firebase.auth.FirebaseUser?) {
+    val avatarUrl = currentUser?.photoUrl?.toString().orEmpty()
+    if (avatarUrl.isNotBlank()) {
+        AsyncImage(
+            model = avatarUrl,
+            contentDescription = "Foto de perfil",
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
+                style = MaterialTheme.typography.displayMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+private suspend fun saveProfile(
+    context: Context,
     displayName: String,
     bio: String,
     username: String,
@@ -170,7 +218,7 @@ private fun saveProfile(
     onError: (String) -> Unit
 ) {
     val user = FirebaseAuth.getInstance().currentUser ?: return onError("No hay sesión iniciada")
-    val storage = FirebaseStorage.getInstance()
+    val db = FirebaseFirestore.getInstance()
 
     val baseData = mutableMapOf<String, Any>(
         "uid" to user.uid,
@@ -183,37 +231,37 @@ private fun saveProfile(
         "updatedAt" to System.currentTimeMillis()
     )
 
-    user.updateProfile(
-        UserProfileChangeRequest.Builder()
-            .setDisplayName(displayName)
-            .build()
-    )
+    try {
+        user.updateProfile(
+            UserProfileChangeRequest.Builder()
+                .setDisplayName(displayName)
+                .build()
+        ).await()
 
-    if (imageUri != null) {
-        val ref = storage.reference.child("profile_pictures/${user.uid}.jpg")
-        ref.putFile(imageUri)
-            .addOnSuccessListener {
-                ref.downloadUrl.addOnSuccessListener { url ->
-                    baseData["avatarUrl"] = url.toString()
-                    updateFirestore(user.uid, baseData, onSuccess, onError)
-                }.addOnFailureListener { onError(it.message ?: "No se pudo obtener la imagen") }
+        if (imageUri != null) {
+            // COMPRESS LIKE POSTS
+            val compressedBase64 = ImageCompressor.compressToBase64(imageUri, context)
+            if (compressedBase64.isNullOrEmpty()) {
+                onError("No se pudo comprimir la foto de perfil")
+                return
             }
-            .addOnFailureListener { onError(it.message ?: "No se pudo subir la imagen") }
-    } else {
-        updateFirestore(user.uid, baseData, onSuccess, onError)
-    }
-}
 
-private fun updateFirestore(
-    uid: String,
-    data: Map<String, Any>,
-    onSuccess: () -> Unit,
-    onError: (String) -> Unit
-) {
-    FirebaseFirestore.getInstance()
-        .collection("users")
-        .document(uid)
-        .set(data, com.google.firebase.firestore.SetOptions.merge())
-        .addOnSuccessListener { onSuccess() }
-        .addOnFailureListener { onError(it.message ?: "No se pudo guardar el perfil") }
+            // Store as base64 (same as posts)
+            baseData["avatarBase64"] = compressedBase64
+            // Also keep a placeholder for old compatibility
+            baseData["avatarUrl"] = ""
+
+            db.collection("users").document(user.uid)
+                .set(baseData, com.google.firebase.firestore.SetOptions.merge())
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { e -> onError(e.message ?: "No se pudo guardar el perfil") }
+        } else {
+            db.collection("users").document(user.uid)
+                .set(baseData, com.google.firebase.firestore.SetOptions.merge())
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { e -> onError(e.message ?: "No se pudo guardar el perfil") }
+        }
+    } catch (e: Exception) {
+        onError(e.message ?: "Error al guardar")
+    }
 }
