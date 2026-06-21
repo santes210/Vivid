@@ -22,7 +22,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
