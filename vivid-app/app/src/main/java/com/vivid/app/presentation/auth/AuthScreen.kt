@@ -13,6 +13,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +24,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -32,7 +35,8 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                auth.signInWithEmailAndPassword(email, password).await()
+                auth.signInWithEmailAndPassword(email.trim(), password).await()
+                ensureUserProfile()
                 _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -47,7 +51,15 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                auth.createUserWithEmailAndPassword(email, password).await()
+                val cleanEmail = email.trim()
+                val cleanUsername = username.trim().ifBlank { cleanEmail.substringBefore("@") }
+                val result = auth.createUserWithEmailAndPassword(cleanEmail, password).await()
+                result.user?.updateProfile(
+                    UserProfileChangeRequest.Builder()
+                        .setDisplayName(cleanUsername)
+                        .build()
+                )?.await()
+                ensureUserProfile(cleanUsername)
                 _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -56,6 +68,37 @@ class AuthViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private suspend fun ensureUserProfile(usernameOverride: String? = null) {
+        val user = auth.currentUser ?: return
+        val username = usernameOverride
+            ?: user.displayName
+            ?: user.email?.substringBefore("@")
+            ?: "usuario"
+
+        val userRef = firestore.collection("users").document(user.uid)
+        val snapshot = userRef.get().await()
+        val existing = snapshot.data.orEmpty()
+
+        userRef.set(
+            mapOf(
+                "uid" to user.uid,
+                "username" to (existing["username"] as? String ?: username),
+                "usernameLower" to (existing["usernameLower"] as? String ?: username.lowercase()),
+                "displayName" to (existing["displayName"] as? String ?: username),
+                "displayNameLower" to (existing["displayNameLower"] as? String ?: username.lowercase()),
+                "email" to (user.email ?: ""),
+                "avatarUrl" to (existing["avatarUrl"] as? String ?: user.photoUrl?.toString().orEmpty()),
+                "bio" to (existing["bio"] as? String ?: ""),
+                "followersCount" to (existing["followersCount"] ?: 0),
+                "followingCount" to (existing["followingCount"] ?: 0),
+                "postsCount" to (existing["postsCount"] ?: 0),
+                "createdAt" to (existing["createdAt"] ?: System.currentTimeMillis()),
+                "updatedAt" to System.currentTimeMillis()
+            ),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).await()
     }
 
     fun clearError() {
@@ -112,7 +155,8 @@ fun AuthScreen(
                 value = username,
                 onValueChange = { username = it },
                 label = { Text("Nombre de usuario") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -122,7 +166,8 @@ fun AuthScreen(
             onValueChange = { email = it },
             label = { Text("Email") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -132,7 +177,8 @@ fun AuthScreen(
             label = { Text("Contraseña") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -157,7 +203,7 @@ fun AuthScreen(
 
         TextButton(onClick = { isLoginMode = !isLoginMode }) {
             Text(
-                if (isLoginMode) "¿No tienes cuenta? Regístrate" 
+                if (isLoginMode) "¿No tienes cuenta? Regístrate"
                 else "¿Ya tienes cuenta? Inicia sesión"
             )
         }

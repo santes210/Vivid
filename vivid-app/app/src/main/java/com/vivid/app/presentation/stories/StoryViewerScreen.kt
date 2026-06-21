@@ -105,9 +105,9 @@ fun StoryViewerScreen(
             }
         }
 
-        // Story content (demo image)
+        // Story content real desde Firestore
         AsyncImage(
-            model = currentStory.avatarUrl.replace("64", "800"),
+            model = currentStory.mediaUrl.ifBlank { currentStory.avatarUrl },
             contentDescription = "Story",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop

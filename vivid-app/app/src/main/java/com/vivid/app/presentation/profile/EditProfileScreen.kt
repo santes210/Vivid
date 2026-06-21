@@ -3,10 +3,11 @@ package com.vivid.app.presentation.profile
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,9 +17,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.launch
 
 @Composable
 fun EditProfileScreen(
@@ -26,15 +27,12 @@ fun EditProfileScreen(
     onCancel: () -> Unit
 ) {
     val user = FirebaseAuth.getInstance().currentUser
-    val db = FirebaseFirestore.getInstance()
-    val storage = FirebaseStorage.getInstance()
-    val scope = rememberCoroutineScope()
-
-    var displayName by remember { mutableStateOf(user?.displayName ?: "") }
+    var displayName by remember { mutableStateOf(user?.displayName ?: user?.email?.substringBefore("@") ?: "") }
     var bio by remember { mutableStateOf("") }
     var username by remember { mutableStateOf(user?.email?.substringBefore("@") ?: "") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
     var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -52,16 +50,31 @@ fun EditProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Profile picture
         Box(contentAlignment = Alignment.BottomEnd) {
-            AsyncImage(
-                model = profileImageUri ?: user?.photoUrl?.toString() ?: "https://picsum.photos/id/1011/120/120",
-                contentDescription = "Foto de perfil",
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
+            if (profileImageUri != null || user?.photoUrl != null) {
+                AsyncImage(
+                    model = profileImageUri ?: user?.photoUrl?.toString(),
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
+                        style = MaterialTheme.typography.displayMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
             FloatingActionButton(
                 onClick = { imagePicker.launch("image/*") },
                 modifier = Modifier.size(36.dp)
@@ -76,7 +89,8 @@ fun EditProfileScreen(
             value = displayName,
             onValueChange = { displayName = it },
             label = { Text("Nombre") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -86,7 +100,8 @@ fun EditProfileScreen(
             onValueChange = { username = it },
             label = { Text("Nombre de usuario") },
             modifier = Modifier.fillMaxWidth(),
-            prefix = { Text("@") }
+            prefix = { Text("@") },
+            singleLine = true
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -98,6 +113,11 @@ fun EditProfileScreen(
             modifier = Modifier.fillMaxWidth(),
             maxLines = 3
         )
+
+        errorMessage?.let {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -115,18 +135,21 @@ fun EditProfileScreen(
             Button(
                 onClick = {
                     isSaving = true
-                    scope.launch {
-                        saveProfile(
-                            displayName = displayName,
-                            bio = bio,
-                            username = username,
-                            imageUri = profileImageUri,
-                            onSuccess = onSave
-                        )
-                    }
+                    errorMessage = null
+                    saveProfile(
+                        displayName = displayName.trim(),
+                        bio = bio.trim(),
+                        username = username.trim(),
+                        imageUri = profileImageUri,
+                        onSuccess = onSave,
+                        onError = { message ->
+                            errorMessage = message
+                            isSaving = false
+                        }
+                    )
                 },
                 modifier = Modifier.weight(1f),
-                enabled = !isSaving
+                enabled = !isSaving && displayName.isNotBlank() && username.isNotBlank()
             ) {
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -143,16 +166,27 @@ private fun saveProfile(
     bio: String,
     username: String,
     imageUri: Uri?,
-    onSuccess: () -> Unit
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit
 ) {
-    val user = FirebaseAuth.getInstance().currentUser ?: return
-    val db = FirebaseFirestore.getInstance()
+    val user = FirebaseAuth.getInstance().currentUser ?: return onError("No hay sesión iniciada")
     val storage = FirebaseStorage.getInstance()
 
-    val userData = mutableMapOf<String, Any>(
+    val baseData = mutableMapOf<String, Any>(
+        "uid" to user.uid,
         "displayName" to displayName,
+        "displayNameLower" to displayName.lowercase(),
         "bio" to bio,
-        "username" to username
+        "username" to username,
+        "usernameLower" to username.lowercase(),
+        "email" to (user.email ?: ""),
+        "updatedAt" to System.currentTimeMillis()
+    )
+
+    user.updateProfile(
+        UserProfileChangeRequest.Builder()
+            .setDisplayName(displayName)
+            .build()
     )
 
     if (imageUri != null) {
@@ -160,23 +194,26 @@ private fun saveProfile(
         ref.putFile(imageUri)
             .addOnSuccessListener {
                 ref.downloadUrl.addOnSuccessListener { url ->
-                    userData["profilePictureUrl"] = url.toString()
-                    updateFirestore(user.uid, userData, onSuccess)
-                }
+                    baseData["avatarUrl"] = url.toString()
+                    updateFirestore(user.uid, baseData, onSuccess, onError)
+                }.addOnFailureListener { onError(it.message ?: "No se pudo obtener la imagen") }
             }
+            .addOnFailureListener { onError(it.message ?: "No se pudo subir la imagen") }
     } else {
-        updateFirestore(user.uid, userData, onSuccess)
+        updateFirestore(user.uid, baseData, onSuccess, onError)
     }
 }
 
 private fun updateFirestore(
     uid: String,
     data: Map<String, Any>,
-    onSuccess: () -> Unit
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit
 ) {
     FirebaseFirestore.getInstance()
         .collection("users")
         .document(uid)
         .set(data, com.google.firebase.firestore.SetOptions.merge())
         .addOnSuccessListener { onSuccess() }
+        .addOnFailureListener { onError(it.message ?: "No se pudo guardar el perfil") }
 }

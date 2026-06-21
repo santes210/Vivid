@@ -1,12 +1,13 @@
 package com.vivid.app.presentation.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 
 data class SearchUser(
     val uid: String,
@@ -35,35 +38,55 @@ fun SearchScreen(
     var query by remember { mutableStateOf("") }
     var users by remember { mutableStateOf<List<SearchUser>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val demoUsers = listOf(
-        SearchUser("u1", "ana_vivid", "Ana García", "https://picsum.photos/id/1009/64/64"),
-        SearchUser("u2", "carlos_vivid", "Carlos López", "https://picsum.photos/id/1012/64/64"),
-        SearchUser("u3", "lucia_vivid", "Lucía Martínez", "https://picsum.photos/id/1006/64/64"),
-        SearchUser("u4", "diego_vivid", "Diego Ruiz", "https://picsum.photos/id/160/64/64"),
-        SearchUser("u5", "maria_vivid", "María Fernández", "https://picsum.photos/id/1016/64/64")
-    )
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val db = FirebaseFirestore.getInstance()
 
-    LaunchedEffect(query) {
-        if (query.length > 2) {
-            isLoading = true
-            // Simulate Firestore search
-            kotlinx.coroutines.delay(300)
-            users = demoUsers.filter {
-                it.username.contains(query, ignoreCase = true) ||
-                it.displayName.contains(query, ignoreCase = true)
-            }
-            isLoading = false
-        } else {
+    LaunchedEffect(query, currentUserId) {
+        val cleanQuery = query.trim().lowercase()
+        if (cleanQuery.length < 2 || currentUserId.isBlank()) {
             users = emptyList()
+            isLoading = false
+            errorMessage = null
+            return@LaunchedEffect
         }
+
+        delay(250)
+        isLoading = true
+        errorMessage = null
+        try {
+            val snapshot = db.collection("users")
+                .orderBy("usernameLower")
+                .startAt(cleanQuery)
+                .endAt(cleanQuery + "\uf8ff")
+                .limit(25)
+                .get()
+                .await()
+
+            users = snapshot.documents.mapNotNull { doc ->
+                val uid = doc.getString("uid") ?: doc.id
+                if (uid == currentUserId) return@mapNotNull null
+                SearchUser(
+                    uid = uid,
+                    username = doc.getString("username") ?: "usuario",
+                    displayName = doc.getString("displayName") ?: doc.getString("username") ?: "Usuario",
+                    avatarUrl = doc.getString("avatarUrl").orEmpty(),
+                    isFollowing = false
+                )
+            }
+        } catch (e: Exception) {
+            users = emptyList()
+            errorMessage = e.message ?: "No se pudieron buscar usuarios."
+        }
+        isLoading = false
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Buscar usuarios") },
+            label = { Text("Buscar usuarios reales") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -71,18 +94,42 @@ fun SearchScreen(
             singleLine = true
         )
 
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+        when {
+            isLoading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             }
-        } else {
-            LazyColumn {
-                items(users) { user ->
-                    UserSearchItem(
-                        user = user,
-                        onClick = { onUserClick(user) },
-                        onFollowClick = { onFollowClick(user) }
+            errorMessage != null -> {
+                Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text(errorMessage ?: "Error", color = MaterialTheme.colorScheme.error)
+                }
+            }
+            query.trim().length < 2 -> {
+                Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Escribe al menos 2 letras para buscar personas.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+            users.isEmpty() -> {
+                Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        "No encontré usuarios con ese nombre.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            else -> {
+                LazyColumn {
+                    items(users, key = { it.uid }) { user ->
+                        UserSearchItem(
+                            user = user,
+                            onClick = { onUserClick(user) },
+                            onMessageClick = { onUserClick(user) }
+                        )
+                    }
                 }
             }
         }
@@ -93,7 +140,7 @@ fun SearchScreen(
 fun UserSearchItem(
     user: SearchUser,
     onClick: () -> Unit,
-    onFollowClick: () -> Unit
+    onMessageClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -102,14 +149,30 @@ fun UserSearchItem(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = user.avatarUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
+        if (user.avatarUrl.isNotBlank()) {
+            AsyncImage(
+                model = user.avatarUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    user.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.width(16.dp))
 
@@ -119,12 +182,12 @@ fun UserSearchItem(
         }
 
         Button(
-            onClick = onFollowClick,
+            onClick = onMessageClick,
             modifier = Modifier.height(36.dp)
         ) {
-            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text(if (user.isFollowing) "Siguiendo" else "Seguir")
+            Text("Mensaje")
         }
     }
 }

@@ -1,13 +1,15 @@
 package com.vivid.app.domain.repository
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import com.vivid.app.data.local.dao.ChatDao
 import com.vivid.app.data.local.dao.MessageDao
 import com.vivid.app.data.local.entity.ChatEntity
 import com.vivid.app.data.local.entity.MessageEntity
 import com.vivid.app.presentation.messages.Message
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -22,34 +24,53 @@ class ChatRepository @Inject constructor(
     private val auth: FirebaseAuth
 ) {
 
-    private val currentUserId get() = auth.currentUser?.uid ?: "demo-user"
+    private val currentUserId get() = auth.currentUser?.uid.orEmpty()
 
     fun getChatsFlow(): Flow<List<ChatEntity>> = chatDao.getAllChats()
 
     suspend fun createOrGetChat(otherUserId: String, otherUserName: String, avatarUrl: String): String {
-        val chatId = listOf(currentUserId, otherUserId).sorted().joinToString("_")
-        
-        val chat = ChatEntity(
-            chatId = chatId,
-            otherUserId = otherUserId,
-            otherUserName = otherUserName,
-            otherUserAvatar = avatarUrl,
-            lastMessage = "",
-            lastMessageTimestamp = System.currentTimeMillis()
+        val chatId = buildChatId(currentUserId, otherUserId)
+        ensureChatExists(chatId, otherUserId, otherUserName, avatarUrl)
+        return chatId
+    }
+
+    suspend fun ensureChatExists(chatId: String, otherUserId: String, otherUserName: String, avatarUrl: String) {
+        if (currentUserId.isBlank() || otherUserId.isBlank()) return
+
+        val currentUser = auth.currentUser
+        val currentUserName = currentUser?.displayName
+            ?: currentUser?.email?.substringBefore("@")
+            ?: "Usuario"
+        val currentAvatar = currentUser?.photoUrl?.toString().orEmpty()
+
+        val now = System.currentTimeMillis()
+        chatDao.insertOrUpdateChat(
+            ChatEntity(
+                chatId = chatId,
+                otherUserId = otherUserId,
+                otherUserName = otherUserName,
+                otherUserAvatar = avatarUrl,
+                lastMessage = "",
+                lastMessageTimestamp = now
+            )
         )
-        
-        chatDao.insertOrUpdateChat(chat)
-        
-        // Create in Firestore if not exists
+
         firestore.collection("chats").document(chatId).set(
             mapOf(
                 "participants" to listOf(currentUserId, otherUserId),
-                "lastMessage" to "",
-                "lastTimestamp" to System.currentTimeMillis()
-            )
-        )
-        
-        return chatId
+                "participantNames" to mapOf(
+                    currentUserId to currentUserName,
+                    otherUserId to otherUserName
+                ),
+                "participantAvatars" to mapOf(
+                    currentUserId to currentAvatar,
+                    otherUserId to avatarUrl
+                ),
+                "createdAt" to now,
+                "updatedAt" to now
+            ),
+            SetOptions.merge()
+        ).await()
     }
 
     fun getMessagesFlow(chatId: String): Flow<List<Message>> {
@@ -62,60 +83,52 @@ class ChatRepository @Inject constructor(
                     timestamp = entity.timestamp,
                     isRead = entity.isRead
                 )
-            }
+            }.sortedBy { it.timestamp }
         }
     }
 
     suspend fun sendMessage(chatId: String, text: String, receiverId: String) {
-        val messageId = System.currentTimeMillis().toString()
+        if (currentUserId.isBlank() || receiverId.isBlank() || text.isBlank()) return
+
+        val now = System.currentTimeMillis()
+        val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
         val message = MessageEntity(
             id = messageId,
             chatId = chatId,
             senderId = currentUserId,
             text = text,
-            timestamp = System.currentTimeMillis()
+            timestamp = now
         )
-        
-        // Save locally
+
         messageDao.insertMessage(message)
-        
-        // Update chat last message
-        val chat = ChatEntity(
-            chatId = chatId,
-            otherUserId = receiverId,
-            otherUserName = "", // Will be updated from Firestore
-            otherUserAvatar = "",
-            lastMessage = text,
-            lastMessageTimestamp = System.currentTimeMillis()
-        )
-        chatDao.insertOrUpdateChat(chat)
-        
-        // Send to Firestore
-        try {
-            firestore.collection("chats")
-                .document(chatId)
-                .collection("messages")
-                .document(messageId)
-                .set(
-                    mapOf(
-                        "text" to text,
-                        "senderId" to currentUserId,
-                        "timestamp" to System.currentTimeMillis(),
-                        "type" to "text"
-                    )
-                ).await()
-            
-            // Update chat metadata
-            firestore.collection("chats").document(chatId).update(
-                "lastMessage", text,
-                "lastTimestamp", System.currentTimeMillis()
-            )
-        } catch (e: Exception) {
-            // Will sync later when online
-        }
+
+        firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .set(
+                mapOf(
+                    "text" to text,
+                    "senderId" to currentUserId,
+                    "receiverId" to receiverId,
+                    "timestamp" to now,
+                    "type" to "text",
+                    "isRead" to false
+                )
+            ).await()
+
+        firestore.collection("chats").document(chatId).set(
+            mapOf(
+                "participants" to listOf(currentUserId, receiverId),
+                "lastMessage" to text,
+                "lastSenderId" to currentUserId,
+                "lastTimestamp" to now,
+                "updatedAt" to now
+            ),
+            SetOptions.merge()
+        ).await()
     }
 
-    // Real-time listener for new messages
     fun listenToMessages(chatId: String, onNewMessage: (Message) -> Unit) {
         firestore.collection("chats")
             .document(chatId)
@@ -123,17 +136,23 @@ class ChatRepository @Inject constructor(
             .orderBy("timestamp", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, _ ->
                 snapshot?.documentChanges?.forEach { change ->
-                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                        val data = change.document.data
+                    if (change.type == DocumentChange.Type.ADDED || change.type == DocumentChange.Type.MODIFIED) {
+                        val timestamp = change.document.getLong("timestamp") ?: 0L
                         val msg = Message(
                             id = change.document.id,
-                            text = data["text"] as? String ?: "",
-                            senderId = data["senderId"] as? String ?: "",
-                            timestamp = (data["timestamp"] as? Long) ?: 0L
+                            text = change.document.getString("text").orEmpty(),
+                            senderId = change.document.getString("senderId").orEmpty(),
+                            timestamp = timestamp,
+                            isRead = change.document.getBoolean("isRead") ?: false
                         )
                         onNewMessage(msg)
                     }
                 }
             }
+    }
+
+    companion object {
+        fun buildChatId(userA: String, userB: String): String =
+            listOf(userA, userB).sorted().joinToString("_")
     }
 }

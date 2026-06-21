@@ -1,5 +1,6 @@
 package com.vivid.app.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -12,9 +13,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.navArgument
+import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.domain.repository.ChatRepository
 import com.vivid.app.presentation.auth.AuthScreen
 import com.vivid.app.presentation.create.CameraScreen
 import com.vivid.app.presentation.create.CreatePostScreen
@@ -25,6 +30,7 @@ import com.vivid.app.presentation.profile.EditProfileScreen
 import com.vivid.app.presentation.profile.ProfileScreen
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.presentation.search.SearchScreen
+import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.StoryViewerScreen
 import com.vivid.app.presentation.stories.demoStories
 
@@ -36,7 +42,7 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow)
     object Profile : Screen("profile", "Perfil", Icons.Default.Person)
     object Messages : Screen("messages", "Mensajes")
-    object Chat : Screen("chat/{chatId}", "Chat")
+    object Chat : Screen("chat/{chatId}/{receiverId}/{receiverName}", "Chat")
 }
 
 @Composable
@@ -88,7 +94,10 @@ fun VividNavigation(navController: NavHostController) {
                 )
             }
             composable(Screen.Search.route) {
-                SearchScreen(onUserClick = {}, onFollowClick = {})
+                SearchScreen(
+                    onUserClick = { user -> navController.openChatWithUser(user) },
+                    onFollowClick = {}
+                )
             }
             composable(Screen.Create.route) {
                 CreatePostScreen(navController = navController)
@@ -117,11 +126,24 @@ fun VividNavigation(navController: NavHostController) {
                 EditProfileScreen(onSave = { navController.popBackStack() }, onCancel = { navController.popBackStack() })
             }
             composable(Screen.Messages.route) {
-                ChatListScreen(onChatClick = { chatId -> navController.navigate("chat/$chatId") })
+                ChatListScreen(onChatClick = { chatId, receiverId, receiverName ->
+                    navController.navigate(
+                        "chat/${Uri.encode(chatId)}/${Uri.encode(receiverId)}/${Uri.encode(receiverName)}"
+                    )
+                })
             }
-            composable(Screen.Chat.route) { backStackEntry ->
+            composable(
+                route = Screen.Chat.route,
+                arguments = listOf(
+                    navArgument("chatId") { type = NavType.StringType },
+                    navArgument("receiverId") { type = NavType.StringType },
+                    navArgument("receiverName") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
                 val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
-                ChatScreen(chatId = chatId, otherUserName = "Usuario")
+                val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""
+                val receiverName = backStackEntry.arguments?.getString("receiverName") ?: "Usuario"
+                ChatScreen(chatId = chatId, receiverId = receiverId, otherUserName = receiverName)
             }
             composable("story_viewer/{index}") { backStackEntry ->
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 0
@@ -129,4 +151,12 @@ fun VividNavigation(navController: NavHostController) {
             }
         }
     }
+}
+
+private fun NavHostController.openChatWithUser(user: SearchUser) {
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    if (currentUserId.isBlank() || user.uid.isBlank()) return
+    val chatId = ChatRepository.buildChatId(currentUserId, user.uid)
+    val name = user.displayName.ifBlank { user.username.ifBlank { "Usuario" } }
+    navigate("chat/${Uri.encode(chatId)}/${Uri.encode(user.uid)}/${Uri.encode(name)}")
 }

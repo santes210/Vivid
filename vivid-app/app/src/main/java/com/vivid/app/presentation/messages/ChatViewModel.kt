@@ -20,14 +20,26 @@ class ChatViewModel @Inject constructor(
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
 
+    private var loadedChatId: String? = null
+
+    fun openChat(chatId: String, receiverId: String, receiverName: String) {
+        viewModelScope.launch {
+            chatRepository.ensureChatExists(chatId, receiverId, receiverName, "")
+        }
+        loadMessages(chatId)
+    }
+
     fun loadMessages(chatId: String) {
+        if (loadedChatId == chatId) return
+        loadedChatId = chatId
+        _messages.value = emptyList()
+
         viewModelScope.launch {
             chatRepository.getMessagesFlow(chatId).collect { msgs ->
                 _messages.value = msgs
             }
         }
-        
-        // Real-time listener
+
         chatRepository.listenToMessages(chatId) { newMessage ->
             val current = _messages.value.toMutableList()
             if (current.none { it.id == newMessage.id }) {
@@ -41,13 +53,5 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.sendMessage(chatId, text, receiverId)
         }
-    }
-
-    fun createChat(otherUserId: String, name: String, avatar: String): String {
-        var chatId = ""
-        viewModelScope.launch {
-            chatId = chatRepository.createOrGetChat(otherUserId, name, avatar)
-        }
-        return chatId
     }
 }

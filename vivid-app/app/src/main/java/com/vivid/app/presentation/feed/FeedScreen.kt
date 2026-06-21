@@ -24,8 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.vivid.app.presentation.stories.StoriesRow
-import com.vivid.app.presentation.stories.demoStories
+import com.vivid.app.presentation.stories.StoriesTray
 import kotlinx.coroutines.launch
 
 data class PostData(
@@ -58,7 +57,7 @@ fun FeedScreen(
                 isLoading = false
             },
             onFallback = {
-                posts = getDemoPosts()
+                posts = emptyList()
                 isLoading = false
             }
         )
@@ -74,7 +73,7 @@ fun FeedScreen(
             }
         )
 
-        StoriesRow(stories = demoStories, onStoryClick = {})
+        StoriesTray(onStoryClick = {})
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -131,14 +130,6 @@ private fun loadPostsFromFirebase(
         .addOnFailureListener {
             onFallback()
         }
-}
-
-private fun getDemoPosts(): List<PostData> {
-    return listOf(
-        PostData("1", "demo1", "ana_vivid", "", "", "", "Hermoso atardecer 🌅", 1240, System.currentTimeMillis() - 100000, false),
-        PostData("2", "demo2", "carlos_vivid", "", "", "", "Mi nuevo setup 💻", 890, System.currentTimeMillis() - 200000, false),
-        PostData("3", "demo3", "lucia_vivid", "", "", "", "Viaje a la montaña 🏔️", 2100, System.currentTimeMillis() - 300000, false)
-    )
 }
 
 private fun updateLikeInFirebase(postId: String, isLiked: Boolean) {

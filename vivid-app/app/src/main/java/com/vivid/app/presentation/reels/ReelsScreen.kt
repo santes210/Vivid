@@ -16,14 +16,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 
 data class Reel(
     val id: String,
@@ -31,32 +32,59 @@ data class Reel(
     val username: String,
     val caption: String,
     val likes: Int,
-    val userAvatar: String = "https://picsum.photos/id/1011/48/48"
+    val userAvatar: String = ""
 )
 
 @Composable
 fun ReelsScreen() {
-    val reels = remember {
-        listOf(
-            Reel("1", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", "ana_vivid", "Día increíble en la playa 🌊", 12400),
-            Reel("2", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", "carlos_vivid", "Mi setup de edición 🔥", 8900),
-            Reel("3", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", "lucia_vivid", "Aventura en la montaña 🏔️", 23100)
-        )
+    val db = FirebaseFirestore.getInstance()
+    var reels by remember { mutableStateOf<List<Reel>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    DisposableEffect(Unit) {
+        var registration: ListenerRegistration? = null
+        registration = db.collection("reels")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(30)
+            .addSnapshotListener { snapshot, _ ->
+                reels = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                    val videoUrl = doc.getString("videoUrl").orEmpty()
+                    if (videoUrl.isBlank()) return@mapNotNull null
+                    Reel(
+                        id = doc.id,
+                        videoUrl = videoUrl,
+                        username = doc.getString("username") ?: "usuario",
+                        caption = doc.getString("caption").orEmpty(),
+                        likes = doc.getLong("likes")?.toInt() ?: 0,
+                        userAvatar = doc.getString("userAvatar").orEmpty()
+                    )
+                }
+                isLoading = false
+            }
+        onDispose { registration?.remove() }
     }
 
     val listState = rememberLazyListState()
     var currentPlayingIndex by remember { mutableStateOf(0) }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        items(reels) { reel ->
-            ReelItem(
-                reel = reel,
-                isPlaying = reels.indexOf(reel) == currentPlayingIndex,
-                onLike = { /* Handle like */ }
-            )
+    when {
+        isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        reels.isEmpty() -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Text("No hay reels todavía", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        else -> LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(reels, key = { it.id }) { reel ->
+                ReelItem(
+                    reel = reel,
+                    isPlaying = reels.indexOf(reel) == currentPlayingIndex,
+                    onLike = { }
+                )
+            }
         }
     }
 }
@@ -65,7 +93,6 @@ fun ReelsScreen() {
 fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
     var isLiked by remember { mutableStateOf(false) }
     var likeCount by remember { mutableStateOf(reel.likes) }
-    val context = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -73,7 +100,6 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
             .height(680.dp)
             .background(Color.Black)
     ) {
-        // Video Player
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -88,20 +114,31 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
             modifier = Modifier.fillMaxSize()
         )
 
-        // Overlay UI
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = reel.userAvatar,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                )
+                if (reel.userAvatar.isNotBlank()) {
+                    AsyncImage(
+                        model = reel.userAvatar,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(reel.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(reel.username, color = Color.White, style = MaterialTheme.typography.titleMedium)
             }
@@ -109,7 +146,6 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
             Text(reel.caption, color = Color.White)
         }
 
-        // Actions
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -132,8 +168,8 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            IconButton(onClick = { /* Comment */ }) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Comment", tint = Color.White, modifier = Modifier.size(28.dp))
+            IconButton(onClick = { }) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(28.dp))
             }
         }
     }

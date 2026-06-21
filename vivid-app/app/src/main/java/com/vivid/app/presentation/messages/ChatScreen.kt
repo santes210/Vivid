@@ -1,6 +1,5 @@
 package com.vivid.app.presentation.messages
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -22,17 +20,18 @@ import java.util.*
 @Composable
 fun ChatScreen(
     chatId: String,
+    receiverId: String,
     otherUserName: String = "Usuario",
     viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "demo-user"
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val messages by viewModel.messages.collectAsState()
 
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(chatId) {
-        viewModel.loadMessages(chatId)
+    LaunchedEffect(chatId, receiverId, otherUserName) {
+        viewModel.openChat(chatId, receiverId, otherUserName)
     }
 
     LaunchedEffect(messages.size) {
@@ -44,17 +43,30 @@ fun ChatScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(title = { Text(otherUserName) })
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(12.dp),
-            reverseLayout = true
-        ) {
-            items(messages.reversed()) { message ->
-                MessageBubble(
-                    message = message,
-                    isMine = message.senderId == currentUserId
+        if (messages.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Envía el primer mensaje.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(12.dp),
+                reverseLayout = true
+            ) {
+                items(messages.reversed(), key = { it.id }) { message ->
+                    MessageBubble(
+                        message = message,
+                        isMine = message.senderId == currentUserId
+                    )
+                }
             }
         }
 
@@ -73,9 +85,11 @@ fun ChatScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
+                enabled = messageText.isNotBlank() && receiverId.isNotBlank(),
                 onClick = {
-                    if (messageText.isNotBlank()) {
-                        viewModel.sendMessage(chatId, messageText, "demo-receiver")
+                    val text = messageText.trim()
+                    if (text.isNotBlank()) {
+                        viewModel.sendMessage(chatId, text, receiverId)
                         messageText = ""
                     }
                 }
@@ -89,9 +103,9 @@ fun ChatScreen(
 @Composable
 fun MessageBubble(message: Message, isMine: Boolean) {
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
-    val bubbleColor = if (isMine) 
-        MaterialTheme.colorScheme.primary 
-    else 
+    val bubbleColor = if (isMine)
+        MaterialTheme.colorScheme.primary
+    else
         MaterialTheme.colorScheme.surfaceVariant
 
     Box(
@@ -118,8 +132,8 @@ fun MessageBubble(message: Message, isMine: Boolean) {
                 Text(
                     text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isMine) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) 
-                           else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isMine) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

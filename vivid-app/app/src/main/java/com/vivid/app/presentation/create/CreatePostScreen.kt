@@ -276,6 +276,13 @@ private suspend fun uploadPostWithCompression(
             
             // Esperar a que Firestore confirme
             task.await()
+            db.collection("users").document(user.uid).set(
+                mapOf(
+                    "postsCount" to com.google.firebase.firestore.FieldValue.increment(1),
+                    "updatedAt" to System.currentTimeMillis()
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            ).await()
             onProgress("¡Publicado exitosamente! 🎉")
             true
         } catch (e: Exception) {

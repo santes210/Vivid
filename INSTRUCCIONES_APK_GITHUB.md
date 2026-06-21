@@ -1,77 +1,42 @@
 # Vivid - APK en GitHub Actions
 
-Esta versión corrige los fallos vistos en las capturas.
+Esta versión incluye las correcciones de compilación y además cambia varias pantallas para dejar de usar datos demo.
 
-## Errores corregidos
+## Errores de build corregidos
 
-### 1. Memoria insuficiente de Gradle
+- Memoria insuficiente de Gradle en GitHub Actions.
+- Iconos Compose no disponibles en `material-icons-core`.
+- Imports faltantes de `await()` e `Image`.
 
-Error anterior:
+## Funciones reales agregadas
 
-```text
-java.lang.OutOfMemoryError: Java heap space
-Gradle build daemon disappeared unexpectedly
-```
-
-Solución aplicada en `vivid-app/gradle.properties` y `.github/workflows/build.yml`:
-
-- Heap de Gradle aumentado a `-Xmx3g`.
-- `MaxMetaspaceSize=1g`.
-- `--max-workers=1` para reducir consumo de memoria.
-- Desactivado paralelismo innecesario en CI.
-
-### 2. Errores Kotlin de referencias no resueltas
-
-Errores nuevos:
-
-```text
-CreatePostScreen.kt:108:36 Unresolved reference 'PhotoLibrary'
-CreatePostScreen.kt:121:36 Unresolved reference 'PhotoCamera'
-CreatePostScreen.kt:217:36 Unresolved reference 'CloudUpload'
-CreatePostScreen.kt:277:18 Unresolved reference 'await'
-FeedScreen.kt:15:47 Unresolved reference 'Cloud'
-FeedScreen.kt:285:49 Unresolved reference 'Cloud'
-FeedScreen.kt:293:13 Unresolved reference 'Image'
-```
-
-Solución aplicada:
-
-- Se reemplazaron iconos que no vienen en `material-icons-core` por iconos disponibles.
-- Se agregó el import faltante:
-
-```kotlin
-import kotlinx.coroutines.tasks.await
-```
-
-- Se agregó el import faltante para Compose Image:
-
-```kotlin
-import androidx.compose.foundation.Image
-```
-
-## Archivos modificados importantes
-
-- `.github/workflows/build.yml`
-- `vivid-app/gradle.properties`
-- `vivid-app/build.gradle.kts`
-- `vivid-app/app/proguard-rules.pro`
-- `vivid-app/app/src/main/java/com/vivid/app/presentation/create/CreatePostScreen.kt`
-- `vivid-app/app/src/main/java/com/vivid/app/presentation/feed/FeedScreen.kt`
+- Mensajes reales con Firestore.
+- Lista de chats real, sin chats demo.
+- Buscar usuarios reales en `users`.
+- Botón **Mensaje** para iniciar conversación con otra persona.
+- Perfil con contadores reales iniciando en 0:
+  - 0 posts
+  - 0 seguidores
+  - 0 seguidos
+- Publicaciones del perfil reales, sin grid demo.
+- Stories sin demos.
+- Reels sin demos.
+- Estados vacíos más limpios con Material 3.
 
 ## Cómo generar el APK
 
 1. Descomprime este ZIP.
-2. Reemplaza/sube los archivos en tu repositorio de GitHub.
+2. Sube/reemplaza los archivos en tu repositorio GitHub.
 3. Haz commit y push a `main` o `master`.
 4. Ve a **Actions → Build Vivid APK**.
-5. Cuando termine correctamente, descarga el artifact:
+5. Descarga el artifact `vivid-debug-apk`.
+
+## Importante
+
+Para que mensajes, búsqueda, stories y reels funcionen dentro de la app, Firebase Firestore debe tener reglas que permitan acceso a usuarios autenticados. Incluí el archivo:
 
 ```text
-vivid-debug-apk
+FIRESTORE_RULES_DEV.md
 ```
 
-Dentro estará el APK debug, normalmente:
-
-```text
-app-debug.apk
-```
+con reglas de desarrollo para probar rápido.
