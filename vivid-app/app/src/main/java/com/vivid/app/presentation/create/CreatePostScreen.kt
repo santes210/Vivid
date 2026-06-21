@@ -24,6 +24,7 @@ import com.vivid.app.data.local.entity.PostEntity
 import com.vivid.app.util.ImageCompressor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.*
 
@@ -105,7 +106,7 @@ fun CreatePostScreen(
                 onClick = { imagePickerLauncher.launch("image/*") },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Galería")
             }
@@ -118,7 +119,7 @@ fun CreatePostScreen(
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Cámara")
             }
@@ -214,7 +215,7 @@ fun CreatePostScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Publicando...")
             } else {
-                Icon(Icons.Default.CloudUpload, contentDescription = null)
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Publicar en Vivid")
             }

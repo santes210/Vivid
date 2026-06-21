@@ -1,45 +1,77 @@
-# Vivid - cómo generar el APK en GitHub
+# Vivid - APK en GitHub Actions
 
-Corregí la configuración que estaba causando el fallo en GitHub Actions:
+Esta versión corrige los fallos vistos en las capturas.
 
-- `java.lang.OutOfMemoryError: Java heap space`
-- `Gradle build daemon disappeared unexpectedly`
-- `Process completed with exit code 1`
+## Errores corregidos
 
-El problema principal era memoria insuficiente para Gradle/D8 al hacer `mergeExtDexDebug`. El proyecto tenía un heap muy bajo para Android + Kotlin + Compose + Firebase + Hilt.
+### 1. Memoria insuficiente de Gradle
 
-## Archivos modificados
+Error anterior:
+
+```text
+java.lang.OutOfMemoryError: Java heap space
+Gradle build daemon disappeared unexpectedly
+```
+
+Solución aplicada en `vivid-app/gradle.properties` y `.github/workflows/build.yml`:
+
+- Heap de Gradle aumentado a `-Xmx3g`.
+- `MaxMetaspaceSize=1g`.
+- `--max-workers=1` para reducir consumo de memoria.
+- Desactivado paralelismo innecesario en CI.
+
+### 2. Errores Kotlin de referencias no resueltas
+
+Errores nuevos:
+
+```text
+CreatePostScreen.kt:108:36 Unresolved reference 'PhotoLibrary'
+CreatePostScreen.kt:121:36 Unresolved reference 'PhotoCamera'
+CreatePostScreen.kt:217:36 Unresolved reference 'CloudUpload'
+CreatePostScreen.kt:277:18 Unresolved reference 'await'
+FeedScreen.kt:15:47 Unresolved reference 'Cloud'
+FeedScreen.kt:285:49 Unresolved reference 'Cloud'
+FeedScreen.kt:293:13 Unresolved reference 'Image'
+```
+
+Solución aplicada:
+
+- Se reemplazaron iconos que no vienen en `material-icons-core` por iconos disponibles.
+- Se agregó el import faltante:
+
+```kotlin
+import kotlinx.coroutines.tasks.await
+```
+
+- Se agregó el import faltante para Compose Image:
+
+```kotlin
+import androidx.compose.foundation.Image
+```
+
+## Archivos modificados importantes
 
 - `.github/workflows/build.yml`
-  - Usa JDK 17.
-  - Instala Android SDK 35 y Build Tools 35.0.0.
-  - Compila con `--max-workers=1` para bajar el pico de memoria.
-  - Sube el APK generado como artifact.
-
 - `vivid-app/gradle.properties`
-  - Sube Gradle heap a `-Xmx3g`.
-  - Sube metaspace a `1g`.
-  - Desactiva paralelismo/configure-on-demand para CI.
-  - Evita daemons extra de Kotlin.
-
 - `vivid-app/build.gradle.kts`
-  - Declara también los plugins `ksp` y `hilt` a nivel raíz con `apply false`.
-
 - `vivid-app/app/proguard-rules.pro`
-  - Agregado para que el build release no falle por archivo faltante.
+- `vivid-app/app/src/main/java/com/vivid/app/presentation/create/CreatePostScreen.kt`
+- `vivid-app/app/src/main/java/com/vivid/app/presentation/feed/FeedScreen.kt`
 
-## Cómo usarlo
+## Cómo generar el APK
 
 1. Descomprime este ZIP.
-2. Sube/reemplaza estos archivos en tu repositorio GitHub.
+2. Reemplaza/sube los archivos en tu repositorio de GitHub.
 3. Haz commit y push a `main` o `master`.
-4. En GitHub entra a **Actions → Build Vivid APK**.
-5. Cuando termine correctamente, descarga el artifact llamado **vivid-debug-apk**.
+4. Ve a **Actions → Build Vivid APK**.
+5. Cuando termine correctamente, descarga el artifact:
 
-El APK estará dentro del artifact como algo parecido a:
+```text
+vivid-debug-apk
+```
+
+Dentro estará el APK debug, normalmente:
 
 ```text
 app-debug.apk
 ```
-
-También puedes ejecutarlo manualmente desde **Actions → Build Vivid APK → Run workflow**.
