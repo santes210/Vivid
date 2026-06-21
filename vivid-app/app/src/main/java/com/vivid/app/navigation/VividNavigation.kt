@@ -21,10 +21,12 @@ import com.vivid.app.presentation.create.CreatePostScreen
 import com.vivid.app.presentation.feed.FeedScreen
 import com.vivid.app.presentation.messages.ChatListScreen
 import com.vivid.app.presentation.messages.ChatScreen
+import com.vivid.app.presentation.profile.EditProfileScreen
 import com.vivid.app.presentation.profile.ProfileScreen
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.presentation.search.SearchScreen
-import com.vivid.app.presentation.stories.StoriesScreen
+import com.vivid.app.presentation.stories.StoryViewerScreen
+import com.vivid.app.presentation.stories.demoStories
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
     object Auth : Screen("auth", "Auth")
@@ -73,13 +75,11 @@ fun VividNavigation(navController: NavHostController) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Auth.route) {
-                AuthScreen(
-                    onLoginSuccess = {
-                        navController.navigate(Screen.Feed.route) {
-                            popUpTo(Screen.Auth.route) { inclusive = true }
-                        }
+                AuthScreen(onLoginSuccess = {
+                    navController.navigate(Screen.Feed.route) {
+                        popUpTo(Screen.Auth.route) { inclusive = true }
                     }
-                )
+                })
             }
             composable(Screen.Feed.route) {
                 FeedScreen(
@@ -88,10 +88,7 @@ fun VividNavigation(navController: NavHostController) {
                 )
             }
             composable(Screen.Search.route) {
-                SearchScreen(
-                    onUserClick = { /* Navigate to profile */ },
-                    onFollowClick = { /* Handle follow */ }
-                )
+                SearchScreen(onUserClick = {}, onFollowClick = {})
             }
             composable(Screen.Create.route) {
                 CreatePostScreen(navController = navController)
@@ -99,9 +96,7 @@ fun VividNavigation(navController: NavHostController) {
             composable("camera") {
                 CameraScreen(
                     onPhotoTaken = { uri ->
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("capturedPhoto", uri.toString())
+                        navController.previousBackStackEntry?.savedStateHandle?.set("capturedPhoto", uri.toString())
                         navController.popBackStack()
                     },
                     onBack = { navController.popBackStack() }
@@ -115,50 +110,23 @@ fun VividNavigation(navController: NavHostController) {
                             popUpTo(0) { inclusive = true }
                         }
                     },
-                    onEditProfile = {
-                        navController.navigate("edit_profile")
-                    }
+                    onEditProfile = { navController.navigate("edit_profile") }
                 )
             }
             composable("edit_profile") {
-                EditProfileScreen(
-                    onSave = { navController.popBackStack() },
-                    onCancel = { navController.popBackStack() }
-                )
-            }
-            composable("story_viewer/{index}") { backStackEntry ->
-                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 0
-                StoryViewerScreen(
-                    stories = demoStories,
-                    initialIndex = index,
-                    onClose = { navController.popBackStack() }
-                )
+                EditProfileScreen(onSave = { navController.popBackStack() }, onCancel = { navController.popBackStack() })
             }
             composable(Screen.Messages.route) {
-                ChatListScreen(
-                    onChatClick = { chatId ->
-                        navController.navigate("chat/$chatId")
-                    }
-                )
+                ChatListScreen(onChatClick = { chatId -> navController.navigate("chat/$chatId") })
             }
             composable(Screen.Chat.route) { backStackEntry ->
                 val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
                 ChatScreen(chatId = chatId, otherUserName = "Usuario")
             }
+            composable("story_viewer/{index}") { backStackEntry ->
+                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 0
+                StoryViewerScreen(stories = demoStories, initialIndex = index, onClose = { navController.popBackStack() })
+            }
         }
-    }
-}
-
-@Composable
-fun SearchScreenPlaceholder() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Pantalla de búsqueda (próximamente)")
-    }
-}
-
-@Composable
-fun ReelsScreenPlaceholder() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Reels (próximamente)")
     }
 }
