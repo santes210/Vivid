@@ -3,6 +3,7 @@ package com.vivid.app.navigation
 import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -41,8 +42,10 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object Create : Screen("create", "Crear", Icons.Default.Add)
     object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow)
     object Profile : Screen("profile", "Perfil", Icons.Default.Person)
+    object OtherProfile : Screen("profile/{userId}", "Perfil")
     object Messages : Screen("messages", "Mensajes")
     object Chat : Screen("chat/{chatId}/{receiverId}/{receiverName}", "Chat")
+    object Settings : Screen("settings", "Ajustes")
 }
 
 @Composable
@@ -95,8 +98,8 @@ fun VividNavigation(navController: NavHostController) {
             }
             composable(Screen.Search.route) {
                 SearchScreen(
-                    onUserClick = { user -> navController.openChatWithUser(user) },
-                    onFollowClick = {}
+                    onUserClick = { user -> navController.navigate("profile/${user.uid}") },
+                    onMessageClick = { user -> navController.openChatWithUser(user) }
                 )
             }
             composable(Screen.Create.route) {
@@ -114,13 +117,52 @@ fun VividNavigation(navController: NavHostController) {
             composable(Screen.Reels.route) { ReelsScreen() }
             composable(Screen.Profile.route) {
                 ProfileScreen(
+                    userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty(),
                     onLogout = {
                         navController.navigate(Screen.Auth.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     },
-                    onEditProfile = { navController.navigate("edit_profile") }
+                    onEditProfile = { navController.navigate("edit_profile") },
+                    onSettings = { navController.navigate(Screen.Settings.route) }
                 )
+            }
+            composable(
+                route = Screen.OtherProfile.route,
+                arguments = listOf(navArgument("userId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val userId = backStackEntry.arguments?.getString("userId") ?: ""
+                ProfileScreen(
+                    userId = userId,
+                    onLogout = { navController.popBackStack() }, // Using onLogout as onBack here
+                    onEditProfile = {},
+                    onSettings = {},
+                    onNavigateToChat = { chatId, receiverId, receiverName ->
+                        navController.navigate("chat/${Uri.encode(chatId)}/${Uri.encode(receiverId)}/${Uri.encode(receiverName)}")
+                    }
+                )
+            }
+            composable(Screen.Settings.route) {
+                // Simple Settings Screen inline
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Ajustes") },
+                            navigationIcon = {
+                                IconButton(onClick = { navController.popBackStack() }) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                                }
+                            }
+                        )
+                    }
+                ) { padding ->
+                    Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+                        Text("Versión 1.0.0", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Notificaciones: Activadas")
+                        Text("Privacidad: Cuenta pública")
+                    }
+                }
             }
             composable("edit_profile") {
                 EditProfileScreen(onSave = { navController.popBackStack() }, onCancel = { navController.popBackStack() })

@@ -39,7 +39,7 @@ data class SearchUser(
 @Composable
 fun SearchScreen(
     onUserClick: (SearchUser) -> Unit,
-    onFollowClick: (SearchUser) -> Unit
+    onMessageClick: (SearchUser) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var users by remember { mutableStateOf<List<SearchUser>>(emptyList()) }
@@ -134,7 +134,7 @@ fun SearchScreen(
                         UserSearchItem(
                             user = user,
                             onClick = { onUserClick(user) },
-                            onMessageClick = { onUserClick(user) }
+                            onMessageClick = { onMessageClick(user) }
                         )
                     }
                 }

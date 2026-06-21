@@ -32,6 +32,19 @@ class ChatViewModel @Inject constructor(
             val avatarBase64 = savedStateHandle.get<String>("avatarBase64") ?: ""
             val avatarUrl = savedStateHandle.get<String>("avatarUrl") ?: ""
             chatRepository.ensureChatExists(chatId, receiverId, receiverName, avatarUrl, avatarBase64)
+            
+            // Check if we can message this user (if they are private and we don't follow)
+            // For now, simple check: if receiverId is not empty, check their "isPrivate" field
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("users").document(receiverId).get().addOnSuccessListener { snapshot ->
+                val isPrivate = snapshot.getBoolean("isPrivate") ?: false
+                if (isPrivate) {
+                    // In a real app, check follow status. Here we set canMessage to false if private.
+                    _canMessage.value = false
+                } else {
+                    _canMessage.value = true
+                }
+            }
         }
         loadMessages(chatId)
     }

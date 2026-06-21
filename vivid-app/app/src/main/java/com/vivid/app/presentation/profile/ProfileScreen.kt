@@ -11,7 +11,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,15 +28,19 @@ import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.vivid.app.domain.repository.ChatRepository
 
 data class ProfileUiState(
+    val uid: String = "",
     val username: String = "vivid_user",
     val displayName: String = "Usuario Vivid",
     val avatarUrl: String = "",
     val avatarBase64: String = "",
     val postsCount: Int = 0,
     val followersCount: Int = 0,
-    val followingCount: Int = 0
+    val followingCount: Int = 0,
+    val isPrivate: Boolean = false,
+    val isFollowing: Boolean = false
 )
 
 data class ProfilePost(
@@ -44,47 +51,48 @@ data class ProfilePost(
 
 @Composable
 fun ProfileScreen(
+    userId: String,
     onLogout: () -> Unit,
     onEditProfile: () -> Unit = {},
-    onSettings: () -> Unit = {}
+    onSettings: () -> Unit = {},
+    onNavigateToChat: (chatId: String, receiverId: String, name: String) -> Unit = { _, _, _ -> }
 ) {
     val auth = FirebaseAuth.getInstance()
-    val user = auth.currentUser
+    val currentUserId = auth.currentUser?.uid.orEmpty()
+    val isOwnProfile = userId == currentUserId
     val db = FirebaseFirestore.getInstance()
-    val uid = user?.uid.orEmpty()
 
-    var profile by remember {
-        mutableStateOf(
-            ProfileUiState(
-                username = user?.email?.substringBefore("@") ?: "vivid_user",
-                displayName = user?.displayName ?: user?.email?.substringBefore("@") ?: "Usuario Vivid",
-                avatarUrl = user?.photoUrl?.toString().orEmpty()
-            )
-        )
-    }
+    var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
-    DisposableEffect(uid) {
+    DisposableEffect(userId) {
         var profileListener: ListenerRegistration? = null
         var postsListener: ListenerRegistration? = null
 
-        if (uid.isNotBlank()) {
-            profileListener = db.collection("users").document(uid)
+        if (userId.isNotBlank()) {
+            profileListener = db.collection("users").document(userId)
                 .addSnapshotListener { snapshot, _ ->
                     val data = snapshot?.data.orEmpty()
                     profile = ProfileUiState(
-                        username = data["username"] as? String ?: user?.email?.substringBefore("@") ?: "vivid_user",
-                        displayName = data["displayName"] as? String ?: user?.displayName ?: "Usuario Vivid",
-                        avatarUrl = data["avatarUrl"] as? String ?: user?.photoUrl?.toString().orEmpty(),
+                        uid = userId,
+                        username = data["username"] as? String ?: "vivid_user",
+                        displayName = data["displayName"] as? String ?: "Usuario Vivid",
+                        avatarUrl = data["avatarUrl"] as? String ?: "",
                         avatarBase64 = data["avatarBase64"] as? String ?: "",
-                        postsCount = (data["postsCount"] as? Long)?.toInt() ?: (data["postsCount"] as? Int ?: 0),
-                        followersCount = (data["followersCount"] as? Long)?.toInt() ?: (data["followersCount"] as? Int ?: 0),
-                        followingCount = (data["followingCount"] as? Long)?.toInt() ?: (data["followingCount"] as? Int ?: 0)
+                        postsCount = (data["postsCount"] as? Long)?.toInt() ?: 0,
+                        followersCount = (data["followersCount"] as? Long)?.toInt() ?: 0,
+                        followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0,
+                        isPrivate = data["isPrivate"] as? Boolean ?: false,
+                        isFollowing = false // Logic for following could be added here
                     )
+                    isLoading = false
                 }
 
+            // Only load posts if profile is public OR it's own profile
+            // (Simplification: In a real app we'd check follow status)
             postsListener = db.collection("posts")
-                .whereEqualTo("userId", uid)
+                .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, _ ->
                     val loadedPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
@@ -94,12 +102,6 @@ fun ProfileScreen(
                         )
                     }
                     posts = loadedPosts
-                    if (profile.postsCount != loadedPosts.size) {
-                        db.collection("users").document(uid).set(
-                            mapOf("postsCount" to loadedPosts.size, "updatedAt" to System.currentTimeMillis()),
-                            com.google.firebase.firestore.SetOptions.merge()
-                        )
-                    }
                 }
         }
 
@@ -111,16 +113,25 @@ fun ProfileScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Perfil") },
-            actions = {
-                IconButton(onClick = onSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+            title = { Text(if (isOwnProfile) "Mi Perfil" else "@${profile.username}") },
+            navigationIcon = {
+                if (!isOwnProfile) {
+                    IconButton(onClick = onLogout) { // Using onLogout as generic back for other profile for now
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                    }
                 }
-                IconButton(onClick = {
-                    auth.signOut()
-                    onLogout()
-                }) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión")
+            },
+            actions = {
+                if (isOwnProfile) {
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+                    }
+                    IconButton(onClick = {
+                        auth.signOut()
+                        onLogout()
+                    }) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión")
+                    }
                 }
             }
         )
@@ -153,46 +164,101 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth(0.8f)
-            ) {
-                Button(onClick = onEditProfile, modifier = Modifier.weight(1f)) {
-                    Text("Editar perfil")
+            if (isOwnProfile) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(0.8f)
+                ) {
+                    Button(onClick = onEditProfile, modifier = Modifier.weight(1f)) {
+                        Text("Editar perfil")
+                    }
+                    OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f)) {
+                        Text("Ajustes")
+                    }
                 }
-                OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f)) {
-                    Text("Ajustes")
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(0.8f)
+                ) {
+                    Button(onClick = { /* Follow logic */ }, modifier = Modifier.weight(1f)) {
+                        Text(if (profile.isFollowing) "Siguiendo" else "Seguir")
+                    }
+                    
+                    // Solo permitir mensajes si NO es privada O si ya lo sigues (Simplificado: Permitir si no es propia)
+                    // El usuario pidió: "cuando entras a su perfil si es privado no puedes mandar mensajes"
+                    if (!profile.isPrivate || profile.isFollowing) {
+                        OutlinedButton(
+                            onClick = {
+                                val chatId = ChatRepository.buildChatId(currentUserId, userId)
+                                onNavigateToChat(chatId, userId, profile.displayName)
+                            }, 
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Mensaje")
+                        }
+                    }
                 }
             }
         }
 
         HorizontalDivider()
 
-        Text(
-            "Publicaciones",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(16.dp)
-        )
-
-        if (posts.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "Aún no tienes publicaciones.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        if (profile.isPrivate && !isOwnProfile && !profile.isFollowing) {
+            PrivateAccountOverlay()
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(4.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(posts, key = { it.id }) { post ->
-                    ProfilePostThumbnail(post)
-                }
+            ProfilePostsGrid(posts)
+        }
+    }
+}
+
+@Composable
+private fun PrivateAccountOverlay() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+        Spacer(Modifier.height(16.dp))
+        Text("Esta cuenta es privada", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Síguela para ver sus fotos y videos.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ProfilePostsGrid(posts: List<ProfilePost>) {
+    Text(
+        "Publicaciones",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(16.dp)
+    )
+
+    if (posts.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "Aún no hay publicaciones.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(4.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(posts, key = { it.id }) { post ->
+                ProfilePostThumbnail(post)
             }
         }
     }
