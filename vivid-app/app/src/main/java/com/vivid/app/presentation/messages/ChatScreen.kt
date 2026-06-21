@@ -26,9 +26,10 @@ fun ChatScreen(
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
 
-    // Explicit initial values to fix Kotlin type inference for collectAsState
-    val messages: List<Message> by viewModel.messages.collectAsState(initial = emptyList())
-    val canMessage: Boolean by viewModel.canMessage.collectAsState(initial = true)
+    // 100% SAFE - direct .value (NO "by" delegate)
+    // Fixes "Cannot infer type" and "Unresolved reference 'canMessage'"
+    val messages: List<Message> = viewModel.messages.collectAsState(initial = emptyList<Message>()).value
+    val canMessage: Boolean = viewModel.canMessage.collectAsState(initial = true).value
 
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
