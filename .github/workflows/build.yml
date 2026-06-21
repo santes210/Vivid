@@ -19,16 +19,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35 + Build Tools
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;34.0.0"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
 
+      - name: Accept licenses
+        run: |
+          yes | sdkmanager --licenses || true
+
       - name: Build Debug APK
         run: |
           cd vivid-app
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --max-workers=1 --stacktrace
+          ./gradlew assembleDebug --no-daemon --max-workers=2 --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

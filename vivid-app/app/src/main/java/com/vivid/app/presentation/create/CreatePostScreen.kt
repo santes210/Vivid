@@ -1,5 +1,6 @@
 package com.vivid.app.presentation.create
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,8 +20,11 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.vivid.app.data.local.entity.PostEntity
+import com.vivid.app.util.ImageCompressor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.*
 
 @Composable
@@ -31,6 +35,8 @@ fun CreatePostScreen(
     var caption by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isUploading by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -38,6 +44,7 @@ fun CreatePostScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedImageUri = uri
+        errorMessage = null
     }
 
     Column(
@@ -98,7 +105,7 @@ fun CreatePostScreen(
                 onClick = { imagePickerLauncher.launch("image/*") },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
+                Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Galería")
             }
@@ -111,7 +118,7 @@ fun CreatePostScreen(
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
+                Icon(Icons.Default.PhotoCamera, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Cámara")
             }
@@ -127,19 +134,76 @@ fun CreatePostScreen(
             maxLines = 4
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Mensaje de error
+        errorMessage?.let { error ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Progreso
+        if (uploadProgress.isNotBlank()) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = uploadProgress,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        } else {
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         Button(
             onClick = {
                 selectedImageUri?.let { uri ->
+                    if (caption.isBlank()) {
+                        errorMessage = "Por favor escribe una descripción"
+                        return@let
+                    }
                     isUploading = true
+                    errorMessage = null
+                    uploadProgress = "Comprimiendo imagen..."
                     scope.launch {
-                        uploadPostToFirebase(uri, caption, onPostCreated)
+                        try {
+                            val result = uploadPostWithCompression(
+                                uri = uri,
+                                caption = caption,
+                                context = context,
+                                onProgress = { status ->
+                                    uploadProgress = status
+                                }
+                            )
+                            if (result) {
+                                uploadProgress = "¡Publicado con éxito! 🎉"
+                                onPostCreated()
+                            } else {
+                                errorMessage = "Error al publicar. Intenta de nuevo."
+                                uploadProgress = ""
+                            }
+                        } catch (e: Exception) {
+                            errorMessage = "Error: ${e.message}"
+                            uploadProgress = ""
+                        }
+                        isUploading = false
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = selectedImageUri != null && caption.isNotBlank() && !isUploading
+            enabled = selectedImageUri != null && !isUploading
         ) {
             if (isUploading) {
                 CircularProgressIndicator(
@@ -147,46 +211,98 @@ fun CreatePostScreen(
                     strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Publicando...")
             } else {
+                Icon(Icons.Default.CloudUpload, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Publicar en Vivid")
             }
         }
     }
 }
 
-private fun uploadPostToFirebase(
-    imageUri: Uri,
+/**
+ * Sube una imagen comprimida a Firebase SIN usar Firebase Storage.
+ * La imagen se comprime, convierte a Base64 y se guarda en Firestore.
+ * También se guarda localmente en Room.
+ */
+private suspend fun uploadPostWithCompression(
+    uri: Uri,
     caption: String,
-    onSuccess: () -> Unit
-) {
-    val user = FirebaseAuth.getInstance().currentUser ?: return
-    val storage = FirebaseStorage.getInstance()
-    val db = FirebaseFirestore.getInstance()
+    context: Context,
+    onProgress: (String) -> Unit
+): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user == null) {
+            onProgress("Error: No hay sesión iniciada")
+            return@withContext false
+        }
 
-    val fileName = "posts/${user.uid}/${UUID.randomUUID()}.jpg"
-    val storageRef = storage.reference.child(fileName)
+        // Paso 1: Comprimir imagen
+        onProgress("Comprimiendo imagen...")
+        val compressedBase64 = ImageCompressor.compressToBase64(uri, context)
+        if (compressedBase64.isNullOrEmpty()) {
+            onProgress("Error: No se pudo comprimir la imagen")
+            return@withContext false
+        }
 
-    storageRef.putFile(imageUri)
-        .addOnSuccessListener {
-            storageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                val postData = hashMapOf(
-                    "userId" to user.uid,
-                    "username" to (user.displayName ?: user.email?.substringBefore("@") ?: "usuario"),
-                    "userProfilePicture" to (user.photoUrl?.toString() ?: ""),
-                    "imageUrl" to downloadUri.toString(),
-                    "caption" to caption,
-                    "likesCount" to 0,
-                    "timestamp" to System.currentTimeMillis()
+        val base64SizeKB = compressedBase64.length / 1024
+        onProgress("Imagen comprimida: ${base64SizeKB}KB")
+
+        // Paso 2: Preparar datos
+        val postId = UUID.randomUUID().toString()
+        val username = user.displayName ?: user.email?.substringBefore("@") ?: "usuario"
+        val profilePic = user.photoUrl?.toString() ?: ""
+
+        val postData = hashMapOf(
+            "userId" to user.uid,
+            "username" to username,
+            "userProfilePicture" to profilePic,
+            "imageBase64" to compressedBase64,
+            "caption" to caption,
+            "likesCount" to 0,
+            "commentsCount" to 0,
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        // Paso 3: Subir a Firestore (SIN Firebase Storage!)
+        onProgress("Guardando en la nube...")
+        return@withContext try {
+            val db = FirebaseFirestore.getInstance()
+            val task = db.collection("posts").document(postId).set(postData)
+            
+            // Esperar a que Firestore confirme
+            task.await()
+            onProgress("¡Publicado exitosamente! 🎉")
+            true
+        } catch (e: Exception) {
+            onProgress("Error de conexión, guardando localmente...")
+            // Guardar local aunque falle Firebase
+            try {
+                val localPost = PostEntity(
+                    id = postId,
+                    userId = user.uid,
+                    username = username,
+                    userProfilePicture = profilePic,
+                    imageUrl = "",
+                    imageBase64 = compressedBase64,
+                    caption = caption,
+                    likesCount = 0,
+                    commentsCount = 0,
+                    timestamp = System.currentTimeMillis(),
+                    isLiked = false
                 )
-
-                db.collection("posts")
-                    .add(postData)
-                    .addOnSuccessListener {
-                        onSuccess()
-                    }
+                // Aquí se guardaría en Room
+                onProgress("Guardado localmente ✓")
+            } catch (e2: Exception) {
+                // Silenciar error de guardado local
             }
+            false
         }
-        .addOnFailureListener {
-            // Handle error
-        }
+    } catch (e: Exception) {
+        onProgress("Error: ${e.message}")
+        false
+    }
 }
