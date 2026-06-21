@@ -66,7 +66,7 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
-    implementation(libs.coil.kt)
+    implementation(libs.coil)
 
     // Room
     implementation(libs.room.runtime)
