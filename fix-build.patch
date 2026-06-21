@@ -1,0 +1,12 @@
+diff --git a/vivid-app/app/build.gradle.kts b/vivid-app/app/build.gradle.kts
+index beed9e7..1bf6356 100644
+--- a/vivid-app/app/build.gradle.kts
++++ b/vivid-app/app/build.gradle.kts
+@@ -71,6 +71,7 @@ dependencies {
+     implementation(libs.androidx.ui.graphics)
+     implementation(libs.androidx.ui.tooling.preview)
+     implementation(libs.androidx.material3)
++    implementation("androidx.compose.material:material-icons-extended")
+     implementation(libs.androidx.navigation.compose)
+ 
+     // Coil

@@ -1,5 +1,9 @@
 package com.vivid.app.presentation.stories
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -18,19 +23,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
-
-data class Story(
-    val id: String,
-    val username: String,
-    val avatarUrl: String,
-    val mediaUrl: String = "",
-    val hasUnseenStory: Boolean = true
-)
+import kotlinx.coroutines.launch
 
 @Composable
 fun StoriesTray(onStoryClick: (Story) -> Unit) {
     val db = FirebaseFirestore.getInstance()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val scope = rememberCoroutineScope()
+
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -41,18 +41,15 @@ fun StoriesTray(onStoryClick: (Story) -> Unit) {
             .orderBy("expiresAt", Query.Direction.ASCENDING)
             .limit(50)
             .addSnapshotListener { snapshot, _ ->
-                stories = snapshot?.documents.orEmpty().mapNotNull { doc ->
-                    val userId = doc.getString("userId").orEmpty()
-                    if (userId.isBlank()) return@mapNotNull null
-                    Story(
-                        id = doc.id,
-                        username = doc.getString("username") ?: "usuario",
-                        avatarUrl = doc.getString("avatarUrl").orEmpty(),
-                        mediaUrl = doc.getString("mediaUrl").orEmpty(),
-                        hasUnseenStory = true
+                val docs = snapshot?.documents.orEmpty()
+                scope.launch {
+                    stories = buildVisibleStories(
+                        firestore = db,
+                        currentUserId = currentUserId,
+                        storyDocs = docs
                     )
+                    isLoading = false
                 }
-                isLoading = false
             }
         onDispose { registration?.remove() }
     }
@@ -106,31 +103,15 @@ fun StoryItem(story: Story, onClick: () -> Unit) {
             modifier = Modifier.size(68.dp),
             color = if (story.hasUnseenStory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
         ) {
-            if (story.avatarUrl.isNotBlank()) {
-                AsyncImage(
-                    model = story.avatarUrl,
-                    contentDescription = story.username,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .padding(3.dp),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .padding(3.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        story.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
+            StoryAvatar(
+                username = story.username,
+                avatarUrl = story.avatarUrl,
+                avatarBase64 = story.avatarBase64,
+                modifier = Modifier
+                    .size(64.dp)
+                    .padding(3.dp)
+                    .clip(CircleShape)
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
@@ -141,5 +122,51 @@ fun StoryItem(story: Story, onClick: () -> Unit) {
     }
 }
 
-// Ya no hay stories demo. Se deja vacío para que las rutas antiguas sigan compilando.
-val demoStories = emptyList<Story>()
+@Composable
+fun StoryAvatar(
+    username: String,
+    avatarUrl: String,
+    avatarBase64: String,
+    modifier: Modifier = Modifier
+) {
+    if (avatarBase64.isNotBlank()) {
+        var bitmap by remember(avatarBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(avatarBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(avatarBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = username,
+                modifier = modifier,
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
+
+    if (avatarUrl.isNotBlank()) {
+        AsyncImage(
+            model = avatarUrl,
+            contentDescription = username,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = modifier.background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}

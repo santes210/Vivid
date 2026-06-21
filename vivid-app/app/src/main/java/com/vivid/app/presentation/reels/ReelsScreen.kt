@@ -3,12 +3,13 @@ package com.vivid.app.presentation.reels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,15 +17,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 data class Reel(
     val id: String,
@@ -67,6 +73,17 @@ fun ReelsScreen() {
     val listState = rememberLazyListState()
     var currentPlayingIndex by remember { mutableStateOf(0) }
 
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
+            .map { visibleItems ->
+                visibleItems.maxByOrNull { item -> item.size }?.index ?: 0
+            }
+            .distinctUntilChanged()
+            .collect { index ->
+                currentPlayingIndex = index
+            }
+    }
+
     when {
         isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -78,21 +95,54 @@ fun ReelsScreen() {
             state = listState,
             modifier = Modifier.fillMaxSize()
         ) {
-            items(reels, key = { it.id }) { reel ->
+            itemsIndexed(reels, key = { _, reel -> reel.id }) { index, reel ->
                 ReelItem(
                     reel = reel,
-                    isPlaying = reels.indexOf(reel) == currentPlayingIndex,
-                    onLike = { }
+                    isPlaying = index == currentPlayingIndex,
+                    onLike = { isLiked -> updateReelLikeInFirebase(reel.id, isLiked) }
                 )
             }
         }
     }
 }
 
+private fun updateReelLikeInFirebase(reelId: String, isLiked: Boolean) {
+    FirebaseFirestore.getInstance()
+        .collection("reels")
+        .document(reelId)
+        .update("likes", FieldValue.increment(if (isLiked) 1L else -1L))
+}
+
 @Composable
-fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
-    var isLiked by remember { mutableStateOf(false) }
-    var likeCount by remember { mutableStateOf(reel.likes) }
+fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    val exoPlayer = remember(reel.videoUrl) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(reel.videoUrl))
+            repeatMode = ExoPlayer.REPEAT_MODE_ALL
+            prepare()
+        }
+    }
+
+    var isLiked by remember(reel.id) { mutableStateOf(false) }
+    var likeCount by remember(reel.id) { mutableStateOf(reel.likes) }
+    var isPausedByUser by remember(reel.id) { mutableStateOf(false) }
+
+    LaunchedEffect(isPlaying, isPausedByUser, exoPlayer) {
+        if (isPlaying && !isPausedByUser) {
+            exoPlayer.playWhenReady = true
+            exoPlayer.play()
+        } else {
+            exoPlayer.playWhenReady = false
+            exoPlayer.pause()
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -103,13 +153,12 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    player = ExoPlayer.Builder(ctx).build().also { exoPlayer ->
-                        val mediaItem = MediaItem.fromUri(reel.videoUrl)
-                        exoPlayer.setMediaItem(mediaItem)
-                        exoPlayer.prepare()
-                        exoPlayer.playWhenReady = isPlaying
-                    }
+                    useController = false
+                    player = exoPlayer
                 }
+            },
+            update = { playerView ->
+                playerView.player = exoPlayer
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -136,7 +185,10 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(reel.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(
+                            reel.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -155,7 +207,7 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
             IconButton(onClick = {
                 isLiked = !isLiked
                 likeCount += if (isLiked) 1 else -1
-                onLike()
+                onLike(isLiked)
             }) {
                 Icon(
                     imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -168,8 +220,15 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            IconButton(onClick = { }) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(28.dp))
+            IconButton(onClick = {
+                isPausedByUser = !isPausedByUser
+            }) {
+                Icon(
+                    imageVector = if (isPlaying && !isPausedByUser) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying && !isPausedByUser) "Pausar" else "Reproducir",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }

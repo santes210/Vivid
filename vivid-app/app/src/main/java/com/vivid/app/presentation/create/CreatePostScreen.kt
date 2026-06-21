@@ -17,10 +17,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.local.entity.PostEntity
+import com.vivid.app.presentation.stories.uploadStoryWithCompression
 import com.vivid.app.util.ImageCompressor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,11 +30,17 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.*
 
+private enum class CreateContentType {
+    POST,
+    STORY
+}
+
 @Composable
 fun CreatePostScreen(
     navController: NavController,
     onPostCreated: () -> Unit = {}
 ) {
+    var selectedContentType by remember { mutableStateOf(CreateContentType.POST) }
     var caption by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isUploading by remember { mutableStateOf(false) }
@@ -40,6 +48,20 @@ fun CreatePostScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val capturedPhotoPathState = currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow("capturedPhoto", "")
+        ?.collectAsState()
+    val capturedPhotoPath = capturedPhotoPathState?.value.orEmpty()
+
+    LaunchedEffect(capturedPhotoPath) {
+        if (capturedPhotoPath.isNotBlank()) {
+            selectedImageUri = Uri.parse(capturedPhotoPath)
+            errorMessage = null
+            currentBackStackEntry?.savedStateHandle?.remove<String>("capturedPhoto")
+        }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -58,13 +80,45 @@ fun CreatePostScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Crear publicación", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                if (selectedContentType == CreateContentType.POST) "Crear publicación" else "Crear story",
+                style = MaterialTheme.typography.headlineSmall
+            )
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(Icons.Default.Close, contentDescription = "Cerrar")
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FilterChip(
+                selected = selectedContentType == CreateContentType.POST,
+                onClick = { selectedContentType = CreateContentType.POST },
+                label = { Text("Publicación") },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = selectedContentType == CreateContentType.STORY,
+                onClick = { selectedContentType = CreateContentType.STORY },
+                label = { Text("Story") },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (selectedContentType == CreateContentType.STORY) {
+            Text(
+                "Tu story se verá 24 horas y respetará tu privacidad.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Image preview or buttons
         if (selectedImageUri != null) {
@@ -130,9 +184,22 @@ fun CreatePostScreen(
         OutlinedTextField(
             value = caption,
             onValueChange = { caption = it },
-            label = { Text("Descripción / Caption") },
+            label = {
+                Text(
+                    if (selectedContentType == CreateContentType.POST) {
+                        "Descripción / Caption"
+                    } else {
+                        "Texto de la story (opcional)"
+                    }
+                )
+            },
             modifier = Modifier.fillMaxWidth(),
-            maxLines = 4
+            maxLines = 4,
+            supportingText = {
+                if (selectedContentType == CreateContentType.STORY) {
+                    Text("Las stories privadas solo podrán verlas tus seguidores aprobados.")
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -171,28 +238,63 @@ fun CreatePostScreen(
         Button(
             onClick = {
                 selectedImageUri?.let { uri ->
-                    if (caption.isBlank()) {
+                    if (selectedContentType == CreateContentType.POST && caption.isBlank()) {
                         errorMessage = "Por favor escribe una descripción"
                         return@let
                     }
                     isUploading = true
                     errorMessage = null
-                    uploadProgress = "Comprimiendo imagen..."
+                    uploadProgress = if (selectedContentType == CreateContentType.POST) {
+                        "Comprimiendo imagen..."
+                    } else {
+                        "Preparando story..."
+                    }
                     scope.launch {
                         try {
-                            val result = uploadPostWithCompression(
-                                uri = uri,
-                                caption = caption,
-                                context = context,
-                                onProgress = { status ->
-                                    uploadProgress = status
+                            val wasSuccessful = when (selectedContentType) {
+                                CreateContentType.POST -> uploadPostWithCompression(
+                                    uri = uri,
+                                    caption = caption,
+                                    context = context,
+                                    onProgress = { status ->
+                                        uploadProgress = status
+                                    }
+                                )
+
+                                CreateContentType.STORY -> {
+                                    val result = uploadStoryWithCompression(
+                                        context = context,
+                                        uri = uri,
+                                        caption = caption.trim()
+                                    )
+                                    result.onFailure { throwable ->
+                                        errorMessage = throwable.message ?: "No se pudo subir la story"
+                                        uploadProgress = ""
+                                    }
+                                    result.isSuccess
                                 }
-                            )
-                            if (result) {
-                                uploadProgress = "¡Publicado con éxito! 🎉"
+                            }
+
+                            if (wasSuccessful) {
+                                uploadProgress = if (selectedContentType == CreateContentType.POST) {
+                                    "¡Publicado con éxito! 🎉"
+                                } else {
+                                    "¡Story compartida con éxito! ✨"
+                                }
+                                selectedImageUri = null
+                                caption = ""
                                 onPostCreated()
-                            } else {
-                                errorMessage = "Error al publicar. Intenta de nuevo."
+                                navController.navigate("feed") {
+                                    popUpTo("feed") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            } else if (errorMessage.isNullOrBlank()) {
+                                errorMessage = if (selectedContentType == CreateContentType.POST) {
+                                    "Error al publicar. Intenta de nuevo."
+                                } else {
+                                    "Error al subir la story. Intenta de nuevo."
+                                }
                                 uploadProgress = ""
                             }
                         } catch (e: Exception) {
@@ -213,11 +315,11 @@ fun CreatePostScreen(
                     color = MaterialTheme.colorScheme.onPrimary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Publicando...")
+                Text(if (selectedContentType == CreateContentType.POST) "Publicando..." else "Subiendo story...")
             } else {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Publicar en Vivid")
+                Text(if (selectedContentType == CreateContentType.POST) "Publicar en Vivid" else "Compartir story")
             }
         }
     }

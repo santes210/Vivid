@@ -1,5 +1,9 @@
 package com.vivid.app.presentation.stories
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -12,11 +16,74 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+@Composable
+fun StoryViewerRoute(
+    initialStoryId: String,
+    onClose: () -> Unit
+) {
+    val db = FirebaseFirestore.getInstance()
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val scope = rememberCoroutineScope()
+
+    var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    DisposableEffect(initialStoryId, currentUserId) {
+        var registration: ListenerRegistration? = null
+        registration = db.collection("stories")
+            .whereGreaterThan("expiresAt", System.currentTimeMillis())
+            .orderBy("expiresAt", Query.Direction.ASCENDING)
+            .limit(50)
+            .addSnapshotListener { snapshot, _ ->
+                val docs = snapshot?.documents.orEmpty()
+                scope.launch {
+                    stories = buildVisibleStories(
+                        firestore = db,
+                        currentUserId = currentUserId,
+                        storyDocs = docs
+                    )
+                    isLoading = false
+                }
+            }
+        onDispose { registration?.remove() }
+    }
+
+    when {
+        isLoading -> Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Color.White)
+        }
+        stories.isEmpty() -> LaunchedEffect(Unit) { onClose() }
+        else -> {
+            val initialIndex = stories.indexOfFirst { it.id == initialStoryId }
+                .takeIf { it >= 0 }
+                ?: 0
+            key(initialStoryId, stories.size) {
+                StoryViewerScreen(
+                    stories = stories,
+                    initialIndex = initialIndex,
+                    onClose = onClose
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun StoryViewerScreen(
@@ -24,13 +91,12 @@ fun StoryViewerScreen(
     initialIndex: Int = 0,
     onClose: () -> Unit
 ) {
-    var currentIndex by remember { mutableStateOf(initialIndex) }
-    var progress by remember { mutableStateOf(0f) }
+    var currentIndex by remember(initialIndex) { mutableStateOf(initialIndex) }
+    var progress by remember(currentIndex) { mutableStateOf(0f) }
 
     val currentStory = stories.getOrNull(currentIndex) ?: return
 
-    // Auto advance
-    LaunchedEffect(currentIndex) {
+    LaunchedEffect(currentIndex, stories.size) {
         progress = 0f
         while (progress < 1f) {
             delay(50)
@@ -47,7 +113,7 @@ fun StoryViewerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
+            .pointerInput(currentIndex, stories.size) {
                 detectTapGestures(
                     onTap = { offset ->
                         if (offset.x < size.width / 2) {
@@ -59,7 +125,8 @@ fun StoryViewerScreen(
                 )
             }
     ) {
-        // Progress bars
+        StoryMedia(story = currentStory)
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -78,21 +145,22 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .weight(1f)
                         .height(3.dp),
-                    color = Color.White
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.25f)
                 )
             }
         }
 
-        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 24.dp, start = 16.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = currentStory.avatarUrl,
-                contentDescription = null,
+            StoryAvatar(
+                username = currentStory.username,
+                avatarUrl = currentStory.avatarUrl,
+                avatarBase64 = currentStory.avatarBase64,
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
@@ -105,23 +173,50 @@ fun StoryViewerScreen(
             }
         }
 
-        // Story content real desde Firestore
-        AsyncImage(
-            model = currentStory.mediaUrl.ifBlank { currentStory.avatarUrl },
-            contentDescription = "Story",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-
-        // Bottom actions
-        Row(
+        Column(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
+                .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .background(Color.Black.copy(alpha = 0.35f))
+                .padding(16.dp)
         ) {
-            Text("Respuesta a ${currentStory.username}", color = Color.White.copy(0.8f))
+            if (currentStory.caption.isNotBlank()) {
+                Text(currentStory.caption, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Text("Story de @${currentStory.username}", color = Color.White.copy(alpha = 0.8f))
         }
     }
+}
+
+@Composable
+private fun StoryMedia(story: Story) {
+    if (story.mediaBase64.isNotBlank()) {
+        var bitmap by remember(story.mediaBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(story.mediaBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(story.mediaBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = "Story",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
+
+    AsyncImage(
+        model = story.mediaUrl.ifBlank { story.avatarUrl },
+        contentDescription = "Story",
+        modifier = Modifier.fillMaxSize(),
+        contentScale = ContentScale.Crop
+    )
 }

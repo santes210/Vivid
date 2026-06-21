@@ -34,8 +34,7 @@ import com.vivid.app.presentation.profile.SettingsScreen
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.presentation.search.SearchScreen
 import com.vivid.app.presentation.search.SearchUser
-import com.vivid.app.presentation.stories.StoryViewerScreen
-import com.vivid.app.presentation.stories.demoStories
+import com.vivid.app.presentation.stories.StoryViewerRoute
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
     object Auth : Screen("auth", "Auth")
@@ -95,7 +94,10 @@ fun VividNavigation(navController: NavHostController) {
             composable(Screen.Feed.route) {
                 FeedScreen(
                     onOpenMessages = { navController.navigate(Screen.Messages.route) },
-                    onOpenProfile = { navController.navigate(Screen.Profile.route) }
+                    onOpenProfile = { navController.navigate(Screen.Profile.route) },
+                    onOpenStoryViewer = { storyId ->
+                        navController.navigate("story_viewer/${Uri.encode(storyId)}")
+                    }
                 )
             }
             composable(Screen.Search.route) {
@@ -174,9 +176,15 @@ fun VividNavigation(navController: NavHostController) {
                     otherUserName = receiverName
                 )
             }
-            composable("story_viewer/{index}") { backStackEntry ->
-                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 0
-                StoryViewerScreen(stories = demoStories, initialIndex = index, onClose = { navController.popBackStack() })
+            composable(
+                route = "story_viewer/{storyId}",
+                arguments = listOf(navArgument("storyId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val storyId = backStackEntry.arguments?.getString("storyId").orEmpty()
+                StoryViewerRoute(
+                    initialStoryId = storyId,
+                    onClose = { navController.popBackStack() }
+                )
             }
         }
     }

@@ -10,9 +10,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,9 +23,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.presentation.stories.StoriesTray
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class PostData(
     val id: String,
@@ -36,18 +39,30 @@ data class PostData(
     val imageBase64: String = "",
     val caption: String,
     val likesCount: Int = 0,
+    val commentsCount: Int = 0,
     val timestamp: Long,
     val isLiked: Boolean = false
+)
+
+data class PostComment(
+    val id: String,
+    val userId: String,
+    val username: String,
+    val text: String,
+    val timestamp: Long,
+    val avatarUrl: String = "",
+    val avatarBase64: String = ""
 )
 
 @Composable
 fun FeedScreen(
     onOpenMessages: () -> Unit,
-    onOpenProfile: () -> Unit
+    onOpenProfile: () -> Unit,
+    onOpenStoryViewer: (storyId: String) -> Unit = {}
 ) {
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    val scope = rememberCoroutineScope()
+    var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
 
     LaunchedEffect(Unit) {
         isLoading = true
@@ -73,7 +88,7 @@ fun FeedScreen(
             }
         )
 
-        StoriesTray(onStoryClick = {})
+        StoriesTray(onStoryClick = { story -> onOpenStoryViewer(story.id) })
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -93,11 +108,21 @@ fun FeedScreen(
             }
         } else {
             LazyColumn {
-                items(posts) { post ->
-                    PostItem(post = post)
+                items(posts, key = { it.id }) { post ->
+                    PostItem(
+                        post = post,
+                        onOpenComments = { selectedPostForComments = post }
+                    )
                 }
             }
         }
+    }
+
+    selectedPostForComments?.let { post ->
+        PostCommentsSheet(
+            post = post,
+            onDismiss = { selectedPostForComments = null }
+        )
     }
 }
 
@@ -121,6 +146,7 @@ private fun loadPostsFromFirebase(
                     imageBase64 = doc.getString("imageBase64") ?: "",
                     caption = doc.getString("caption") ?: "",
                     likesCount = doc.getLong("likesCount")?.toInt() ?: 0,
+                    commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0,
                     timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
                     isLiked = false
                 )
@@ -135,18 +161,21 @@ private fun loadPostsFromFirebase(
 private fun updateLikeInFirebase(postId: String, isLiked: Boolean) {
     val db = FirebaseFirestore.getInstance()
     val postRef = db.collection("posts").document(postId)
-    
+
     val increment = if (isLiked) 1L else -1L
-    postRef.update("likesCount", com.google.firebase.firestore.FieldValue.increment(increment))
+    postRef.update("likesCount", FieldValue.increment(increment))
 }
 
 @Composable
-fun PostItem(post: PostData) {
+fun PostItem(
+    post: PostData,
+    onOpenComments: () -> Unit
+) {
     var isLiked by remember { mutableStateOf(post.isLiked) }
     var likeCount by remember { mutableStateOf(post.likesCount) }
+    var commentCount by remember { mutableStateOf(post.commentsCount) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Header del post
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -155,7 +184,9 @@ fun PostItem(post: PostData) {
                 AsyncImage(
                     model = post.userProfilePicture,
                     contentDescription = "Avatar",
-                    modifier = Modifier.size(36.dp).clip(CircleShape),
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
             } else {
@@ -177,14 +208,12 @@ fun PostItem(post: PostData) {
             Text(post.username, style = MaterialTheme.typography.titleMedium)
         }
 
-        // Imagen del post
         PostImage(
             imageBase64 = post.imageBase64,
             imageUrl = post.imageUrl,
             username = post.username
         )
 
-        // Acciones
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -202,21 +231,261 @@ fun PostItem(post: PostData) {
             }
             Text("$likeCount", style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.width(16.dp))
-            IconButton(onClick = { }) {
-                Icon(Icons.Default.Email, contentDescription = "Comment")
+            IconButton(onClick = {
+                commentCount = maxOf(commentCount, post.commentsCount)
+                onOpenComments()
+            }) {
+                Icon(Icons.Default.Email, contentDescription = "Comentarios")
             }
+            Text("$commentCount", style = MaterialTheme.typography.bodyMedium)
         }
 
-        // Caption
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             Text(text = post.caption, style = MaterialTheme.typography.bodyMedium)
             Text(
-                text = "Ver todos los comentarios",
+                text = if (commentCount > 0) "Ver $commentCount comentarios" else "Sé la primera persona en comentar",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PostCommentsSheet(
+    post: PostData,
+    onDismiss: () -> Unit
+) {
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
+    val currentUser = auth.currentUser
+    val scope = rememberCoroutineScope()
+
+    var comments by remember(post.id) { mutableStateOf<List<PostComment>>(emptyList()) }
+    var commentText by remember(post.id) { mutableStateOf("") }
+    var isSending by remember(post.id) { mutableStateOf(false) }
+    var errorMessage by remember(post.id) { mutableStateOf<String?>(null) }
+
+    DisposableEffect(post.id) {
+        var registration: ListenerRegistration? = null
+        registration = db.collection("posts")
+            .document(post.id)
+            .collection("comments")
+            .orderBy("timestamp")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    errorMessage = error.message ?: "No se pudieron cargar los comentarios."
+                    return@addSnapshotListener
+                }
+
+                comments = snapshot?.documents.orEmpty().map { doc ->
+                    PostComment(
+                        id = doc.id,
+                        userId = doc.getString("userId").orEmpty(),
+                        username = doc.getString("username") ?: "usuario",
+                        text = doc.getString("text").orEmpty(),
+                        timestamp = doc.getLong("timestamp") ?: 0L,
+                        avatarUrl = doc.getString("avatarUrl").orEmpty(),
+                        avatarBase64 = doc.getString("avatarBase64").orEmpty()
+                    )
+                }
+                errorMessage = null
+            }
+
+        onDispose { registration?.remove() }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+        ) {
+            Text("Comentarios", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (post.caption.isBlank()) "Publicación de @${post.username}" else post.caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            when {
+                errorMessage != null -> {
+                    Text(
+                        errorMessage ?: "Error",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                }
+                comments.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 140.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Todavía no hay comentarios.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 360.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(comments, key = { it.id }) { comment ->
+                            CommentRow(comment = comment)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Escribe un comentario...") },
+                    maxLines = 3
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    enabled = commentText.isNotBlank() && !isSending && currentUser != null,
+                    onClick = {
+                        val cleanComment = commentText.trim()
+                        if (cleanComment.isBlank()) return@Button
+
+                        scope.launch {
+                            isSending = true
+                            errorMessage = null
+                            try {
+                                val userDoc = db.collection("users")
+                                    .document(currentUser?.uid.orEmpty())
+                                    .get()
+                                    .await()
+
+                                val username = userDoc.getString("username")
+                                    ?: currentUser?.displayName
+                                    ?: currentUser?.email?.substringBefore("@")
+                                    ?: "usuario"
+
+                                val avatarUrl = userDoc.getString("avatarUrl").orEmpty()
+                                val avatarBase64 = userDoc.getString("avatarBase64").orEmpty()
+
+                                db.collection("posts")
+                                    .document(post.id)
+                                    .collection("comments")
+                                    .add(
+                                        mapOf(
+                                            "userId" to currentUser?.uid.orEmpty(),
+                                            "username" to username,
+                                            "text" to cleanComment,
+                                            "avatarUrl" to avatarUrl,
+                                            "avatarBase64" to avatarBase64,
+                                            "timestamp" to System.currentTimeMillis()
+                                        )
+                                    )
+                                    .await()
+
+                                db.collection("posts")
+                                    .document(post.id)
+                                    .update("commentsCount", FieldValue.increment(1))
+                                    .await()
+
+                                commentText = ""
+                            } catch (e: Exception) {
+                                errorMessage = e.message ?: "No se pudo enviar el comentario."
+                            } finally {
+                                isSending = false
+                            }
+                        }
+                    }
+                ) {
+                    Text(if (isSending) "..." else "Enviar")
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun CommentRow(comment: PostComment) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        CommentAvatar(comment = comment)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(comment.username, style = MaterialTheme.typography.titleSmall)
+            Text(comment.text, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun CommentAvatar(comment: PostComment) {
+    if (comment.avatarBase64.isNotBlank()) {
+        var bitmap by remember(comment.avatarBase64) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(comment.avatarBase64) {
+            bitmap = try {
+                val bytes = Base64.decode(comment.avatarBase64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = comment.username,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            return
+        }
+    }
+
+    if (comment.avatarUrl.isNotBlank()) {
+        AsyncImage(
+            model = comment.avatarUrl,
+            contentDescription = comment.username,
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                comment.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
     }
 }
 
@@ -233,9 +502,8 @@ fun PostImage(
     LaunchedEffect(imageBase64, imageUrl) {
         isLoading = true
         hasError = false
-        
+
         if (imageBase64.isNotBlank()) {
-            // Cargar desde Base64 comprimido
             try {
                 val bytes = Base64.decode(imageBase64, Base64.NO_WRAP)
                 bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -244,7 +512,6 @@ fun PostImage(
                 hasError = true
             }
         } else if (imageUrl.isNotBlank()) {
-            // Cargar desde URL (para compatibilidad con posts antiguos)
             bitmap = null
             hasError = false
         }
@@ -275,7 +542,6 @@ fun PostImage(
                 )
             }
         } else if (bitmap != null) {
-            // Mostrar imagen comprimida desde Base64
             Image(
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = "Post image",
@@ -283,7 +549,6 @@ fun PostImage(
                 contentScale = ContentScale.Crop
             )
         } else if (imageUrl.isNotBlank()) {
-            // Fallback: cargar desde URL
             AsyncImage(
                 model = imageUrl,
                 contentDescription = "Post image",
@@ -291,7 +556,6 @@ fun PostImage(
                 contentScale = ContentScale.Crop
             )
         } else {
-            // Placeholder
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -299,7 +563,7 @@ fun PostImage(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "📷 ${username}",
+                    text = "📷 $username",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
