@@ -22,6 +22,9 @@ class ChatViewModel @Inject constructor(
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
 
+    private val _canMessage = MutableStateFlow(true)
+    val canMessage: StateFlow<Boolean> = _canMessage.asStateFlow()
+
     private var loadedChatId: String? = null
 
     fun openChat(chatId: String, receiverId: String, receiverName: String) {
