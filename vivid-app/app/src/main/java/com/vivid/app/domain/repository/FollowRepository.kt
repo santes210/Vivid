@@ -1,6 +1,7 @@
 package com.vivid.app.domain.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -14,45 +15,61 @@ class FollowRepository @Inject constructor(
     private val currentUserId get() = auth.currentUser?.uid ?: ""
 
     suspend fun followUser(targetUserId: String) {
-        if (currentUserId.isEmpty()) return
+        if (currentUserId.isEmpty() || targetUserId == currentUserId) return
 
         val batch = firestore.batch()
 
-        // Add to current user's following
+        // 1. Add to current user's following subcollection
         val followingRef = firestore.collection("users")
             .document(currentUserId)
             .collection("following")
             .document(targetUserId)
-
         batch.set(followingRef, mapOf("timestamp" to System.currentTimeMillis()))
 
-        // Add to target user's followers
+        // 2. Add to target user's followers subcollection
         val followerRef = firestore.collection("users")
             .document(targetUserId)
             .collection("followers")
             .document(currentUserId)
-
         batch.set(followerRef, mapOf("timestamp" to System.currentTimeMillis()))
+
+        // 3. Increment current user followingCount
+        val currentUserRef = firestore.collection("users").document(currentUserId)
+        batch.update(currentUserRef, "followingCount", FieldValue.increment(1))
+
+        // 4. Increment target user followersCount
+        val targetUserRef = firestore.collection("users").document(targetUserId)
+        batch.update(targetUserRef, "followersCount", FieldValue.increment(1))
 
         batch.commit().await()
     }
 
     suspend fun unfollowUser(targetUserId: String) {
-        if (currentUserId.isEmpty()) return
+        if (currentUserId.isEmpty() || targetUserId == currentUserId) return
 
         val batch = firestore.batch()
 
-        firestore.collection("users")
+        // 1. Delete from following subcollection
+        val followingRef = firestore.collection("users")
             .document(currentUserId)
             .collection("following")
             .document(targetUserId)
-            .delete()
+        batch.delete(followingRef)
 
-        firestore.collection("users")
+        // 2. Delete from followers subcollection
+        val followerRef = firestore.collection("users")
             .document(targetUserId)
             .collection("followers")
             .document(currentUserId)
-            .delete()
+        batch.delete(followerRef)
+
+        // 3. Decrement current user followingCount
+        val currentUserRef = firestore.collection("users").document(currentUserId)
+        batch.update(currentUserRef, "followingCount", FieldValue.increment(-1))
+
+        // 4. Decrement target user followersCount
+        val targetUserRef = firestore.collection("users").document(targetUserId)
+        batch.update(targetUserRef, "followersCount", FieldValue.increment(-1))
 
         batch.commit().await()
     }

@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -39,8 +40,7 @@ data class ProfileUiState(
     val postsCount: Int = 0,
     val followersCount: Int = 0,
     val followingCount: Int = 0,
-    val isPrivate: Boolean = false,
-    val isFollowing: Boolean = false
+    val isPrivate: Boolean = false
 )
 
 data class ProfilePost(
@@ -55,7 +55,8 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onEditProfile: () -> Unit = {},
     onSettings: () -> Unit = {},
-    onNavigateToChat: (chatId: String, receiverId: String, name: String) -> Unit = { _, _, _ -> }
+    onNavigateToChat: (chatId: String, receiverId: String, name: String) -> Unit = { _, _, _ -> },
+    viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val auth = FirebaseAuth.getInstance()
     val currentUserId = auth.currentUser?.uid.orEmpty()
@@ -64,7 +65,11 @@ fun ProfileScreen(
 
     var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val isFollowing by viewModel.isFollowing.collectAsState()
+
+    LaunchedEffect(userId) {
+        viewModel.checkFollowStatus(userId)
+    }
 
     DisposableEffect(userId) {
         var profileListener: ListenerRegistration? = null
@@ -83,14 +88,10 @@ fun ProfileScreen(
                         postsCount = (data["postsCount"] as? Long)?.toInt() ?: 0,
                         followersCount = (data["followersCount"] as? Long)?.toInt() ?: 0,
                         followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0,
-                        isPrivate = data["isPrivate"] as? Boolean ?: false,
-                        isFollowing = false // Logic for following could be added here
+                        isPrivate = data["isPrivate"] as? Boolean ?: false
                     )
-                    isLoading = false
                 }
 
-            // Only load posts if profile is public OR it's own profile
-            // (Simplification: In a real app we'd check follow status)
             postsListener = db.collection("posts")
                 .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, _ ->
@@ -116,7 +117,7 @@ fun ProfileScreen(
             title = { Text(if (isOwnProfile) "Mi Perfil" else "@${profile.username}") },
             navigationIcon = {
                 if (!isOwnProfile) {
-                    IconButton(onClick = onLogout) { // Using onLogout as generic back for other profile for now
+                    IconButton(onClick = onLogout) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
                 }
@@ -181,13 +182,15 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth(0.8f)
                 ) {
-                    Button(onClick = { /* Follow logic */ }, modifier = Modifier.weight(1f)) {
-                        Text(if (profile.isFollowing) "Siguiendo" else "Seguir")
+                    Button(
+                        onClick = { viewModel.toggleFollow(userId) },
+                        modifier = Modifier.weight(1f),
+                        colors = if (isFollowing) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.buttonColors()
+                    ) {
+                        Text(if (isFollowing) "Siguiendo" else "Seguir")
                     }
                     
-                    // Solo permitir mensajes si NO es privada O si ya lo sigues (Simplificado: Permitir si no es propia)
-                    // El usuario pidió: "cuando entras a su perfil si es privado no puedes mandar mensajes"
-                    if (!profile.isPrivate || profile.isFollowing) {
+                    if (!profile.isPrivate || isFollowing) {
                         OutlinedButton(
                             onClick = {
                                 val chatId = ChatRepository.buildChatId(currentUserId, userId)
@@ -206,7 +209,7 @@ fun ProfileScreen(
 
         HorizontalDivider()
 
-        if (profile.isPrivate && !isOwnProfile && !profile.isFollowing) {
+        if (profile.isPrivate && !isOwnProfile && !isFollowing) {
             PrivateAccountOverlay()
         } else {
             ProfilePostsGrid(posts)

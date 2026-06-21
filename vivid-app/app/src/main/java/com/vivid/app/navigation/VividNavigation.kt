@@ -30,6 +30,7 @@ import com.vivid.app.presentation.messages.ChatListScreen
 import com.vivid.app.presentation.messages.ChatScreen
 import com.vivid.app.presentation.profile.EditProfileScreen
 import com.vivid.app.presentation.profile.ProfileScreen
+import com.vivid.app.presentation.profile.SettingsScreen
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.presentation.search.SearchScreen
 import com.vivid.app.presentation.search.SearchUser
@@ -144,26 +145,7 @@ fun VividNavigation(navController: NavHostController) {
                 )
             }
             composable(Screen.Settings.route) {
-                // Simple Settings Screen inline
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = { Text("Ajustes") },
-                            navigationIcon = {
-                                IconButton(onClick = { navController.popBackStack() }) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
-                                }
-                            }
-                        )
-                    }
-                ) { padding ->
-                    Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-                        Text("Versión 1.0.0", style = MaterialTheme.typography.bodyLarge)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Notificaciones: Activadas")
-                        Text("Privacidad: Cuenta pública")
-                    }
-                }
+                SettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("edit_profile") {
                 EditProfileScreen(onSave = { navController.popBackStack() }, onCancel = { navController.popBackStack() })

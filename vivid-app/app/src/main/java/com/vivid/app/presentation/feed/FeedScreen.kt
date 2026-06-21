@@ -136,13 +136,8 @@ private fun updateLikeInFirebase(postId: String, isLiked: Boolean) {
     val db = FirebaseFirestore.getInstance()
     val postRef = db.collection("posts").document(postId)
     
-    postRef.get().addOnSuccessListener { document ->
-        if (document.exists()) {
-            val currentLikes = document.getLong("likesCount")?.toInt() ?: 0
-            val newLikes = if (isLiked) currentLikes + 1 else currentLikes - 1
-            postRef.update("likesCount", newLikes)
-        }
-    }
+    val increment = if (isLiked) 1L else -1L
+    postRef.update("likesCount", com.google.firebase.firestore.FieldValue.increment(increment))
 }
 
 @Composable
