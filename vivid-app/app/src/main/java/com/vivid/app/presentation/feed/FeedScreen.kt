@@ -33,7 +33,6 @@ fun FeedScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Top bar
         TopAppBar(
             title = { Text("Vivid", style = MaterialTheme.typography.headlineMedium) },
             actions = {
@@ -43,15 +42,10 @@ fun FeedScreen(
             }
         )
 
-        // Stories row
-        StoriesRow(
-            stories = demoStories,
-            onStoryClick = { /* Open story viewer */ }
-        )
+        StoriesRow(stories = demoStories, onStoryClick = {})
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Feed posts
         LazyColumn {
             items(posts) { post ->
                 PostItem(post = post)
@@ -59,8 +53,6 @@ fun FeedScreen(
         }
     }
 }
-
-
 
 data class PostDemo(
     val id: String,
@@ -77,7 +69,6 @@ fun PostItem(post: PostDemo) {
     var likeCount by remember { mutableStateOf(post.likes) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Header
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -85,26 +76,20 @@ fun PostItem(post: PostDemo) {
             AsyncImage(
                 model = "https://picsum.photos/id/${post.username.hashCode() % 40 + 10}/36/36",
                 contentDescription = "Avatar",
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape),
+                modifier = Modifier.size(36.dp).clip(CircleShape),
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(post.username, style = MaterialTheme.typography.titleMedium)
         }
 
-        // Image
         AsyncImage(
             model = post.imageUrl,
             contentDescription = "Post image",
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(380.dp),
+            modifier = Modifier.fillMaxWidth().height(380.dp),
             contentScale = ContentScale.Crop
         )
 
-        // Actions
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -120,20 +105,14 @@ fun PostItem(post: PostDemo) {
                 )
             }
             Text("$likeCount", style = MaterialTheme.typography.bodyMedium)
-
             Spacer(modifier = Modifier.width(16.dp))
-
-            IconButton(onClick = { /* Open comments */ }) {
+            IconButton(onClick = { }) {
                 Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Comment")
             }
         }
 
-        // Caption
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            Text(
-                text = post.caption,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(text = post.caption, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = "Ver todos los comentarios",
                 style = MaterialTheme.typography.labelSmall,
