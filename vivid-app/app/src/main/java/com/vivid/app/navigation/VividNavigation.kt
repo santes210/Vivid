@@ -5,8 +5,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.AddCircle
-import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,8 +32,8 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object Auth : Screen("auth", "Auth")
     object Feed : Screen("feed", "Inicio", Icons.Default.Home)
     object Search : Screen("search", "Buscar", Icons.Default.Search)
-    object Create : Screen("create", "Crear", Icons.Outlined.AddCircle)
-    object Reels : Screen("reels", "Reels", Icons.Outlined.PlayArrow)
+    object Create : Screen("create", "Crear", Icons.Default.Add)
+    object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow)
     object Profile : Screen("profile", "Perfil", Icons.Default.Person)
     object Messages : Screen("messages", "Mensajes")
     object Chat : Screen("chat/{chatId}", "Chat")

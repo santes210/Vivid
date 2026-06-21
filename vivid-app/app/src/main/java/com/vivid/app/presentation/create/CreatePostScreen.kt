@@ -78,7 +78,7 @@ fun CreatePostScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    Icons.Default.Image,
+                    Icons.Default.Add,
                     contentDescription = null,
                     modifier = Modifier.size(80.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -98,7 +98,7 @@ fun CreatePostScreen(
                 onClick = { imagePickerLauncher.launch("image/*") },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Galería")
             }
@@ -111,7 +111,7 @@ fun CreatePostScreen(
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Cámara")
             }

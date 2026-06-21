@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,7 +37,7 @@ fun FeedScreen(
             title = { Text("Vivid", style = MaterialTheme.typography.headlineMedium) },
             actions = {
                 IconButton(onClick = onOpenMessages) {
-                    Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Mensajes")
+                    Icon(Icons.Default.Email, contentDescription = "Mensajes")
                 }
             }
         )
@@ -107,7 +107,7 @@ fun PostItem(post: PostDemo) {
             Text("$likeCount", style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.width(16.dp))
             IconButton(onClick = { }) {
-                Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Comment")
+                Icon(Icons.Default.Email, contentDescription = "Comment")
             }
         }
 

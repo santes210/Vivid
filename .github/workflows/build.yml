@@ -28,7 +28,7 @@ jobs:
         run: |
           cd vivid-app
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --max-workers=1 --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

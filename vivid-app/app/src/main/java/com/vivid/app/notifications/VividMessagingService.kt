@@ -10,7 +10,6 @@ import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.vivid.app.MainActivity
-import com.vivid.app.R
 
 class VividMessagingService : FirebaseMessagingService() {
 
@@ -39,7 +38,7 @@ class VividMessagingService : FirebaseMessagingService() {
         )
 
         val notification = NotificationCompat.Builder(this, "messages_channel")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -53,7 +52,7 @@ class VividMessagingService : FirebaseMessagingService() {
 
     private fun showGeneralNotification(title: String, body: String) {
         val notification = NotificationCompat.Builder(this, "general_channel")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

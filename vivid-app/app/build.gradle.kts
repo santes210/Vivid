@@ -7,6 +7,14 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+configurations.all {
+    resolutionStrategy.force("com.squareup:javapoet:1.13.0")
+}
+
+hilt {
+    enableAggregatingTask = false
+}
+
 android {
     namespace = "com.vivid.app"
     compileSdk = 35
@@ -39,6 +47,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs += listOf("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api")
     }
     buildFeatures {
         compose = true

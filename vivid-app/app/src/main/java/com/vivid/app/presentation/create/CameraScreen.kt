@@ -24,6 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import java.io.File
 import java.text.SimpleDateFormat
@@ -41,7 +42,7 @@ fun CameraScreen(
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val storagePermissionState = rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
 
-    var hasCameraPermission by remember { mutableStateOf(false) }
+    val hasCameraPermission = cameraPermissionState.status.isGranted
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
     var cameraProvider: ProcessCameraProvider? by remember { mutableStateOf(null) }
     var cameraExecutor: ExecutorService? by remember { mutableStateOf(null) }
@@ -54,11 +55,10 @@ fun CameraScreen(
         }
     )
 
-    LaunchedEffect(Unit) {
-        if (!cameraPermissionState.hasPermission) {
+    LaunchedEffect(hasCameraPermission) {
+        if (!hasCameraPermission) {
             cameraPermissionState.launchPermissionRequest()
         }
-        hasCameraPermission = cameraPermissionState.hasPermission
     }
 
     if (!hasCameraPermission) {
@@ -130,7 +130,7 @@ fun CameraScreen(
                 lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK)
                     CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
             }) {
-                Icon(Icons.Default.FlipCameraAndroid, contentDescription = "Cambiar cámara", tint = androidx.compose.ui.graphics.Color.White)
+                Icon(Icons.Default.Refresh, contentDescription = "Cambiar cámara", tint = androidx.compose.ui.graphics.Color.White)
             }
         }
 
@@ -168,7 +168,7 @@ fun CameraScreen(
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    Icons.Default.Camera,
+                    Icons.Default.Add,
                     contentDescription = "Tomar foto",
                     modifier = Modifier.size(36.dp),
                     tint = androidx.compose.ui.graphics.Color.White
@@ -186,7 +186,7 @@ fun CameraScreen(
                 .padding(end = 32.dp, bottom = 48.dp),
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            Icon(Icons.Default.PhotoLibrary, contentDescription = "Galería")
+            Icon(Icons.Default.Add, contentDescription = "Galería")
         }
     }
 

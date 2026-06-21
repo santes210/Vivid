@@ -66,7 +66,7 @@ fun EditProfileScreen(
                 onClick = { imagePicker.launch("image/*") },
                 modifier = Modifier.size(36.dp)
             ) {
-                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                Icon(Icons.Default.Edit, contentDescription = null)
             }
         }
 
