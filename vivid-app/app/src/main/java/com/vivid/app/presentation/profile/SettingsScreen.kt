@@ -36,7 +36,11 @@ data class SettingsInfoDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenCloseFriends: () -> Unit = {},
+    onOpenBlockedUsers: () -> Unit = {}
+) {
     val auth = FirebaseAuth.getInstance()
     val firestore = FirebaseFirestore.getInstance()
     val user = auth.currentUser
@@ -200,33 +204,17 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsListItem(
                     title = "Mejores amigos",
+                    subtitle = if (closeFriendsCount == 0) "Sin personas todavía" else "$closeFriendsCount personas agregadas",
                     icon = Icons.Outlined.StarOutline,
-                    onClick = {
-                        infoDialog = SettingsInfoDialog(
-                            title = "Mejores amigos",
-                            message = if (closeFriendsCount == 0) {
-                                "Todavía no tienes personas agregadas a Mejores amigos."
-                            } else {
-                                "Tienes $closeFriendsCount personas en tu lista de Mejores amigos."
-                            }
-                        )
-                    }
+                    onClick = onOpenCloseFriends
                 )
             }
             item {
                 SettingsListItem(
                     title = "Bloqueados",
+                    subtitle = if (blockedUsersCount == 0) "No tienes cuentas bloqueadas" else "$blockedUsersCount cuentas bloqueadas",
                     icon = Icons.Outlined.Block,
-                    onClick = {
-                        infoDialog = SettingsInfoDialog(
-                            title = "Cuentas bloqueadas",
-                            message = if (blockedUsersCount == 0) {
-                                "No tienes cuentas bloqueadas."
-                            } else {
-                                "Actualmente tienes $blockedUsersCount cuentas bloqueadas."
-                            }
-                        )
-                    }
+                    onClick = onOpenBlockedUsers
                 )
             }
 

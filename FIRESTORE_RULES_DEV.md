@@ -1,17 +1,17 @@
 # Reglas Firestore de desarrollo para que Vivid funcione
 
-Estas reglas están pensadas para **hacer funcionar la app actual** con:
+Estas reglas permiten en la versión actual:
 
 - seguir / dejar de seguir
-- comentar publicaciones
+- solicitudes de seguimiento para cuentas privadas
+- aceptar / rechazar solicitudes
+- comentarios
 - likes
 - stories
-- chats
+- chats y borrar mensajes
 - reels
 
-## Regla recomendada para esta versión
-
-Copia y pega esto en **Firebase Console → Firestore Database → Rules**:
+## Pega esto en Firebase Console → Firestore Database → Rules
 
 ```js
 rules_version = '2';
@@ -41,12 +41,37 @@ service cloud.firestore {
 
       match /followers/{docId} {
         allow read: if signedIn();
-        allow create, delete: if signedIn() && docId == request.auth.uid;
+        allow create, delete: if signedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid == docId
+        );
       }
 
       match /following/{docId} {
         allow read: if signedIn();
-        allow create, delete: if signedIn() && request.auth.uid == userId;
+        allow create, delete: if signedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid == docId
+        );
+      }
+
+      match /followRequests/{docId} {
+        allow read: if signedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid == docId
+        );
+        allow create, delete: if signedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid == docId
+        );
+      }
+
+      match /sentFollowRequests/{docId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, delete: if signedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid == docId
+        );
       }
     }
 
@@ -93,11 +118,9 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-
         allow create: if signedIn()
           && request.resource.data.senderId == request.auth.uid
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-
         allow update, delete: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
       }
@@ -106,54 +129,5 @@ service cloud.firestore {
 }
 ```
 
----
-
-## Por qué te salía “permisos insuficientes”
-
-### Seguir personas
-Tu app al seguir a alguien hace estas operaciones:
-
-- crea `users/{miUid}/following/{otroUid}`
-- crea `users/{otroUid}/followers/{miUid}`
-- actualiza `users/{miUid}.followingCount`
-- actualiza `users/{otroUid}.followersCount`
-
-Si tus reglas solo dejaban editar **tu propio documento** de usuario, Firestore bloqueaba la parte de:
-
-- actualizar `followersCount` del otro usuario
-
-Por eso te fallaba el follow.
-
-### Comentar publicaciones
-Tu app al comentar hace esto:
-
-- crea `posts/{postId}/comments/{commentId}`
-- actualiza `posts/{postId}.commentsCount`
-
-Si no existían reglas para la subcolección `comments`, o si el `post` solo lo podía actualizar el dueño, Firestore lo bloqueaba.
-
-Por eso ni siquiera el dueño podía comentar si la regla no contemplaba `comments` y `commentsCount`.
-
----
-
-## Archivo listo en el proyecto
-También te dejé esta misma regla en:
-
-```text
-firestore.rules
-```
-
----
-
-## Importante
-Estas reglas son **de desarrollo / compatibilidad** para que la app actual funcione.
-
-Más adelante se pueden endurecer, pero primero conviene dejar estable:
-
-- follow
-- comments
-- likes
-- stories
-- chats
-
-Si quieres, después te preparo una **versión más segura** de reglas y también adapto el código para que no necesite permisos tan amplios.
+## Nota
+Si no publicas estas reglas nuevas, las solicitudes privadas, aceptar/rechazar y el borrado de mensajes pueden fallar por permisos.

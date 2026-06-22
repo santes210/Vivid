@@ -10,8 +10,12 @@ import com.vivid.app.data.local.dao.MessageDao
 import com.vivid.app.data.local.entity.ChatEntity
 import com.vivid.app.data.local.entity.MessageEntity
 import com.vivid.app.presentation.messages.Message
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +29,7 @@ class ChatRepository @Inject constructor(
 ) {
 
     private val currentUserId get() = auth.currentUser?.uid.orEmpty()
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun getChatsFlow(): Flow<List<ChatEntity>> = chatDao.getAllChats()
 
@@ -179,10 +184,31 @@ class ChatRepository @Inject constructor(
                         timestamp = timestamp,
                         isRead = change.document.getBoolean("isRead") ?: false
                     )
+
                     when (change.type) {
                         DocumentChange.Type.ADDED,
-                        DocumentChange.Type.MODIFIED -> onMessageEvent(MessageChange.Upsert(msg))
-                        DocumentChange.Type.REMOVED -> onMessageEvent(MessageChange.Removed(msg.id))
+                        DocumentChange.Type.MODIFIED -> {
+                            repositoryScope.launch {
+                                messageDao.insertMessage(
+                                    MessageEntity(
+                                        id = msg.id,
+                                        chatId = chatId,
+                                        senderId = msg.senderId,
+                                        text = msg.text,
+                                        timestamp = msg.timestamp,
+                                        isRead = msg.isRead
+                                    )
+                                )
+                            }
+                            onMessageEvent(MessageChange.Upsert(msg))
+                        }
+
+                        DocumentChange.Type.REMOVED -> {
+                            repositoryScope.launch {
+                                messageDao.deleteMessage(msg.id)
+                            }
+                            onMessageEvent(MessageChange.Removed(msg.id))
+                        }
                     }
                 }
             }

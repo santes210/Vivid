@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,6 +75,7 @@ data class PostComment(
 @Composable
 fun FeedScreen(
     onOpenMessages: () -> Unit,
+    onOpenRequests: () -> Unit = {},
     onOpenProfile: () -> Unit,
     onOpenStoryViewer: (storyId: String) -> Unit = {}
 ) {
@@ -83,6 +85,7 @@ fun FeedScreen(
 
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var followRequestsCount by remember { mutableIntStateOf(0) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
     var selectedPostViewerIndex by remember { mutableStateOf<Int?>(null) }
     var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
@@ -103,12 +106,37 @@ fun FeedScreen(
         )
     }
 
+    DisposableEffect(currentUserId) {
+        var registration: ListenerRegistration? = null
+        if (currentUserId.isNotBlank()) {
+            registration = FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUserId)
+                .collection("followRequests")
+                .addSnapshotListener { snapshot, _ ->
+                    followRequestsCount = snapshot?.size() ?: 0
+                }
+        }
+        onDispose { registration?.remove() }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Vivid", style = MaterialTheme.typography.headlineMedium) },
                 actions = {
+                    BadgedBox(
+                        badge = {
+                            if (followRequestsCount > 0) {
+                                Badge { Text(followRequestsCount.coerceAtMost(9).toString()) }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = onOpenRequests) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Solicitudes")
+                        }
+                    }
                     IconButton(onClick = onOpenMessages) {
                         Icon(Icons.Default.Email, contentDescription = "Mensajes")
                     }

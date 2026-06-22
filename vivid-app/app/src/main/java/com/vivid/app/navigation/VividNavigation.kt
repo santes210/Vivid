@@ -28,7 +28,10 @@ import com.vivid.app.presentation.create.CreatePostScreen
 import com.vivid.app.presentation.feed.FeedScreen
 import com.vivid.app.presentation.messages.ChatListScreen
 import com.vivid.app.presentation.messages.ChatScreen
+import com.vivid.app.presentation.profile.BlockedUsersScreen
+import com.vivid.app.presentation.profile.CloseFriendsScreen
 import com.vivid.app.presentation.profile.EditProfileScreen
+import com.vivid.app.presentation.profile.FollowRequestsScreen
 import com.vivid.app.presentation.profile.ProfileScreen
 import com.vivid.app.presentation.profile.SettingsScreen
 import com.vivid.app.presentation.reels.ReelsScreen
@@ -46,6 +49,9 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object OtherProfile : Screen("profile/{userId}", "Perfil")
     object Messages : Screen("messages", "Mensajes")
     object Chat : Screen("chat/{chatId}/{receiverId}/{receiverName}", "Chat")
+    object FollowRequests : Screen("follow_requests", "Solicitudes")
+    object CloseFriends : Screen("close_friends", "Mejores amigos")
+    object BlockedUsers : Screen("blocked_users", "Bloqueados")
     object Settings : Screen("settings", "Ajustes")
 }
 
@@ -94,6 +100,7 @@ fun VividNavigation(navController: NavHostController) {
             composable(Screen.Feed.route) {
                 FeedScreen(
                     onOpenMessages = { navController.navigate(Screen.Messages.route) },
+                    onOpenRequests = { navController.navigate(Screen.FollowRequests.route) },
                     onOpenProfile = { navController.navigate(Screen.Profile.route) },
                     onOpenStoryViewer = { storyId ->
                         navController.navigate("story_viewer/${Uri.encode(storyId)}")
@@ -147,7 +154,11 @@ fun VividNavigation(navController: NavHostController) {
                 )
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(onBack = { navController.popBackStack() })
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenCloseFriends = { navController.navigate(Screen.CloseFriends.route) },
+                    onOpenBlockedUsers = { navController.navigate(Screen.BlockedUsers.route) }
+                )
             }
             composable("edit_profile") {
                 EditProfileScreen(onSave = { navController.popBackStack() }, onCancel = { navController.popBackStack() })
@@ -158,6 +169,15 @@ fun VividNavigation(navController: NavHostController) {
                         "chat/${Uri.encode(chatId)}/${Uri.encode(receiverId)}/${Uri.encode(receiverName)}"
                     )
                 })
+            }
+            composable(Screen.FollowRequests.route) {
+                FollowRequestsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.CloseFriends.route) {
+                CloseFriendsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.BlockedUsers.route) {
+                BlockedUsersScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = Screen.Chat.route,

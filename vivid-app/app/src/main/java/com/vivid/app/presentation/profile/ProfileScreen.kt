@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -73,9 +74,11 @@ fun ProfileScreen(
     var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
     var selectedPost by remember { mutableStateOf<ProfilePost?>(null) }
-    val isFollowing by viewModel.isFollowing.collectAsState()
+    var showProfileMenu by remember { mutableStateOf(false) }
+    val relationshipState by viewModel.relationshipState.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
+    val followActionMessage by viewModel.followActionMessage.collectAsState()
 
     LaunchedEffect(userId) {
         viewModel.checkFollowStatus(userId)
@@ -85,6 +88,13 @@ fun ProfileScreen(
         followActionError?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearFollowActionError()
+        }
+    }
+
+    LaunchedEffect(followActionMessage) {
+        followActionMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearFollowActionMessage()
         }
     }
 
@@ -156,6 +166,28 @@ fun ProfileScreen(
                         }) {
                             Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión")
                         }
+                    } else {
+                        Box {
+                            IconButton(onClick = { showProfileMenu = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                            }
+                            DropdownMenu(
+                                expanded = showProfileMenu,
+                                onDismissRequest = { showProfileMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (relationshipState.isBlocked) "Desbloquear" else "Bloquear") },
+                                    onClick = {
+                                        showProfileMenu = false
+                                        if (relationshipState.isBlocked) {
+                                            viewModel.unblockUser(userId)
+                                        } else {
+                                            viewModel.blockUser(userId)
+                                        }
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             )
@@ -226,7 +258,14 @@ fun ProfileScreen(
                             Text("Ajustes")
                         }
                     }
-                } else {
+                } else if (!relationshipState.isBlocked) {
+                    val followButtonText = when {
+                        relationshipState.isFollowing -> "Siguiendo"
+                        relationshipState.hasPendingRequest -> "Pendiente"
+                        profile.isPrivate -> "Solicitar"
+                        else -> "Seguir"
+                    }
+
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth(0.8f)
@@ -235,7 +274,11 @@ fun ProfileScreen(
                             onClick = { viewModel.toggleFollow(userId) },
                             modifier = Modifier.weight(1f),
                             enabled = !isFollowActionLoading,
-                            colors = if (isFollowing) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.buttonColors()
+                            colors = if (relationshipState.isFollowing || relationshipState.hasPendingRequest) {
+                                ButtonDefaults.filledTonalButtonColors()
+                            } else {
+                                ButtonDefaults.buttonColors()
+                            }
                         ) {
                             if (isFollowActionLoading) {
                                 CircularProgressIndicator(
@@ -244,11 +287,11 @@ fun ProfileScreen(
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             } else {
-                                Text(if (isFollowing) "Siguiendo" else "Seguir")
+                                Text(followButtonText)
                             }
                         }
 
-                        if (!profile.isPrivate || isFollowing) {
+                        if (!profile.isPrivate || relationshipState.isFollowing) {
                             OutlinedButton(
                                 onClick = {
                                     val chatId = ChatRepository.buildChatId(currentUserId, userId)
@@ -267,8 +310,10 @@ fun ProfileScreen(
 
             HorizontalDivider()
 
-            if (profile.isPrivate && !isOwnProfile && !isFollowing) {
-                PrivateAccountOverlay()
+            if (relationshipState.isBlocked) {
+                BlockedAccountOverlay()
+            } else if (profile.isPrivate && !isOwnProfile && !relationshipState.isFollowing) {
+                PrivateAccountOverlay(hasPendingRequest = relationshipState.hasPendingRequest)
             } else {
                 ProfilePostsGrid(posts = posts, onPostClick = { selectedPost = it })
             }
@@ -281,7 +326,7 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun PrivateAccountOverlay() {
+private fun PrivateAccountOverlay(hasPendingRequest: Boolean) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -291,7 +336,30 @@ private fun PrivateAccountOverlay() {
         Spacer(Modifier.height(16.dp))
         Text("Esta cuenta es privada", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Síguela para ver sus fotos y videos.",
+            if (hasPendingRequest) {
+                "Tu solicitud está pendiente de aprobación."
+            } else {
+                "Envía una solicitud para ver sus fotos y videos."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun BlockedAccountOverlay() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+        Spacer(Modifier.height(16.dp))
+        Text("Has bloqueado esta cuenta", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Desbloquéala desde el menú de opciones para volver a ver su contenido.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
