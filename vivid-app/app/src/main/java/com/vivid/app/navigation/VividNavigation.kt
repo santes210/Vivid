@@ -171,9 +171,13 @@ fun VividNavigation(navController: NavHostController) {
                 val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""
                 val receiverName = backStackEntry.arguments?.getString("receiverName") ?: "Usuario"
                 ChatScreen(
-                    chatId = chatId, 
-                    receiverId = receiverId, 
-                    otherUserName = receiverName
+                    chatId = chatId,
+                    receiverId = receiverId,
+                    otherUserName = receiverName,
+                    onBack = { navController.popBackStack() },
+                    onOpenProfile = { targetUserId ->
+                        navController.navigate("profile/${Uri.encode(targetUserId)}")
+                    }
                 )
             }
             composable(

@@ -1,24 +1,12 @@
-# Reglas Firestore de desarrollo para que Vivid funcione
-
-Estas reglas están pensadas para **hacer funcionar la app actual** con:
-
-- seguir / dejar de seguir
-- comentar publicaciones
-- likes
-- stories
-- chats
-- reels
-
-## Regla recomendada para esta versión
-
-Copia y pega esto en **Firebase Console → Firestore Database → Rules**:
-
-```js
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
       return request.auth != null;
+    }
+
+    function postOwner() {
+      return signedIn() && resource.data.userId == request.auth.uid;
     }
 
     function socialCountersOnly() {
@@ -34,6 +22,9 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if signedIn();
+
+      // El dueño puede crear/editar su perfil.
+      // También permitimos cambios de contadores sociales para que follow/unfollow funcione.
       allow create: if signedIn() && request.auth.uid == userId;
       allow update: if signedIn() && (
         request.auth.uid == userId || socialCountersOnly()
@@ -41,11 +32,13 @@ service cloud.firestore {
 
       match /followers/{docId} {
         allow read: if signedIn();
+        // targetUser/followers/{currentUserId}
         allow create, delete: if signedIn() && docId == request.auth.uid;
       }
 
       match /following/{docId} {
         allow read: if signedIn();
+        // currentUser/following/{targetUserId}
         allow create, delete: if signedIn() && request.auth.uid == userId;
       }
     }
@@ -53,6 +46,9 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+
+      // El dueño puede editar todo su post.
+      // Otros usuarios autenticados pueden tocar likes/comments count para que like/comentar funcione.
       allow update: if signedIn() && (
         resource.data.userId == request.auth.uid ||
         request.resource.data.diff(resource.data).changedKeys().hasOnly([
@@ -60,6 +56,7 @@ service cloud.firestore {
           'commentsCount'
         ])
       );
+
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 
       match /comments/{commentId} {
@@ -70,6 +67,8 @@ service cloud.firestore {
     }
 
     match /stories/{storyId} {
+      // Nota: la app consulta stories activas en bloque y luego filtra privacidad del lado cliente.
+      // Por eso, para esta versión, dejamos lectura a usuarios autenticados.
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.userId == request.auth.uid;
@@ -104,56 +103,3 @@ service cloud.firestore {
     }
   }
 }
-```
-
----
-
-## Por qué te salía “permisos insuficientes”
-
-### Seguir personas
-Tu app al seguir a alguien hace estas operaciones:
-
-- crea `users/{miUid}/following/{otroUid}`
-- crea `users/{otroUid}/followers/{miUid}`
-- actualiza `users/{miUid}.followingCount`
-- actualiza `users/{otroUid}.followersCount`
-
-Si tus reglas solo dejaban editar **tu propio documento** de usuario, Firestore bloqueaba la parte de:
-
-- actualizar `followersCount` del otro usuario
-
-Por eso te fallaba el follow.
-
-### Comentar publicaciones
-Tu app al comentar hace esto:
-
-- crea `posts/{postId}/comments/{commentId}`
-- actualiza `posts/{postId}.commentsCount`
-
-Si no existían reglas para la subcolección `comments`, o si el `post` solo lo podía actualizar el dueño, Firestore lo bloqueaba.
-
-Por eso ni siquiera el dueño podía comentar si la regla no contemplaba `comments` y `commentsCount`.
-
----
-
-## Archivo listo en el proyecto
-También te dejé esta misma regla en:
-
-```text
-firestore.rules
-```
-
----
-
-## Importante
-Estas reglas son **de desarrollo / compatibilidad** para que la app actual funcione.
-
-Más adelante se pueden endurecer, pero primero conviene dejar estable:
-
-- follow
-- comments
-- likes
-- stories
-- chats
-
-Si quieres, después te preparo una **versión más segura** de reglas y también adapto el código para que no necesite permisos tan amplios.

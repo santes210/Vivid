@@ -10,9 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +32,9 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.presentation.stories.StoriesTray
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class PostData(
     val id: String,
@@ -61,9 +67,15 @@ fun FeedScreen(
     onOpenProfile: () -> Unit,
     onOpenStoryViewer: (storyId: String) -> Unit = {}
 ) {
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
+    var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
+    var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
 
     LaunchedEffect(Unit) {
         isLoading = true
@@ -79,41 +91,53 @@ fun FeedScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Vivid", style = MaterialTheme.typography.headlineMedium) },
-            actions = {
-                IconButton(onClick = onOpenMessages) {
-                    Icon(Icons.Default.Email, contentDescription = "Mensajes")
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Vivid", style = MaterialTheme.typography.headlineMedium) },
+                actions = {
+                    IconButton(onClick = onOpenMessages) {
+                        Icon(Icons.Default.Email, contentDescription = "Mensajes")
+                    }
                 }
-            }
-        )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            StoriesTray(onStoryClick = { story -> onOpenStoryViewer(story.id) })
 
-        StoriesTray(onStoryClick = { story -> onOpenStoryViewer(story.id) })
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else if (posts.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No hay publicaciones aún")
-            }
-        } else {
-            LazyColumn {
-                items(posts, key = { it.id }) { post ->
-                    PostItem(
-                        post = post,
-                        onOpenComments = { selectedPostForComments = post }
-                    )
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (posts.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No hay publicaciones aún")
+                }
+            } else {
+                LazyColumn {
+                    items(posts, key = { it.id }) { post ->
+                        PostItem(
+                            post = post,
+                            currentUserId = currentUserId,
+                            onOpenComments = { selectedPostForComments = post },
+                            onOpenDetails = { selectedPostForDetails = post },
+                            onDeletePost = { selectedPostForDelete = post }
+                        )
+                    }
                 }
             }
         }
@@ -123,6 +147,42 @@ fun FeedScreen(
         PostCommentsSheet(
             post = post,
             onDismiss = { selectedPostForComments = null }
+        )
+    }
+
+    selectedPostForDetails?.let { post ->
+        PostDetailsDialog(
+            post = post,
+            onDismiss = { selectedPostForDetails = null }
+        )
+    }
+
+    selectedPostForDelete?.let { post ->
+        AlertDialog(
+            onDismissRequest = { selectedPostForDelete = null },
+            title = { Text("Eliminar publicación") },
+            text = { Text("Esta acción borrará la publicación y sus comentarios.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedPostForDelete = null
+                    scope.launch {
+                        val success = deletePostFromFirebase(post)
+                        if (success) {
+                            posts = posts.filterNot { it.id == post.id }
+                            snackbarHostState.showSnackbar("Publicación eliminada")
+                        } else {
+                            snackbarHostState.showSnackbar("No se pudo eliminar la publicación")
+                        }
+                    }
+                }) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedPostForDelete = null }) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 }
@@ -168,23 +228,124 @@ private fun updateLikeInFirebase(postId: String, isLiked: Boolean) {
     postRef.update("likesCount", FieldValue.increment(increment))
 }
 
+private suspend fun deletePostFromFirebase(post: PostData): Boolean {
+    return try {
+        val db = FirebaseFirestore.getInstance()
+        val postRef = db.collection("posts").document(post.id)
+        val commentsSnapshot = postRef.collection("comments").get().await()
+        val batch = db.batch()
+
+        commentsSnapshot.documents.forEach { batch.delete(it.reference) }
+        batch.delete(postRef)
+        if (post.userId.isNotBlank()) {
+            batch.set(
+                db.collection("users").document(post.userId),
+                mapOf(
+                    "postsCount" to FieldValue.increment(-1),
+                    "updatedAt" to System.currentTimeMillis()
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        }
+        batch.commit().await()
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
+
+private fun formatPostDate(timestamp: Long): String {
+    return runCatching {
+        SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(timestamp))
+    }.getOrDefault("")
+}
+
+@Composable
+private fun PostDetailsDialog(
+    post: PostData,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Detalles de la publicación") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Autor: @${post.username}")
+                Text("Fecha: ${formatPostDate(post.timestamp)}")
+                Text("Likes: ${post.likesCount}")
+                Text("Comentarios: ${post.commentsCount}")
+                if (post.caption.isNotBlank()) {
+                    Text("Descripción:")
+                    Text(post.caption, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+
 @Composable
 fun PostItem(
     post: PostData,
-    onOpenComments: () -> Unit
+    currentUserId: String,
+    onOpenComments: () -> Unit,
+    onOpenDetails: () -> Unit,
+    onDeletePost: () -> Unit
 ) {
     var isLiked by remember { mutableStateOf(post.isLiked) }
     var likeCount by remember { mutableStateOf(post.likesCount) }
     var commentCount by remember { mutableStateOf(post.commentsCount) }
+    var showMenu by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PostAuthorAvatar(post = post)
             Spacer(modifier = Modifier.width(12.dp))
-            Text(post.username, style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(post.username, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    formatPostDate(post.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Ver detalles") },
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                        onClick = {
+                            showMenu = false
+                            onOpenDetails()
+                        }
+                    )
+                    if (post.userId == currentUserId) {
+                        DropdownMenuItem(
+                            text = { Text("Eliminar publicación") },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onDeletePost()
+                            }
+                        )
+                    }
+                }
+            }
         }
 
         PostImage(

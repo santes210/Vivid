@@ -35,6 +35,7 @@ data class ProfileUiState(
     val uid: String = "",
     val username: String = "vivid_user",
     val displayName: String = "Usuario Vivid",
+    val bio: String = "",
     val avatarUrl: String = "",
     val avatarBase64: String = "",
     val postsCount: Int = 0,
@@ -93,6 +94,7 @@ fun ProfileScreen(
                         uid = userId,
                         username = data["username"] as? String ?: "vivid_user",
                         displayName = data["displayName"] as? String ?: "Usuario Vivid",
+                        bio = data["bio"] as? String ?: "",
                         avatarUrl = data["avatarUrl"] as? String ?: "",
                         avatarBase64 = data["avatarBase64"] as? String ?: "",
                         postsCount = (data["postsCount"] as? Long)?.toInt() ?: 0,
@@ -169,6 +171,21 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Text("@${profile.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (profile.bio.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = profile.bio,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
