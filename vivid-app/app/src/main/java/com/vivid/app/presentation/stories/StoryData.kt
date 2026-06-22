@@ -22,8 +22,17 @@ data class Story(
     val mediaUrl: String = "",
     val mediaBase64: String = "",
     val caption: String = "",
+    val createdAt: Long = 0L,
     val expiresAt: Long = 0L,
     val hasUnseenStory: Boolean = true
+)
+
+data class StoryGroup(
+    val userId: String,
+    val username: String,
+    val avatarUrl: String,
+    val avatarBase64: String,
+    val stories: List<Story>
 )
 
 suspend fun buildVisibleStories(
@@ -54,7 +63,7 @@ suspend fun buildVisibleStories(
         userCache[userId] = snapshot.data.orEmpty()
     }
 
-    storyDocs.mapNotNull { doc ->
+    val visibleStories = storyDocs.mapNotNull { doc ->
         val userId = doc.getString("userId").orEmpty()
         if (userId.isBlank()) return@mapNotNull null
 
@@ -79,10 +88,35 @@ suspend fun buildVisibleStories(
             mediaUrl = doc.getString("mediaUrl").orEmpty(),
             mediaBase64 = doc.getString("mediaBase64").orEmpty(),
             caption = doc.getString("caption").orEmpty(),
+            createdAt = doc.getLong("createdAt") ?: 0L,
             expiresAt = doc.getLong("expiresAt") ?: 0L,
             hasUnseenStory = true
         )
-    }.sortedBy { it.expiresAt }
+    }
+
+    groupStoriesByUser(visibleStories).flatMap { it.stories }
+}
+
+fun groupStoriesByUser(stories: List<Story>): List<StoryGroup> {
+    val grouped = linkedMapOf<String, MutableList<Story>>()
+
+    stories
+        .sortedByDescending { it.createdAt }
+        .forEach { story ->
+            grouped.getOrPut(story.userId) { mutableListOf() }.add(story)
+        }
+
+    return grouped.values.map { storyList ->
+        val orderedStories = storyList.sortedBy { it.createdAt }
+        val first = orderedStories.first()
+        StoryGroup(
+            userId = first.userId,
+            username = first.username,
+            avatarUrl = first.avatarUrl,
+            avatarBase64 = first.avatarBase64,
+            stories = orderedStories
+        )
+    }
 }
 
 suspend fun uploadStoryWithCompression(

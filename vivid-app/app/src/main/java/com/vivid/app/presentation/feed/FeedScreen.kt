@@ -6,9 +6,12 @@ import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -80,7 +83,7 @@ fun FeedScreen(
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
-    var selectedPostForViewer by remember { mutableStateOf<PostData?>(null) }
+    var selectedPostViewerIndex by remember { mutableStateOf<Int?>(null) }
     var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForEdit by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
@@ -137,11 +140,11 @@ fun FeedScreen(
                 }
             } else {
                 LazyColumn {
-                    items(posts, key = { it.id }) { post ->
+                    itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
                         PostItem(
                             post = post,
                             currentUserId = currentUserId,
-                            onOpenPost = { selectedPostForViewer = post },
+                            onOpenPost = { selectedPostViewerIndex = index },
                             onOpenComments = { selectedPostForComments = post },
                             onOpenDetails = { selectedPostForDetails = post },
                             onEditPost = { selectedPostForEdit = post },
@@ -160,10 +163,11 @@ fun FeedScreen(
         )
     }
 
-    selectedPostForViewer?.let { post ->
+    selectedPostViewerIndex?.let { initialIndex ->
         PostViewerDialog(
-            post = post,
-            onDismiss = { selectedPostForViewer = null }
+            posts = posts,
+            initialIndex = initialIndex,
+            onDismiss = { selectedPostViewerIndex = null }
         )
     }
 
@@ -339,17 +343,25 @@ private fun PostDetailsDialog(
     )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun PostViewerDialog(
-    post: PostData,
+    posts: List<PostData>,
+    initialIndex: Int,
     onDismiss: () -> Unit
 ) {
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, (posts.lastIndex).coerceAtLeast(0)),
+        pageCount = { posts.size }
+    )
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                val currentPost = posts.getOrNull(pagerState.currentPage)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -358,30 +370,60 @@ private fun PostViewerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(post.username, style = MaterialTheme.typography.titleMedium)
+                        Text(currentPost?.username.orEmpty(), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            formatPostDate(post.timestamp),
+                            currentPost?.timestamp?.let { formatPostDate(it) }.orEmpty(),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     TextButton(onClick = onDismiss) { Text("Cerrar") }
                 }
-                Box(
+
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    PostImage(
-                        imageBase64 = post.imageBase64,
-                        imageUrl = post.imageUrl,
-                        username = post.username,
+                        .weight(1f)
+                ) { page ->
+                    val post = posts[page]
+                    Box(
                         modifier = Modifier.fillMaxSize(),
-                        useDefaultHeight = false
-                    )
+                        contentAlignment = Alignment.Center
+                    ) {
+                        PostImage(
+                            imageBase64 = post.imageBase64,
+                            imageUrl = post.imageUrl,
+                            username = post.username,
+                            modifier = Modifier.fillMaxSize(),
+                            useDefaultHeight = false
+                        )
+                    }
                 }
-                if (post.caption.isNotBlank()) {
+
+                if (posts.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        repeat(posts.size) { index ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 3.dp)
+                                    .size(if (index == pagerState.currentPage) 8.dp else 6.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                            )
+                        }
+                    }
+                }
+
+                currentPost?.takeIf { it.caption.isNotBlank() }?.let { post ->
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("@${post.username}", style = MaterialTheme.typography.labelLarge)
                         Spacer(Modifier.height(6.dp))
@@ -448,6 +490,7 @@ private fun EditPostDialog(
     )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PostItem(
     post: PostData,
@@ -518,7 +561,18 @@ fun PostItem(
             }
         }
 
-        Box(modifier = Modifier.clickable { onOpenPost() }) {
+        Box(
+            modifier = Modifier.combinedClickable(
+                onClick = { onOpenPost() },
+                onDoubleClick = {
+                    if (!isLiked) {
+                        isLiked = true
+                        likeCount += 1
+                        updateLikeInFirebase(post.id, true)
+                    }
+                }
+            )
+        ) {
             PostImage(
                 imageBase64 = post.imageBase64,
                 imageUrl = post.imageUrl,

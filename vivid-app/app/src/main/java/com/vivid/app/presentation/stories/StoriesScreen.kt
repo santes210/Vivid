@@ -3,6 +3,7 @@ package com.vivid.app.presentation.stories
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,7 +16,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -82,43 +87,83 @@ fun StoriesRow(
         return
     }
 
+    val groups = remember(stories) { groupStoriesByUser(stories) }
+
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(stories, key = { it.id }) { story ->
-            StoryItem(story = story, onClick = { onStoryClick(story) })
+        items(groups, key = { it.userId }) { group ->
+            StoryGroupItem(group = group, onClick = { onStoryClick(group.stories.first()) })
         }
     }
 }
 
 @Composable
-fun StoryItem(story: Story, onClick: () -> Unit) {
+private fun StoryGroupItem(group: StoryGroup, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
     ) {
-        Surface(
-            shape = CircleShape,
-            modifier = Modifier.size(68.dp),
-            color = if (story.hasUnseenStory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-        ) {
+        Box(contentAlignment = Alignment.Center) {
+            StorySegmentsRing(
+                segments = group.stories.size.coerceAtLeast(1),
+                modifier = Modifier.size(68.dp)
+            )
             StoryAvatar(
-                username = story.username,
-                avatarUrl = story.avatarUrl,
-                avatarBase64 = story.avatarBase64,
+                username = group.username,
+                avatarUrl = group.avatarUrl,
+                avatarBase64 = group.avatarBase64,
                 modifier = Modifier
-                    .size(64.dp)
-                    .padding(3.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            story.username,
+            group.username,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1
         )
+    }
+}
+
+@Composable
+private fun StorySegmentsRing(
+    segments: Int,
+    modifier: Modifier = Modifier,
+    activeColor: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+) {
+    Canvas(modifier = modifier) {
+        val strokeWidth = 5.dp.toPx()
+        val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+        val topLeftX = strokeWidth / 2
+        val topLeftY = strokeWidth / 2
+        val gap = 6f
+        val segmentSweep = ((360f - gap * segments) / segments).coerceAtLeast(12f)
+
+        for (index in 0 until segments) {
+            val start = -90f + index * (segmentSweep + gap)
+            drawArc(
+                color = trackColor,
+                startAngle = start,
+                sweepAngle = segmentSweep,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                size = arcSize,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = activeColor,
+                startAngle = start,
+                sweepAngle = segmentSweep,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                size = arcSize,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+        }
     }
 }
 
