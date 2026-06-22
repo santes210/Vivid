@@ -57,6 +57,10 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
 
 @Composable
 fun VividNavigation(navController: NavHostController) {
+    val auth = FirebaseAuth.getInstance()
+    val startDestination = remember(auth.currentUser?.uid) {
+        if (auth.currentUser != null) Screen.Feed.route else Screen.Auth.route
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -87,7 +91,7 @@ fun VividNavigation(navController: NavHostController) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Auth.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Auth.route) {

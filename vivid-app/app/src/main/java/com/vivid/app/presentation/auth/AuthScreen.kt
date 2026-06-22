@@ -125,12 +125,19 @@ fun AuthScreen(
     onLoginSuccess: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
+    val currentUser = FirebaseAuth.getInstance().currentUser
     var isLoginMode by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
 
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null) {
+            onLoginSuccess()
+        }
+    }
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
