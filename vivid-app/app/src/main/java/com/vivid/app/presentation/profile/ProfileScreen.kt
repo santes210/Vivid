@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -24,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
@@ -47,7 +49,10 @@ data class ProfileUiState(
 data class ProfilePost(
     val id: String,
     val imageUrl: String = "",
-    val imageBase64: String = ""
+    val imageBase64: String = "",
+    val caption: String = "",
+    val timestamp: Long = 0L,
+    val username: String = ""
 )
 
 @Composable
@@ -67,6 +72,7 @@ fun ProfileScreen(
 
     var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var selectedPost by remember { mutableStateOf<ProfilePost?>(null) }
     val isFollowing by viewModel.isFollowing.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
@@ -111,7 +117,10 @@ fun ProfileScreen(
                         ProfilePost(
                             id = doc.id,
                             imageUrl = doc.getString("imageUrl").orEmpty(),
-                            imageBase64 = doc.getString("imageBase64").orEmpty()
+                            imageBase64 = doc.getString("imageBase64").orEmpty(),
+                            caption = doc.getString("caption").orEmpty(),
+                            timestamp = doc.getLong("timestamp") ?: 0L,
+                            username = doc.getString("username").orEmpty()
                         )
                     }
                     posts = loadedPosts
@@ -171,6 +180,11 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Text("@${profile.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(8.dp))
+                AssistChip(
+                    onClick = { },
+                    label = { Text(if (profile.isPrivate) "Cuenta privada" else "Cuenta pública") }
+                )
                 if (profile.bio.isNotBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
@@ -256,9 +270,13 @@ fun ProfileScreen(
             if (profile.isPrivate && !isOwnProfile && !isFollowing) {
                 PrivateAccountOverlay()
             } else {
-                ProfilePostsGrid(posts)
+                ProfilePostsGrid(posts = posts, onPostClick = { selectedPost = it })
             }
         }
+    }
+
+    selectedPost?.let { post ->
+        ProfilePostViewerDialog(post = post, onDismiss = { selectedPost = null })
     }
 }
 
@@ -282,7 +300,10 @@ private fun PrivateAccountOverlay() {
 }
 
 @Composable
-private fun ProfilePostsGrid(posts: List<ProfilePost>) {
+private fun ProfilePostsGrid(
+    posts: List<ProfilePost>,
+    onPostClick: (ProfilePost) -> Unit
+) {
     Text(
         "Publicaciones",
         style = MaterialTheme.typography.titleMedium,
@@ -306,7 +327,7 @@ private fun ProfilePostsGrid(posts: List<ProfilePost>) {
             modifier = Modifier.fillMaxSize()
         ) {
             items(posts, key = { it.id }) { post ->
-                ProfilePostThumbnail(post)
+                ProfilePostThumbnail(post = post, onClick = { onPostClick(post) })
             }
         }
     }
@@ -366,7 +387,7 @@ private fun fallbackAvatar(displayName: String) {
 }
 
 @Composable
-private fun ProfilePostThumbnail(post: ProfilePost) {
+private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
     var bitmap by remember(post.imageBase64) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(post.imageBase64) {
@@ -386,7 +407,8 @@ private fun ProfilePostThumbnail(post: ProfilePost) {
             contentDescription = null,
             modifier = Modifier
                 .aspectRatio(1f)
-                .padding(2.dp),
+                .padding(2.dp)
+                .clickable { onClick() },
             contentScale = ContentScale.Crop
         )
         post.imageUrl.isNotBlank() -> AsyncImage(
@@ -394,17 +416,91 @@ private fun ProfilePostThumbnail(post: ProfilePost) {
             contentDescription = null,
             modifier = Modifier
                 .aspectRatio(1f)
-                .padding(2.dp),
+                .padding(2.dp)
+                .clickable { onClick() },
             contentScale = ContentScale.Crop
         )
         else -> Box(
             modifier = Modifier
                 .aspectRatio(1f)
                 .padding(2.dp)
+                .clickable { onClick() }
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             Text("Vivid", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(post.username.ifBlank { "Publicación" }, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (post.timestamp > 0) java.text.SimpleDateFormat("dd MMM yyyy · HH:mm", java.util.Locale.getDefault()).format(java.util.Date(post.timestamp)) else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        post.imageBase64.isNotBlank() -> {
+                            val bitmap = remember(post.imageBase64) {
+                                try {
+                                    val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP)
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                } catch (_: Exception) {
+                                    null
+                                }
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                        post.imageUrl.isNotBlank() -> {
+                            AsyncImage(
+                                model = post.imageUrl,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                }
+                if (post.caption.isNotBlank()) {
+                    Text(
+                        post.caption,
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
         }
     }
 }

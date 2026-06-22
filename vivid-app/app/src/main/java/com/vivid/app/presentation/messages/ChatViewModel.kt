@@ -6,7 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.vivid.app.data.local.entity.ChatEntity
 import com.vivid.app.domain.repository.ChatRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -32,14 +36,11 @@ class ChatViewModel @Inject constructor(
             val avatarBase64 = savedStateHandle.get<String>("avatarBase64") ?: ""
             val avatarUrl = savedStateHandle.get<String>("avatarUrl") ?: ""
             chatRepository.ensureChatExists(chatId, receiverId, receiverName, avatarUrl, avatarBase64)
-            
-            // Check if we can message this user (if they are private and we don't follow)
-            // For now, simple check: if receiverId is not empty, check their "isPrivate" field
+
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             db.collection("users").document(receiverId).get().addOnSuccessListener { snapshot ->
                 val isPrivate = snapshot.getBoolean("isPrivate") ?: false
                 if (isPrivate) {
-                    // In a real app, check follow status. Here we set canMessage to false if private.
                     _canMessage.value = false
                 } else {
                     _canMessage.value = true
@@ -60,11 +61,21 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        chatRepository.listenToMessages(chatId) { newMessage ->
-            val current = _messages.value.toMutableList()
-            if (current.none { it.id == newMessage.id }) {
-                current.add(newMessage)
-                _messages.value = current.sortedBy { it.timestamp }
+        chatRepository.listenToMessages(chatId) { event ->
+            when (event) {
+                is ChatRepository.MessageChange.Upsert -> {
+                    val current = _messages.value.toMutableList()
+                    val index = current.indexOfFirst { it.id == event.message.id }
+                    if (index >= 0) {
+                        current[index] = event.message
+                    } else {
+                        current.add(event.message)
+                    }
+                    _messages.value = current.sortedBy { it.timestamp }
+                }
+                is ChatRepository.MessageChange.Removed -> {
+                    _messages.value = _messages.value.filterNot { it.id == event.messageId }
+                }
             }
         }
     }
@@ -72,6 +83,13 @@ class ChatViewModel @Inject constructor(
     fun sendMessage(chatId: String, text: String, receiverId: String) {
         viewModelScope.launch {
             chatRepository.sendMessage(chatId, text, receiverId)
+        }
+    }
+
+    fun deleteMessage(chatId: String, messageId: String) {
+        viewModelScope.launch {
+            chatRepository.deleteMessage(chatId, messageId)
+            _messages.value = _messages.value.filterNot { it.id == messageId }
         }
     }
 }

@@ -14,7 +14,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,6 +41,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val firestore = FirebaseFirestore.getInstance()
     val user = auth.currentUser
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val screenOpenedAt = remember { System.currentTimeMillis() }
@@ -366,6 +369,65 @@ fun SettingsScreen(onBack: () -> Unit) {
                             snackbarHostState.showSnackbar(
                                 if (count > 0) "$count stories vencidas eliminadas." else "No tenías stories vencidas."
                             )
+                        }
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Copiar usuario",
+                    subtitle = "Guardar @${username} en el portapapeles",
+                    icon = Icons.Default.ContentCopy,
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString("@$username"))
+                        scope.launch { snackbarHostState.showSnackbar("Usuario copiado") }
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Copiar correo",
+                    subtitle = user?.email ?: "No disponible",
+                    icon = Icons.Default.ContentCopy,
+                    onClick = {
+                        val email = user?.email.orEmpty()
+                        if (email.isBlank()) {
+                            scope.launch { snackbarHostState.showSnackbar("No hay correo disponible") }
+                        } else {
+                            clipboardManager.setText(AnnotatedString(email))
+                            scope.launch { snackbarHostState.showSnackbar("Correo copiado") }
+                        }
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Copiar UID",
+                    subtitle = "Útil para soporte o pruebas",
+                    icon = Icons.Default.Info,
+                    onClick = {
+                        val uid = user?.uid.orEmpty()
+                        if (uid.isBlank()) {
+                            scope.launch { snackbarHostState.showSnackbar("No hay UID disponible") }
+                        } else {
+                            clipboardManager.setText(AnnotatedString(uid))
+                            scope.launch { snackbarHostState.showSnackbar("UID copiado") }
+                        }
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Abrir repositorio del proyecto",
+                    subtitle = "Ver Vivid en GitHub",
+                    icon = Icons.Default.OpenInBrowser,
+                    onClick = {
+                        val opened = launchIntentSafely(
+                            context,
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santes210/Vivid"))
+                        )
+                        if (!opened) {
+                            scope.launch { snackbarHostState.showSnackbar("No se pudo abrir GitHub") }
                         }
                     }
                 )

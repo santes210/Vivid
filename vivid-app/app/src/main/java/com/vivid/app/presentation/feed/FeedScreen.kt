@@ -5,12 +5,14 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -24,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -74,7 +77,9 @@ fun FeedScreen(
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
+    var selectedPostForViewer by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
+    var selectedPostForEdit by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
 
     LaunchedEffect(Unit) {
@@ -133,8 +138,10 @@ fun FeedScreen(
                         PostItem(
                             post = post,
                             currentUserId = currentUserId,
+                            onOpenPost = { selectedPostForViewer = post },
                             onOpenComments = { selectedPostForComments = post },
                             onOpenDetails = { selectedPostForDetails = post },
+                            onEditPost = { selectedPostForEdit = post },
                             onDeletePost = { selectedPostForDelete = post }
                         )
                     }
@@ -150,10 +157,33 @@ fun FeedScreen(
         )
     }
 
+    selectedPostForViewer?.let { post ->
+        PostViewerDialog(
+            post = post,
+            onDismiss = { selectedPostForViewer = null }
+        )
+    }
+
     selectedPostForDetails?.let { post ->
         PostDetailsDialog(
             post = post,
             onDismiss = { selectedPostForDetails = null }
+        )
+    }
+
+    selectedPostForEdit?.let { post ->
+        EditPostDialog(
+            post = post,
+            onDismiss = { selectedPostForEdit = null },
+            onSaved = { updatedCaption ->
+                selectedPostForEdit = null
+                posts = posts.map {
+                    if (it.id == post.id) it.copy(caption = updatedCaption) else it
+                }
+                scope.launch {
+                    snackbarHostState.showSnackbar("Publicación actualizada")
+                }
+            }
         )
     }
 
@@ -254,6 +284,24 @@ private suspend fun deletePostFromFirebase(post: PostData): Boolean {
     }
 }
 
+private suspend fun updatePostCaptionInFirebase(postId: String, newCaption: String): Boolean {
+    return try {
+        FirebaseFirestore.getInstance()
+            .collection("posts")
+            .document(postId)
+            .update(
+                mapOf(
+                    "caption" to newCaption,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            )
+            .await()
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
+
 private fun formatPostDate(timestamp: Long): String {
     return runCatching {
         SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(timestamp))
@@ -289,11 +337,122 @@ private fun PostDetailsDialog(
 }
 
 @Composable
+private fun PostViewerDialog(
+    post: PostData,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(post.username, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            formatPostDate(post.timestamp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PostImage(
+                        imageBase64 = post.imageBase64,
+                        imageUrl = post.imageUrl,
+                        username = post.username,
+                        modifier = Modifier.fillMaxSize(),
+                        useDefaultHeight = false
+                    )
+                }
+                if (post.caption.isNotBlank()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("@${post.username}", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(6.dp))
+                        Text(post.caption, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditPostDialog(
+    post: PostData,
+    onDismiss: () -> Unit,
+    onSaved: (String) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var caption by remember(post.id) { mutableStateOf(post.caption) }
+    var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = { Text("Editar publicación") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = caption,
+                    onValueChange = { caption = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Descripción") },
+                    maxLines = 5
+                )
+                if (!errorMessage.isNullOrBlank()) {
+                    Text(errorMessage.orEmpty(), color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    scope.launch {
+                        isSaving = true
+                        val success = updatePostCaptionInFirebase(post.id, caption.trim())
+                        if (success) {
+                            onSaved(caption.trim())
+                        } else {
+                            errorMessage = "No se pudo actualizar la publicación"
+                        }
+                        isSaving = false
+                    }
+                }
+            ) {
+                Text(if (isSaving) "Guardando..." else "Guardar")
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !isSaving, onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
 fun PostItem(
     post: PostData,
     currentUserId: String,
+    onOpenPost: () -> Unit,
     onOpenComments: () -> Unit,
     onOpenDetails: () -> Unit,
+    onEditPost: () -> Unit,
     onDeletePost: () -> Unit
 ) {
     var isLiked by remember { mutableStateOf(post.isLiked) }
@@ -336,6 +495,14 @@ fun PostItem(
                     )
                     if (post.userId == currentUserId) {
                         DropdownMenuItem(
+                            text = { Text("Editar publicación") },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onEditPost()
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Eliminar publicación") },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                             onClick = {
@@ -348,11 +515,13 @@ fun PostItem(
             }
         }
 
-        PostImage(
-            imageBase64 = post.imageBase64,
-            imageUrl = post.imageUrl,
-            username = post.username
-        )
+        Box(modifier = Modifier.clickable { onOpenPost() }) {
+            PostImage(
+                imageBase64 = post.imageBase64,
+                imageUrl = post.imageUrl,
+                username = post.username
+            )
+        }
 
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -684,7 +853,9 @@ private fun CommentAvatar(comment: PostComment) {
 fun PostImage(
     imageBase64: String,
     imageUrl: String,
-    username: String
+    username: String,
+    modifier: Modifier = Modifier,
+    useDefaultHeight: Boolean = true
 ) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -710,9 +881,13 @@ fun PostImage(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(380.dp)
+        modifier = if (useDefaultHeight) {
+            modifier
+                .fillMaxWidth()
+                .height(380.dp)
+        } else {
+            modifier
+        }
     ) {
         if (isLoading) {
             CircularProgressIndicator(

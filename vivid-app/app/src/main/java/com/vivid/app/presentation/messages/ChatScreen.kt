@@ -1,6 +1,8 @@
 package com.vivid.app.presentation.messages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,11 +39,13 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val clipboardManager = LocalClipboardManager.current
     val messages: List<Message> = viewModel.messages.collectAsState(initial = emptyList<Message>()).value
     val canMessage: Boolean = viewModel.canMessage.collectAsState(initial = true).value
 
     var messageText by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
+    var selectedMessage by remember { mutableStateOf<Message?>(null) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(chatId, receiverId, otherUserName) {
@@ -225,17 +231,52 @@ fun ChatScreen(
                     items(messages.reversed(), key = { it.id }) { message ->
                         MessageBubble(
                             message = message,
-                            isMine = message.senderId == currentUserId
+                            isMine = message.senderId == currentUserId,
+                            onLongPress = { selectedMessage = message }
                         )
                     }
                 }
             }
         }
     }
+
+    selectedMessage?.let { message ->
+        ModalBottomSheet(
+            onDismissRequest = { selectedMessage = null }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Copiar texto") },
+                    supportingContent = { Text(message.text.take(80)) },
+                    modifier = Modifier.clickable {
+                        clipboardManager.setText(AnnotatedString(message.text))
+                        selectedMessage = null
+                    }
+                )
+                if (message.senderId == currentUserId) {
+                    ListItem(
+                        headlineContent = { Text("Eliminar mensaje", color = MaterialTheme.colorScheme.error) },
+                        supportingContent = { Text("Solo se eliminará este mensaje.") },
+                        modifier = Modifier.clickable {
+                            viewModel.deleteMessage(chatId, message.id)
+                            selectedMessage = null
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun MessageBubble(message: Message, isMine: Boolean) {
+fun MessageBubble(message: Message, isMine: Boolean, onLongPress: () -> Unit = {}) {
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleColor = if (isMine) {
         MaterialTheme.colorScheme.primary
@@ -258,7 +299,12 @@ fun MessageBubble(message: Message, isMine: Boolean) {
             ),
             color = bubbleColor,
             tonalElevation = 1.dp,
-            modifier = Modifier.widthIn(max = 300.dp)
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = onLongPress
+                )
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                 Text(

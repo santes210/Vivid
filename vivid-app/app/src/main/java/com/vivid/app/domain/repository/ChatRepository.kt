@@ -42,7 +42,7 @@ class ChatRepository @Inject constructor(
             ?: currentUser?.email?.substringBefore("@")
             ?: "Usuario"
         val currentAvatar = currentUser?.photoUrl?.toString().orEmpty()
-        val currentBase64 = ""  // can fetch from Firestore if needed in future
+        val currentBase64 = ""
 
         val now = System.currentTimeMillis()
         chatDao.insertOrUpdateChat(
@@ -134,26 +134,63 @@ class ChatRepository @Inject constructor(
         ).await()
     }
 
-    fun listenToMessages(chatId: String, onNewMessage: (Message) -> Unit) {
+    suspend fun deleteMessage(chatId: String, messageId: String) {
+        messageDao.deleteMessage(messageId)
+        firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .delete()
+            .await()
+
+        val latestRemaining = firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .firstOrNull()
+
+        firestore.collection("chats").document(chatId).set(
+            mapOf(
+                "lastMessage" to latestRemaining?.getString("text").orEmpty(),
+                "lastSenderId" to latestRemaining?.getString("senderId").orEmpty(),
+                "lastTimestamp" to (latestRemaining?.getLong("timestamp") ?: System.currentTimeMillis()),
+                "updatedAt" to System.currentTimeMillis()
+            ),
+            SetOptions.merge()
+        ).await()
+    }
+
+    fun listenToMessages(chatId: String, onMessageEvent: (MessageChange) -> Unit) {
         firestore.collection("chats")
             .document(chatId)
             .collection("messages")
             .orderBy("timestamp", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, _ ->
                 snapshot?.documentChanges?.forEach { change ->
-                    if (change.type == DocumentChange.Type.ADDED || change.type == DocumentChange.Type.MODIFIED) {
-                        val timestamp = change.document.getLong("timestamp") ?: 0L
-                        val msg = Message(
-                            id = change.document.id,
-                            text = change.document.getString("text").orEmpty(),
-                            senderId = change.document.getString("senderId").orEmpty(),
-                            timestamp = timestamp,
-                            isRead = change.document.getBoolean("isRead") ?: false
-                        )
-                        onNewMessage(msg)
+                    val timestamp = change.document.getLong("timestamp") ?: 0L
+                    val msg = Message(
+                        id = change.document.id,
+                        text = change.document.getString("text").orEmpty(),
+                        senderId = change.document.getString("senderId").orEmpty(),
+                        timestamp = timestamp,
+                        isRead = change.document.getBoolean("isRead") ?: false
+                    )
+                    when (change.type) {
+                        DocumentChange.Type.ADDED,
+                        DocumentChange.Type.MODIFIED -> onMessageEvent(MessageChange.Upsert(msg))
+                        DocumentChange.Type.REMOVED -> onMessageEvent(MessageChange.Removed(msg.id))
                     }
                 }
             }
+    }
+
+    sealed class MessageChange {
+        data class Upsert(val message: Message) : MessageChange()
+        data class Removed(val messageId: String) : MessageChange()
     }
 
     companion object {
