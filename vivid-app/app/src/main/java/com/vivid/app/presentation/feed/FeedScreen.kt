@@ -23,11 +23,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -857,9 +860,12 @@ fun PostImage(
     modifier: Modifier = Modifier,
     useDefaultHeight: Boolean = true
 ) {
-    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var hasError by remember { mutableStateOf(false) }
+    var bitmap by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
+    var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
+    var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
+
+    val urlPainter = rememberAsyncImagePainter(model = imageUrl)
+    val urlState = urlPainter.state
 
     LaunchedEffect(imageBase64, imageUrl) {
         isLoading = true
@@ -870,69 +876,112 @@ fun PostImage(
                 val bytes = Base64.decode(imageBase64, Base64.NO_WRAP)
                 bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 hasError = bitmap == null
-            } catch (e: Exception) {
+            } catch (_: Exception) {
+                bitmap = null
                 hasError = true
             }
-        } else if (imageUrl.isNotBlank()) {
+            isLoading = false
+        } else {
             bitmap = null
             hasError = false
         }
-        isLoading = false
+    }
+
+    LaunchedEffect(urlState, imageBase64) {
+        if (imageBase64.isBlank() && imageUrl.isNotBlank()) {
+            when (urlState) {
+                is AsyncImagePainter.State.Loading,
+                is AsyncImagePainter.State.Empty -> {
+                    isLoading = true
+                    hasError = false
+                }
+                is AsyncImagePainter.State.Success -> {
+                    isLoading = false
+                    hasError = false
+                }
+                is AsyncImagePainter.State.Error -> {
+                    isLoading = false
+                    hasError = true
+                }
+            }
+        }
+    }
+
+    val imageAspectRatio = when {
+        bitmap != null && bitmap!!.height > 0 -> bitmap!!.width.toFloat() / bitmap!!.height.toFloat()
+        urlState is AsyncImagePainter.State.Success -> {
+            val drawable = urlState.result.drawable
+            if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
+                drawable.intrinsicWidth.toFloat() / drawable.intrinsicHeight.toFloat()
+            } else {
+                null
+            }
+        }
+        else -> null
+    }
+
+    val containerModifier = when {
+        imageAspectRatio != null -> modifier
+            .fillMaxWidth()
+            .aspectRatio(imageAspectRatio)
+        useDefaultHeight -> modifier
+            .fillMaxWidth()
+            .height(380.dp)
+        else -> modifier.fillMaxSize()
     }
 
     Box(
-        modifier = if (useDefaultHeight) {
-            modifier
-                .fillMaxWidth()
-                .height(380.dp)
-        } else {
-            modifier
-        }
+        modifier = containerModifier.background(Color.Black),
+        contentAlignment = Alignment.Center
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center)
-            )
-        } else if (hasError) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Email,
-                    contentDescription = "Error",
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+        when {
+            isLoading -> {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            }
+            hasError -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = "Error",
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            bitmap != null -> {
+                Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = "Post image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
                 )
             }
-        } else if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Post image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else if (imageUrl.isNotBlank()) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = "Post image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "📷 $username",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            imageUrl.isNotBlank() -> {
+                Image(
+                    painter = urlPainter,
+                    contentDescription = "Post image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
                 )
+            }
+            else -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "📷 $username",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
