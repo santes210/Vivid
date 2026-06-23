@@ -1,5 +1,3 @@
-import com.vivid.app.di.BuildConfigSecrets
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,6 +15,13 @@ hilt {
     enableAggregatingTask = false
 }
 
+// =========================================================
+//  CREDENCIALES EMBEBIDAS (modo inseguro, decidiste aceptarlo)
+// =========================================================
+// Estas constantes se inyectan en BuildConfig para que
+// StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
+val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
+
 android {
     namespace = "com.vivid.app"
     compileSdk = 35
@@ -30,34 +35,23 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // Inyecta CF_BASE_URL en BuildConfig (accesible desde Kotlin/Java)
+        buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
         }
-        debug {
-            // igual que release
-        }
-    }
-
-    // ============================================================
-    //  CREDENCIALES EMBEBIDAS (modo inseguro a proposito)
-    // ============================================================
-    // Estas constantes vienen de BuildConfigSecrets.kt que tiene
-    // las claves B2 directamente. Se exponen como BuildConfig.*
-    // para que StorageModule las pueda leer.
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-
-    buildTypes.all {
-        buildConfigField("String", "CF_BASE_URL", "\"${BuildConfigSecrets.CF_BASE_URL}\"")
     }
 
     compileOptions {
@@ -70,6 +64,11 @@ android {
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
             "-opt-in=androidx.media3.common.util.UnstableApi"
         )
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.15"
