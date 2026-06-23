@@ -83,7 +83,7 @@ class CreateReelViewModel @Inject constructor(
                     _state.value = CreateReelUiState.Watermarking(100)
                 }
 
-                // 3. Miniatura (JPEG, 480px ancho) — la CF también la subirá
+                // 3. Miniatura (JPEG, 720px ancho)
                 val thumbFile = File(context.cacheDir, "reel_thumb_${System.currentTimeMillis()}.jpg")
                 VideoThumbnailer.extract(
                     context,
@@ -92,23 +92,21 @@ class CreateReelViewModel @Inject constructor(
                     targetWidth = 720
                 )
 
-                // 4. Subir a B2 vía CF (incluye thumbnail si existe)
+                // 4. Subir video a B2 (URL firmada para bucket privado)
                 _state.value = CreateReelUiState.Uploading(0)
                 val ts = System.currentTimeMillis()
                 val remoteKey = "reels/${user.uid}/$ts.mp4"
                 val publicUrl = storage.uploadFile(finalVideoPath, remoteKey) { pct ->
-                    _state.value = CreateReelUiState.Uploading(pct)
+                    _state.value = CreateReelUiState.Uploading(pct / 2)
                 }
 
-                // Si la miniatura se subió a B2, recuperamos su URL firmada
-                var thumbUrl = ""
-                if (thumbFile.exists() && thumbFile.length() > 0) {
-                    // La CF la subió como {remoteKey}_thumb.jpg
-                    val thumbKey = "${remoteKey.replace(".mp4", "_thumb.jpg")}"
-                    thumbUrl = (storage as? com.vivid.app.data.storage.CloudFunctionsStorageProvider)
-                        ?.renewSignedUrl(thumbKey, 3600 * 24) // 24h
-                        ?: ""
-                }
+                // Subir miniatura a B2 (URL firmada)
+                val thumbKey = "${remoteKey.replace(".mp4", "_thumb.jpg")}"
+                val thumbUrl = if (thumbFile.exists() && thumbFile.length() > 0) {
+                    storage.uploadFile(thumbFile.absolutePath, thumbKey) { pct ->
+                        _state.value = CreateReelUiState.Uploading(50 + pct / 2)
+                    }
+                } else ""
 
                 // 5. Metadata
                 _state.value = CreateReelUiState.SavingMetadata
@@ -149,7 +147,7 @@ class CreateReelViewModel @Inject constructor(
             "videoUrl" to videoUrl,
             "thumbnailUrl" to thumbnailUrl,
             "storageKey" to storageKey,
-            "provider" to "backblaze-via-cf",
+            "provider" to "backblaze-direct",
             "caption" to caption.trim(),
             "likes" to 0,
             "comments" to 0,

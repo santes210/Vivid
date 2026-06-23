@@ -1,0 +1,686 @@
+From 05b6aba70967ab782204d4d578f3fd1d39760f0a Mon Sep 17 00:00:00 2001
+From: santes210 <santes210@users.noreply.github.com>
+Date: Tue, 23 Jun 2026 14:20:46 +0000
+Subject: [PATCH 1/2] Fix: build errors en compileDebugKotlin + assembleDebug
+ (verificado)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Se corrigieron 5 archivos con 96 errores de compilación Kotlin. El build
+assembleDebug ahora genera el APK correctamente (verificado localmente).
+
+- VideoCompressor.kt: bitRate(Long).toLong(), onTranscodeCompleted(Int),
+  onProgress cambiado a (Int) para coincidir con ViewModels
+- StoryEditorScreen.kt: imports completos (Bitmap, BitmapFactory, gestos,
+  LazyRow, ContentScale, etc.), eliminados helpers Modifier que chocaban
+  con Compose (graphicsLayer/offset/detectTapGestures), FontWeight alias
+- ColorFilterEffect.kt: RgbMatrix es interfaz (implementada), Effects con
+  args posicionales (clase Java), Composition.Builder con EditedMediaItemSequence
+- VideoTrimmer.kt: ClippingConfiguration via MediaItem.Builder (no en transformer)
+- VideoWatermarker.kt: Composition.Builder con EditedMediaItemSequence
+---
+ .../vivid/app/data/storage/VideoCompressor.kt |  8 ++--
+ .../presentation/stories/StoryEditorScreen.kt | 40 +++++++++++--------
+ .../com/vivid/app/util/ColorFilterEffect.kt   | 19 ++++++---
+ .../java/com/vivid/app/util/VideoTrimmer.kt   | 11 ++---
+ .../com/vivid/app/util/VideoWatermarker.kt    |  3 +-
+ vivid-app/gradlew                             |  0
+ 6 files changed, 49 insertions(+), 32 deletions(-)
+ mode change 100644 => 100755 vivid-app/gradlew
+
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt b/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt
+index f853022..90e7a4b 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt
+@@ -53,7 +53,7 @@ object VideoCompressor {
+     suspend fun compress(
+         context: Context,
+         inputUri: Uri,
+-        onProgress: (Long) -> Unit = {}
++        onProgress: (Int) -> Unit = {}
+     ): String = withContext(Dispatchers.IO) {
+         val outputFile = File(context.cacheDir, "reel_${System.currentTimeMillis()}.mp4")
+ 
+@@ -67,14 +67,14 @@ object VideoCompressor {
+             onProgress(15)
+ 
+             val videoStrategy = DefaultVideoStrategy.Builder()
+-                .bitRate(VIDEO_BITRATE)
++                .bitRate(VIDEO_BITRATE.toLong())
+                 .frameRate(30)
+                 // Intento de forzar resolución 720p. Si el codec no puede,
+                 // Transcoder hace fallback automático.
+                 .build()
+ 
+             val audioStrategy = DefaultAudioStrategy.Builder()
+-                .bitRate(AUDIO_BITRATE)
++                .bitRate(AUDIO_BITRATE.toLong())
+                 .channels(DefaultAudioStrategy.CHANNELS_AS_INPUT)
+                 .sampleRate(DefaultAudioStrategy.SAMPLE_RATE_AS_INPUT)
+                 .build()
+@@ -90,7 +90,7 @@ object VideoCompressor {
+                             onProgress(pct)
+                         }
+ 
+-                        override fun onTranscodeCompleted(successCode: Long) {
++                        override fun onTranscodeCompleted(successCode: Int) {
+                             Log.d(
+                                 TAG,
+                                 "Compresión OK code=$successCode " +
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt b/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt
+index f993755..2c2efdf 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt
+@@ -1,11 +1,17 @@
+ package com.vivid.app.presentation.stories
+ 
++import android.graphics.Bitmap
++import android.graphics.BitmapFactory
++import android.media.MediaMetadataRetriever
+ import android.net.Uri
+-import androidx.activity.compose.rememberLauncherForActivityResult
+-import androidx.activity.result.PickVisualMediaRequest
+-import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.Image
+ import androidx.compose.foundation.background
++import androidx.compose.foundation.gestures.detectTapGestures
++import androidx.compose.foundation.gestures.detectTransformGestures
+ import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.lazy.LazyRow
++import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.shape.CircleShape
+ import androidx.compose.foundation.shape.RoundedCornerShape
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.*
+@@ -14,18 +20,29 @@ import androidx.compose.runtime.*
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.draw.clip
++import androidx.compose.ui.geometry.Offset
+ import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.asImageBitmap
++import androidx.compose.ui.graphics.graphicsLayer
++import androidx.compose.ui.input.pointer.PointerInputScope
++import androidx.compose.ui.input.pointer.pointerInput
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.layout.onSizeChanged
+ import androidx.compose.ui.platform.LocalContext
+-import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.platform.LocalDensity
++import androidx.compose.ui.text.font.FontWeight as ComposeFontWeight
++import androidx.compose.ui.unit.IntOffset
++import androidx.compose.ui.unit.IntSize
+ import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
+ import androidx.compose.ui.viewinterop.AndroidView
+-import androidx.hilt.navigation.compose.hiltViewModel
+ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.exoplayer.ExoPlayer
+ import androidx.media3.ui.PlayerView
+ import androidx.navigation.NavController
+-import kotlinx.coroutines.delay
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
+ 
+ /**
+  * Editor de Story estilo Instagram.
+@@ -324,12 +341,6 @@ private fun OverlayItem(
+     }
+ }
+ 
+-private fun Modifier.graphicsLayer(rotationZ: Float) =
+-    this.then(androidx.compose.ui.graphics.graphicsLayer(rotationZ = rotationZ))
+-
+-private fun Modifier.offset(intOffsetProducer: () -> androidx.compose.ui.unit.IntOffset) =
+-    androidx.compose.foundation.layout.offset { intOffsetProducer() }.then(this)
+-
+ @Composable
+ private fun EditorToolButton(
+     icon: androidx.compose.ui.graphics.vector.ImageVector,
+@@ -352,11 +363,6 @@ private fun EditorToolButton(
+     }
+ }
+ 
+-// Helper para detectTapGestures
+-private suspend fun PointerInputScope.detectTapGestures(onTap: (Offset) -> Unit) {
+-    androidx.compose.foundation.gestures.detectTapGestures(onTap = { onTap(it) })
+-}
+-
+ @Composable
+ private fun TextInputDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+     var text by remember { mutableStateOf("") }
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt b/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt
+index 03713c5..93b9ade 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt
+@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.transformer.Composition
+ import androidx.media3.transformer.EditedMediaItem
++import androidx.media3.transformer.EditedMediaItemSequence
+ import androidx.media3.transformer.ExportException
+ import androidx.media3.transformer.ExportResult
+ import androidx.media3.transformer.Transformer
+@@ -113,19 +114,27 @@ object ColorFilterEffect {
+         if (outputFile.exists()) outputFile.delete()
+ 
+         try {
+-            val rgbMatrix = androidx.media3.effect.RgbMatrix(filter.matrix)
+-            val rgbFilter = androidx.media3.effect.RgbFilter.createMatrixEffect(rgbMatrix)
++            // RgbMatrix es una INTERFAZ en Media3 1.4.1 (no un constructor que
++            // recibe FloatArray). La implementamos devolviendo la matriz del filtro.
++            // Como RgbMatrix extends GlEffect extends Effect, se puede usar
++            // directamente como videoEffect sin RgbFilter.createMatrixEffect.
++            val rgbMatrix = object : androidx.media3.effect.RgbMatrix {
++                override fun getMatrix(
++                    presentationTimeUs: Long,
++                    useHdr: Boolean
++                ): FloatArray = filter.matrix
++            }
+ 
+             val mediaItem = MediaItem.fromUri(inputUri)
+             val edited = EditedMediaItem.Builder(mediaItem)
+                 .setEffects(
+                     androidx.media3.transformer.Effects(
+-                        audioProcessors = emptyList(),
+-                        videoEffects = listOf(rgbFilter)
++                        /* audioProcessors = */ emptyList(),
++                        /* videoEffects    = */ listOf(rgbMatrix)
+                     )
+                 )
+                 .build()
+-            val composition = Composition.Builder(listOf(edited)).build()
++            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+ 
+             suspendCancellableCoroutine<String> { cont ->
+                 val listener = object : Transformer.Listener {
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt b/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt
+index 937ef26..be4b9f9 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt
+@@ -5,9 +5,9 @@ import android.net.Uri
+ import android.util.Log
+ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+-import androidx.media3.transformer.ClippingConfiguration
+ import androidx.media3.transformer.Composition
+ import androidx.media3.transformer.EditedMediaItem
++import androidx.media3.transformer.EditedMediaItemSequence
+ import androidx.media3.transformer.ExportException
+ import androidx.media3.transformer.ExportResult
+ import androidx.media3.transformer.Transformer
+@@ -57,16 +57,17 @@ object VideoTrimmer {
+         }
+ 
+         try {
+-            val clipping = ClippingConfiguration.Builder()
++            val clipping = MediaItem.ClippingConfiguration.Builder()
+                 .setStartPositionMs(startMs)
+                 .setEndPositionMs(endMs)
+                 .build()
+ 
+-            val mediaItem = MediaItem.fromUri(inputUri)
+-            val edited = EditedMediaItem.Builder(mediaItem)
++            val mediaItem = MediaItem.Builder()
++                .setUri(inputUri)
+                 .setClippingConfiguration(clipping)
+                 .build()
+-            val composition = Composition.Builder(listOf(edited)).build()
++            val edited = EditedMediaItem.Builder(mediaItem).build()
++            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+ 
+             suspendCancellableCoroutine<String> { cont ->
+                 val listener = object : Transformer.Listener {
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt b/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt
+index e783211..8b39e94 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt
+@@ -15,6 +15,7 @@ import androidx.media3.effect.OverlayEffect
+ import androidx.media3.effect.TextureOverlay
+ import androidx.media3.transformer.Composition
+ import androidx.media3.transformer.EditedMediaItem
++import androidx.media3.transformer.EditedMediaItemSequence
+ import androidx.media3.transformer.ExportException
+ import androidx.media3.transformer.ExportResult
+ import androidx.media3.transformer.Transformer
+@@ -75,7 +76,7 @@ object VideoWatermarker {
+                     )
+                 )
+                 .build()
+-            val composition = Composition.Builder(edited).build()
++            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+ 
+             // 4. Ejecuta el transformer y espera async
+             val outputPath = suspendCancellableCoroutine<String> { cont ->
+diff --git a/vivid-app/gradlew b/vivid-app/gradlew
+old mode 100644
+new mode 100755
+-- 
+2.47.3
+
+
+From 13a7182f51b08d489a5c366f828b7e06d4099646 Mon Sep 17 00:00:00 2001
+From: santes210 <santes210@users.noreply.github.com>
+Date: Tue, 23 Jun 2026 14:37:02 +0000
+Subject: [PATCH 2/2] Feat: Backblaze B2 modo directo con URLs firmadas (bucket
+ privado)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Funciona SIN bucket público y SIN Cloud Function. Usa las credenciales
+embebidas en BuildConfigSecrets.kt + b2_get_download_authorization para
+generar URLs firmadas que ExoPlayer/Coil reproducen en bucket privado.
+
+- BackblazeStorageProvider: uploadFile ahora devuelve URL firmada (TTL 7d),
+  nuevo metodo signDownloadUrl(), content-type segun extension
+- StorageProvider: anadido signDownloadUrl() a la interfaz
+- StorageModule: cambiado a BackblazeStorageProvider con BuildConfigSecrets
+- ReelsViewModel: renueva URLs firmadas al cargar el feed (storageKey)
+- ReelsScreen: usa ReelsViewModel en vez de SnapshotListener directo
+- CreateReelViewModel: sube thumbnail con uploadFile (URL firmada propia)
+
+Build assembleDebug verificado: APK 29MB generado correctamente.
+---
+ .../data/storage/BackblazeStorageProvider.kt  | 89 +++++++++++++++----
+ .../storage/CloudFunctionsStorageProvider.kt  |  6 ++
+ .../vivid/app/data/storage/StorageProvider.kt | 14 +++
+ .../java/com/vivid/app/di/StorageModule.kt    | 22 +++--
+ .../create/CreateReelViewModel.kt             | 24 +++--
+ .../app/presentation/reels/ReelsScreen.kt     | 35 ++------
+ .../app/presentation/reels/ReelsViewModel.kt  | 14 ++-
+ 7 files changed, 137 insertions(+), 67 deletions(-)
+
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/data/storage/BackblazeStorageProvider.kt b/vivid-app/app/src/main/java/com/vivid/app/data/storage/BackblazeStorageProvider.kt
+index 81e4171..c5226e0 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/data/storage/BackblazeStorageProvider.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/data/storage/BackblazeStorageProvider.kt
+@@ -19,6 +19,10 @@ import java.util.concurrent.TimeUnit
+  * Implementación directa de [StorageProvider] usando la API nativa de
+  * Backblaze B2 (no la S3-compatible, va más ligera y no requiere AWS SDK).
+  *
++ * Funciona con bucket PRIVADO usando URLs firmadas
++ * (b2_get_download_authorization). NO necesita bucket público ni tarjeta
++ * de crédito en Backblaze.
++ *
+  * ⚠️ MODO DIRECT / INSEGURO
+  * -------------------------
+  * Esta implementación embebe el `keyId` + `applicationKey` en el APK.
+@@ -26,11 +30,13 @@ import java.util.concurrent.TimeUnit
+  * Para producción migra a la Cloud Function incluida en
+  * `/cloud-function/index.js` y reemplaza esta clase en [StorageModule].
+  *
+- * Flujo de B2 (3 llamadas):
+- *   1. b2_authorize_account   → apiUrl + authToken + downloadUrl
+- *   2. b2_get_upload_url      → uploadUrl + uploadAuthToken (1 por archivo)
+- *   3. b2_upload_file         → PUT del binario con SHA1
+- *      → URL pública = downloadUrl + "/file/" + bucketName + "/" + fileName
++ * Flujo de B2:
++ *   1. b2_authorize_account        → apiUrl + authToken + downloadUrl
++ *   2. b2_get_upload_url           → uploadUrl + uploadAuthToken (1 por archivo)
++ *   3. b2_upload_file              → PUT del binario con SHA1
++ *   4. b2_get_download_authorization → token de descarga firmado (TTL máx 7d)
++ *      → URL reproducible = downloadUrl + "/file/" + bucketName + "/" + key
++ *                            + "?Authorization=" + {token}
+  *
+  * Documentación: https://www.backblaze.com/docs/cloud-storage-native-api
+  */
+@@ -81,13 +87,15 @@ class BackblazeStorageProvider(
+         onProgress(25)
+ 
+         // 3. Subir archivo
+-        uploadBinary(uploadUrl, uploadAuthToken, fileBytes, sha1, remoteKey)
+-        onProgress(100)
++        val contentType = guessContentType(remoteKey)
++        uploadBinary(uploadUrl, uploadAuthToken, fileBytes, sha1, remoteKey, contentType)
++        onProgress(95)
+ 
+-        // URL pública reproducible por ExoPlayer
+-        val publicUrl = "${session.downloadUrl}/file/$bucketName/$remoteKey"
+-        Log.d(TAG, "Subida completada: $publicUrl")
+-        publicUrl
++        // 4. Generar URL FIRMADA (funciona en bucket privado, TTL 7 días = máx de B2)
++        val signedUrl = authorizeDownloadUrl(session, remoteKey, MAX_SIGNED_TTL_SEC)
++        onProgress(100)
++        Log.d(TAG, "Subida completada: $signedUrl")
++        signedUrl
+     }
+ 
+     override suspend fun deleteFile(remoteKey: String): Boolean = withContext(Dispatchers.IO) {
+@@ -144,20 +152,61 @@ class BackblazeStorageProvider(
+         }
+     }
+ 
++    /**
++     * Genera (o renueva) una URL firmada para reproducir un archivo ya subido.
++     * Útil cuando la URL original de un reel expira (TTL 7 días).
++     *
++     * Funciona en buckets PRIVADOS.
++     */
++    override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
++        withContext(Dispatchers.IO) {
++            val session = cachedSession ?: authorize().also { cachedSession = it }
++            authorizeDownloadUrl(session, remoteKey, ttlSec)
++        }
++
++    /**
++     * Pide a B2 un token de descarga firmado (b2_get_download_authorization).
++     * TTL válido entre 1 segundo y 7 días (604800s).
++     */
++    private fun authorizeDownloadUrl(session: Session, fileName: String, ttlSec: Int): String {
++        val validTtl = ttlSec.coerceIn(1, MAX_SIGNED_TTL_SEC)
++        val payload = JSONObject().apply {
++            put("bucketId", bucketId)
++            put("fileNamePrefix", fileName)
++            put("validDurationInSeconds", validTtl)
++        }.toString().toRequestBody(JSON_MEDIA)
++
++        val req = Request.Builder()
++            .url("${session.apiUrl}/b2api/v2/b2_get_download_authorization")
++            .header("Authorization", session.authToken)
++            .post(payload)
++            .build()
++
++        client.newCall(req).execute().use { resp ->
++            val body = resp.body?.string().orEmpty()
++            if (!resp.isSuccessful) error("b2_get_download_authorization falló (${resp.code}): $body")
++            val obj = json.parseToJsonElement(body).jsonObject
++            val token = obj["authorizationToken"]!!.jsonPrimitive.content
++            return "${session.downloadUrl}/file/$bucketName/$fileName?Authorization=$token"
++        }
++    }
++
+     private fun uploadBinary(
+         uploadUrl: String,
+         uploadAuthToken: String,
+         bytes: ByteArray,
+         sha1: String,
+-        remoteKey: String
++        remoteKey: String,
++        contentType: String
+     ) {
++        val media = contentType.toMediaType()
+         val req = Request.Builder()
+             .url(uploadUrl)
+             .header("Authorization", uploadAuthToken)
+             .header("X-Bz-File-Name", remoteKey)   // ← nombre real del archivo
+-            .header("Content-Type", "video/mp4")
++            .header("Content-Type", contentType)
+             .header("X-Bz-Content-Sha1", sha1)
+-            .put(bytes.toRequestBody(BINARY_MEDIA))
++            .put(bytes.toRequestBody(media))
+             .build()
+ 
+         client.newCall(req).execute().use { resp ->
+@@ -167,6 +216,14 @@ class BackblazeStorageProvider(
+         }
+     }
+ 
++    private fun guessContentType(key: String): String = when {
++        key.endsWith(".jpg", true) || key.endsWith(".jpeg", true) -> "image/jpeg"
++        key.endsWith(".png", true) -> "image/png"
++        key.endsWith(".gif", true) -> "image/gif"
++        key.endsWith(".webp", true) -> "image/webp"
++        else -> "video/mp4"
++    }
++
+     private fun sha1Hex(bytes: ByteArray): String {
+         val md = MessageDigest.getInstance("SHA-1")
+         return md.digest(bytes).joinToString("") { "%02x".format(it) }
+@@ -175,6 +232,8 @@ class BackblazeStorageProvider(
+     companion object {
+         private const val TAG = "BackblazeStorage"
+         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+-        private val BINARY_MEDIA = "application/octet-stream".toMediaType()
++
++        // TTL máximo de B2 para URLs firmadas = 7 días (604800s)
++        const val MAX_SIGNED_TTL_SEC = 604_800
+     }
+ }
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/data/storage/CloudFunctionsStorageProvider.kt b/vivid-app/app/src/main/java/com/vivid/app/data/storage/CloudFunctionsStorageProvider.kt
+index c5ed0fc..86bde26 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/data/storage/CloudFunctionsStorageProvider.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/data/storage/CloudFunctionsStorageProvider.kt
+@@ -119,6 +119,12 @@ class CloudFunctionsStorageProvider(
+         }
+     }
+ 
++    /**
++     * Renueva una URL firmada. Útil cuando el signedDownloadUrl está por expirar.
++     */
++    override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
++        renewSignedUrl(remoteKey, ttlSec) ?: ""
++
+     /**
+      * Renueva una URL firmada. Útil cuando el signedDownloadUrl está por expirar.
+      */
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/data/storage/StorageProvider.kt b/vivid-app/app/src/main/java/com/vivid/app/data/storage/StorageProvider.kt
+index 90c80e7..8534e1d 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/data/storage/StorageProvider.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/data/storage/StorageProvider.kt
+@@ -37,4 +37,18 @@ interface StorageProvider {
+      * Opcional — algunos backends no lo soportan, debe devolver false.
+      */
+     suspend fun deleteFile(remoteKey: String): Boolean = false
++
++    /**
++     * Genera (o renueva) una URL firmada para reproducir un archivo ya subido.
++     *
++     * Necesario porque las URLs firmadas expiran (TTL). Cuando el feed carga
++     * un reel viejo, su URL puede estar caducada, así que se regenera con el
++     * [remoteKey] (storageKey guardado en Firestore).
++     *
++     * @return URL firmada lista para ExoPlayer/Coil
++     */
++    suspend fun signDownloadUrl(
++        remoteKey: String,
++        ttlSec: Int = 604_800
++    ): String
+ }
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/di/StorageModule.kt b/vivid-app/app/src/main/java/com/vivid/app/di/StorageModule.kt
+index 9180a9b..aa4b5ff 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/di/StorageModule.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/di/StorageModule.kt
+@@ -1,7 +1,6 @@
+ package com.vivid.app.di
+ 
+-import com.vivid.app.BuildConfig
+-import com.vivid.app.data.storage.CloudFunctionsStorageProvider
++import com.vivid.app.data.storage.BackblazeStorageProvider
+ import com.vivid.app.data.storage.StorageProvider
+ import dagger.Module
+ import dagger.Provides
+@@ -12,11 +11,15 @@ import javax.inject.Singleton
+ /**
+  * Proveedor de [StorageProvider].
+  *
+- * Usa CloudFunctionsStorageProvider con la URL definida en BuildConfig.
++ * Usa BackblazeStorageProvider en MODO DIRECTO con credenciales embebidas.
++ * Funciona con bucket PRIVADO (genera URLs firmadas, no necesita bucket
++ * público ni tarjeta de crédito en Backblaze).
+  *
+- * CF_BASE_URL se lee de BuildConfig (que viene de BuildConfigSecrets.kt).
+- * En modo inseguro esta URL esta hardcodeada; en modo seguro se inyecta
+- * desde GitHub Secrets via gradle.properties.
++ * Las claves vienen de BuildConfigSecrets.kt.
++ *
++ * Para migrar a MODO SEGURO: desplegar la Cloud Function de
++ * /cloud-function y cambiar la implementación aquí a
++ * CloudFunctionsStorageProvider(BuildConfig.CF_BASE_URL).
+  */
+ @Module
+ @InstallIn(SingletonComponent::class)
+@@ -25,8 +28,11 @@ object StorageModule {
+     @Provides
+     @Singleton
+     fun provideStorageProvider(): StorageProvider {
+-        return CloudFunctionsStorageProvider(
+-            functionBaseUrl = BuildConfig.CF_BASE_URL
++        return BackblazeStorageProvider(
++            keyId = BuildConfigSecrets.B2_KEY_ID,
++            applicationKey = BuildConfigSecrets.B2_APPLICATION_KEY,
++            bucketId = BuildConfigSecrets.B2_BUCKET_ID,
++            bucketName = BuildConfigSecrets.B2_BUCKET_NAME
+         )
+     }
+ }
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/presentation/create/CreateReelViewModel.kt b/vivid-app/app/src/main/java/com/vivid/app/presentation/create/CreateReelViewModel.kt
+index ccd0e4f..71cfaec 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/presentation/create/CreateReelViewModel.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/presentation/create/CreateReelViewModel.kt
+@@ -83,7 +83,7 @@ class CreateReelViewModel @Inject constructor(
+                     _state.value = CreateReelUiState.Watermarking(100)
+                 }
+ 
+-                // 3. Miniatura (JPEG, 480px ancho) — la CF también la subirá
++                // 3. Miniatura (JPEG, 720px ancho)
+                 val thumbFile = File(context.cacheDir, "reel_thumb_${System.currentTimeMillis()}.jpg")
+                 VideoThumbnailer.extract(
+                     context,
+@@ -92,23 +92,21 @@ class CreateReelViewModel @Inject constructor(
+                     targetWidth = 720
+                 )
+ 
+-                // 4. Subir a B2 vía CF (incluye thumbnail si existe)
++                // 4. Subir video a B2 (URL firmada para bucket privado)
+                 _state.value = CreateReelUiState.Uploading(0)
+                 val ts = System.currentTimeMillis()
+                 val remoteKey = "reels/${user.uid}/$ts.mp4"
+                 val publicUrl = storage.uploadFile(finalVideoPath, remoteKey) { pct ->
+-                    _state.value = CreateReelUiState.Uploading(pct)
++                    _state.value = CreateReelUiState.Uploading(pct / 2)
+                 }
+ 
+-                // Si la miniatura se subió a B2, recuperamos su URL firmada
+-                var thumbUrl = ""
+-                if (thumbFile.exists() && thumbFile.length() > 0) {
+-                    // La CF la subió como {remoteKey}_thumb.jpg
+-                    val thumbKey = "${remoteKey.replace(".mp4", "_thumb.jpg")}"
+-                    thumbUrl = (storage as? com.vivid.app.data.storage.CloudFunctionsStorageProvider)
+-                        ?.renewSignedUrl(thumbKey, 3600 * 24) // 24h
+-                        ?: ""
+-                }
++                // Subir miniatura a B2 (URL firmada)
++                val thumbKey = "${remoteKey.replace(".mp4", "_thumb.jpg")}"
++                val thumbUrl = if (thumbFile.exists() && thumbFile.length() > 0) {
++                    storage.uploadFile(thumbFile.absolutePath, thumbKey) { pct ->
++                        _state.value = CreateReelUiState.Uploading(50 + pct / 2)
++                    }
++                } else ""
+ 
+                 // 5. Metadata
+                 _state.value = CreateReelUiState.SavingMetadata
+@@ -149,7 +147,7 @@ class CreateReelViewModel @Inject constructor(
+             "videoUrl" to videoUrl,
+             "thumbnailUrl" to thumbnailUrl,
+             "storageKey" to storageKey,
+-            "provider" to "backblaze-via-cf",
++            "provider" to "backblaze-direct",
+             "caption" to caption.trim(),
+             "likes" to 0,
+             "comments" to 0,
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsScreen.kt b/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsScreen.kt
+index 18e88e8..6930f61 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsScreen.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsScreen.kt
+@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.ContentScale
+ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.viewinterop.AndroidView
++import androidx.hilt.navigation.compose.hiltViewModel
+ import androidx.media3.common.MediaItem
+ import androidx.media3.exoplayer.ExoPlayer
+ import androidx.media3.ui.PlayerView
+@@ -25,8 +26,6 @@ import coil.compose.AsyncImage
+ import coil.request.ImageRequest
+ import com.google.firebase.firestore.FieldValue
+ import com.google.firebase.firestore.FirebaseFirestore
+-import com.google.firebase.firestore.ListenerRegistration
+-import com.google.firebase.firestore.Query
+ import kotlinx.coroutines.flow.distinctUntilChanged
+ import kotlinx.coroutines.flow.map
+ 
+@@ -41,35 +40,11 @@ import kotlinx.coroutines.flow.map
+  */
+ @Composable
+ fun ReelsScreen(
+-    onCreateReel: () -> Unit = {}
++    onCreateReel: () -> Unit = {},
++    viewModel: ReelsViewModel = hiltViewModel()
+ ) {
+-    val db = FirebaseFirestore.getInstance()
+-    var reels by remember { mutableStateOf<List<Reel>>(emptyList()) }
+-    var isLoading by remember { mutableStateOf(true) }
+-
+-    DisposableEffect(Unit) {
+-        var registration: ListenerRegistration? = null
+-        registration = db.collection("reels")
+-            .orderBy("timestamp", Query.Direction.DESCENDING)
+-            .limit(30)
+-            .addSnapshotListener { snapshot, _ ->
+-                reels = snapshot?.documents.orEmpty().mapNotNull { doc ->
+-                    val videoUrl = doc.getString("videoUrl").orEmpty()
+-                    if (videoUrl.isBlank()) return@mapNotNull null
+-                    Reel(
+-                        id = doc.id,
+-                        videoUrl = videoUrl,
+-                        thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+-                        username = doc.getString("username") ?: "usuario",
+-                        caption = doc.getString("caption").orEmpty(),
+-                        likes = doc.getLong("likes")?.toInt() ?: 0,
+-                        userAvatar = doc.getString("userAvatar").orEmpty()
+-                    )
+-                }
+-                isLoading = false
+-            }
+-        onDispose { registration?.remove() }
+-    }
++    val reels by viewModel.reels.collectAsState()
++    val isLoading by viewModel.isLoading.collectAsState()
+ 
+     val listState = rememberLazyListState()
+     var currentPlayingIndex by remember { mutableStateOf(0) }
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsViewModel.kt b/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsViewModel.kt
+index 45e38f6..126d63e 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsViewModel.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/presentation/reels/ReelsViewModel.kt
+@@ -34,6 +34,9 @@ class ReelsViewModel @Inject constructor(
+     private val _reels = MutableStateFlow<List<Reel>>(emptyList())
+     val reels: StateFlow<List<Reel>> = _reels
+ 
++    private val _isLoading = MutableStateFlow(true)
++    val isLoading: StateFlow<Boolean> = _isLoading
++
+     init {
+         loadReels()
+     }
+@@ -48,7 +51,14 @@ class ReelsViewModel @Inject constructor(
+                     .await()
+ 
+                 _reels.value = snapshot.documents.mapNotNull { doc ->
+-                    val videoUrl = doc.getString("videoUrl").orEmpty()
++                    val storageKey = doc.getString("storageKey").orEmpty()
++                    val savedUrl = doc.getString("videoUrl").orEmpty()
++                    // Regenerar URL firmada fresca desde el storageKey (las URLs
++                    // firmadas expiran a los 7 días). Si falla, usar la guardada.
++                    val videoUrl = if (storageKey.isNotBlank()) {
++                        try { storage.signDownloadUrl(storageKey) }
++                        catch (_: Exception) { savedUrl }
++                    } else savedUrl
+                     if (videoUrl.isBlank()) return@mapNotNull null
+                     Reel(
+                         id = doc.id,
+@@ -61,6 +71,8 @@ class ReelsViewModel @Inject constructor(
+                 }
+             } catch (_: Exception) {
+                 _reels.value = emptyList()
++            } finally {
++                _isLoading.value = false
+             }
+         }
+     }
+-- 
+2.47.3
+

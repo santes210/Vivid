@@ -19,6 +19,10 @@ import java.util.concurrent.TimeUnit
  * Implementación directa de [StorageProvider] usando la API nativa de
  * Backblaze B2 (no la S3-compatible, va más ligera y no requiere AWS SDK).
  *
+ * Funciona con bucket PRIVADO usando URLs firmadas
+ * (b2_get_download_authorization). NO necesita bucket público ni tarjeta
+ * de crédito en Backblaze.
+ *
  * ⚠️ MODO DIRECT / INSEGURO
  * -------------------------
  * Esta implementación embebe el `keyId` + `applicationKey` en el APK.
@@ -26,11 +30,13 @@ import java.util.concurrent.TimeUnit
  * Para producción migra a la Cloud Function incluida en
  * `/cloud-function/index.js` y reemplaza esta clase en [StorageModule].
  *
- * Flujo de B2 (3 llamadas):
- *   1. b2_authorize_account   → apiUrl + authToken + downloadUrl
- *   2. b2_get_upload_url      → uploadUrl + uploadAuthToken (1 por archivo)
- *   3. b2_upload_file         → PUT del binario con SHA1
- *      → URL pública = downloadUrl + "/file/" + bucketName + "/" + fileName
+ * Flujo de B2:
+ *   1. b2_authorize_account        → apiUrl + authToken + downloadUrl
+ *   2. b2_get_upload_url           → uploadUrl + uploadAuthToken (1 por archivo)
+ *   3. b2_upload_file              → PUT del binario con SHA1
+ *   4. b2_get_download_authorization → token de descarga firmado (TTL máx 7d)
+ *      → URL reproducible = downloadUrl + "/file/" + bucketName + "/" + key
+ *                            + "?Authorization=" + {token}
  *
  * Documentación: https://www.backblaze.com/docs/cloud-storage-native-api
  */
@@ -81,13 +87,15 @@ class BackblazeStorageProvider(
         onProgress(25)
 
         // 3. Subir archivo
-        uploadBinary(uploadUrl, uploadAuthToken, fileBytes, sha1, remoteKey)
-        onProgress(100)
+        val contentType = guessContentType(remoteKey)
+        uploadBinary(uploadUrl, uploadAuthToken, fileBytes, sha1, remoteKey, contentType)
+        onProgress(95)
 
-        // URL pública reproducible por ExoPlayer
-        val publicUrl = "${session.downloadUrl}/file/$bucketName/$remoteKey"
-        Log.d(TAG, "Subida completada: $publicUrl")
-        publicUrl
+        // 4. Generar URL FIRMADA (funciona en bucket privado, TTL 7 días = máx de B2)
+        val signedUrl = authorizeDownloadUrl(session, remoteKey, MAX_SIGNED_TTL_SEC)
+        onProgress(100)
+        Log.d(TAG, "Subida completada: $signedUrl")
+        signedUrl
     }
 
     override suspend fun deleteFile(remoteKey: String): Boolean = withContext(Dispatchers.IO) {
@@ -144,20 +152,61 @@ class BackblazeStorageProvider(
         }
     }
 
+    /**
+     * Genera (o renueva) una URL firmada para reproducir un archivo ya subido.
+     * Útil cuando la URL original de un reel expira (TTL 7 días).
+     *
+     * Funciona en buckets PRIVADOS.
+     */
+    override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
+        withContext(Dispatchers.IO) {
+            val session = cachedSession ?: authorize().also { cachedSession = it }
+            authorizeDownloadUrl(session, remoteKey, ttlSec)
+        }
+
+    /**
+     * Pide a B2 un token de descarga firmado (b2_get_download_authorization).
+     * TTL válido entre 1 segundo y 7 días (604800s).
+     */
+    private fun authorizeDownloadUrl(session: Session, fileName: String, ttlSec: Int): String {
+        val validTtl = ttlSec.coerceIn(1, MAX_SIGNED_TTL_SEC)
+        val payload = JSONObject().apply {
+            put("bucketId", bucketId)
+            put("fileNamePrefix", fileName)
+            put("validDurationInSeconds", validTtl)
+        }.toString().toRequestBody(JSON_MEDIA)
+
+        val req = Request.Builder()
+            .url("${session.apiUrl}/b2api/v2/b2_get_download_authorization")
+            .header("Authorization", session.authToken)
+            .post(payload)
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("b2_get_download_authorization falló (${resp.code}): $body")
+            val obj = json.parseToJsonElement(body).jsonObject
+            val token = obj["authorizationToken"]!!.jsonPrimitive.content
+            return "${session.downloadUrl}/file/$bucketName/$fileName?Authorization=$token"
+        }
+    }
+
     private fun uploadBinary(
         uploadUrl: String,
         uploadAuthToken: String,
         bytes: ByteArray,
         sha1: String,
-        remoteKey: String
+        remoteKey: String,
+        contentType: String
     ) {
+        val media = contentType.toMediaType()
         val req = Request.Builder()
             .url(uploadUrl)
             .header("Authorization", uploadAuthToken)
             .header("X-Bz-File-Name", remoteKey)   // ← nombre real del archivo
-            .header("Content-Type", "video/mp4")
+            .header("Content-Type", contentType)
             .header("X-Bz-Content-Sha1", sha1)
-            .put(bytes.toRequestBody(BINARY_MEDIA))
+            .put(bytes.toRequestBody(media))
             .build()
 
         client.newCall(req).execute().use { resp ->
@@ -165,6 +214,14 @@ class BackblazeStorageProvider(
             if (!resp.isSuccessful) error("b2_upload_file falló (${resp.code}): $body")
             Log.d(TAG, "b2_upload_file OK (${bytes.size} bytes)")
         }
+    }
+
+    private fun guessContentType(key: String): String = when {
+        key.endsWith(".jpg", true) || key.endsWith(".jpeg", true) -> "image/jpeg"
+        key.endsWith(".png", true) -> "image/png"
+        key.endsWith(".gif", true) -> "image/gif"
+        key.endsWith(".webp", true) -> "image/webp"
+        else -> "video/mp4"
     }
 
     private fun sha1Hex(bytes: ByteArray): String {
@@ -175,6 +232,8 @@ class BackblazeStorageProvider(
     companion object {
         private const val TAG = "BackblazeStorage"
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
-        private val BINARY_MEDIA = "application/octet-stream".toMediaType()
+
+        // TTL máximo de B2 para URLs firmadas = 7 días (604800s)
+        const val MAX_SIGNED_TTL_SEC = 604_800
     }
 }

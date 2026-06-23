@@ -122,6 +122,12 @@ class CloudFunctionsStorageProvider(
     /**
      * Renueva una URL firmada. Útil cuando el signedDownloadUrl está por expirar.
      */
+    override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
+        renewSignedUrl(remoteKey, ttlSec) ?: ""
+
+    /**
+     * Renueva una URL firmada. Útil cuando el signedDownloadUrl está por expirar.
+     */
     suspend fun renewSignedUrl(remoteKey: String, ttlSec: Int = 3600): String? =
         withContext(Dispatchers.IO) {
             try {

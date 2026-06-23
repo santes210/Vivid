@@ -37,4 +37,18 @@ interface StorageProvider {
      * Opcional — algunos backends no lo soportan, debe devolver false.
      */
     suspend fun deleteFile(remoteKey: String): Boolean = false
+
+    /**
+     * Genera (o renueva) una URL firmada para reproducir un archivo ya subido.
+     *
+     * Necesario porque las URLs firmadas expiran (TTL). Cuando el feed carga
+     * un reel viejo, su URL puede estar caducada, así que se regenera con el
+     * [remoteKey] (storageKey guardado en Firestore).
+     *
+     * @return URL firmada lista para ExoPlayer/Coil
+     */
+    suspend fun signDownloadUrl(
+        remoteKey: String,
+        ttlSec: Int = 604_800
+    ): String
 }

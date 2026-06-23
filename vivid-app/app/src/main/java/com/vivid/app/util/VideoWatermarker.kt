@@ -15,6 +15,7 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
@@ -75,7 +76,7 @@ object VideoWatermarker {
                     )
                 )
                 .build()
-            val composition = Composition.Builder(edited).build()
+            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
 
             // 4. Ejecuta el transformer y espera async
             val outputPath = suspendCancellableCoroutine<String> { cont ->

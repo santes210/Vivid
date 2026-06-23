@@ -5,9 +5,9 @@ import android.net.Uri
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.transformer.ClippingConfiguration
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
@@ -57,16 +57,17 @@ object VideoTrimmer {
         }
 
         try {
-            val clipping = ClippingConfiguration.Builder()
+            val clipping = MediaItem.ClippingConfiguration.Builder()
                 .setStartPositionMs(startMs)
                 .setEndPositionMs(endMs)
                 .build()
 
-            val mediaItem = MediaItem.fromUri(inputUri)
-            val edited = EditedMediaItem.Builder(mediaItem)
+            val mediaItem = MediaItem.Builder()
+                .setUri(inputUri)
                 .setClippingConfiguration(clipping)
                 .build()
-            val composition = Composition.Builder(listOf(edited)).build()
+            val edited = EditedMediaItem.Builder(mediaItem).build()
+            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
 
             suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {

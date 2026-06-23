@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
@@ -113,19 +114,27 @@ object ColorFilterEffect {
         if (outputFile.exists()) outputFile.delete()
 
         try {
-            val rgbMatrix = androidx.media3.effect.RgbMatrix(filter.matrix)
-            val rgbFilter = androidx.media3.effect.RgbFilter.createMatrixEffect(rgbMatrix)
+            // RgbMatrix es una INTERFAZ en Media3 1.4.1 (no un constructor que
+            // recibe FloatArray). La implementamos devolviendo la matriz del filtro.
+            // Como RgbMatrix extends GlEffect extends Effect, se puede usar
+            // directamente como videoEffect sin RgbFilter.createMatrixEffect.
+            val rgbMatrix = object : androidx.media3.effect.RgbMatrix {
+                override fun getMatrix(
+                    presentationTimeUs: Long,
+                    useHdr: Boolean
+                ): FloatArray = filter.matrix
+            }
 
             val mediaItem = MediaItem.fromUri(inputUri)
             val edited = EditedMediaItem.Builder(mediaItem)
                 .setEffects(
                     androidx.media3.transformer.Effects(
-                        audioProcessors = emptyList(),
-                        videoEffects = listOf(rgbFilter)
+                        /* audioProcessors = */ emptyList(),
+                        /* videoEffects    = */ listOf(rgbMatrix)
                     )
                 )
                 .build()
-            val composition = Composition.Builder(listOf(edited)).build()
+            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
 
             suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {

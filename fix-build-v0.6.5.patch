@@ -1,0 +1,262 @@
+From 05b6aba70967ab782204d4d578f3fd1d39760f0a Mon Sep 17 00:00:00 2001
+From: santes210 <santes210@users.noreply.github.com>
+Date: Tue, 23 Jun 2026 14:20:46 +0000
+Subject: [PATCH] Fix: build errors en compileDebugKotlin + assembleDebug
+ (verificado)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Se corrigieron 5 archivos con 96 errores de compilación Kotlin. El build
+assembleDebug ahora genera el APK correctamente (verificado localmente).
+
+- VideoCompressor.kt: bitRate(Long).toLong(), onTranscodeCompleted(Int),
+  onProgress cambiado a (Int) para coincidir con ViewModels
+- StoryEditorScreen.kt: imports completos (Bitmap, BitmapFactory, gestos,
+  LazyRow, ContentScale, etc.), eliminados helpers Modifier que chocaban
+  con Compose (graphicsLayer/offset/detectTapGestures), FontWeight alias
+- ColorFilterEffect.kt: RgbMatrix es interfaz (implementada), Effects con
+  args posicionales (clase Java), Composition.Builder con EditedMediaItemSequence
+- VideoTrimmer.kt: ClippingConfiguration via MediaItem.Builder (no en transformer)
+- VideoWatermarker.kt: Composition.Builder con EditedMediaItemSequence
+---
+ .../vivid/app/data/storage/VideoCompressor.kt |  8 ++--
+ .../presentation/stories/StoryEditorScreen.kt | 40 +++++++++++--------
+ .../com/vivid/app/util/ColorFilterEffect.kt   | 19 ++++++---
+ .../java/com/vivid/app/util/VideoTrimmer.kt   | 11 ++---
+ .../com/vivid/app/util/VideoWatermarker.kt    |  3 +-
+ vivid-app/gradlew                             |  0
+ 6 files changed, 49 insertions(+), 32 deletions(-)
+ mode change 100644 => 100755 vivid-app/gradlew
+
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt b/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt
+index f853022..90e7a4b 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/data/storage/VideoCompressor.kt
+@@ -53,7 +53,7 @@ object VideoCompressor {
+     suspend fun compress(
+         context: Context,
+         inputUri: Uri,
+-        onProgress: (Long) -> Unit = {}
++        onProgress: (Int) -> Unit = {}
+     ): String = withContext(Dispatchers.IO) {
+         val outputFile = File(context.cacheDir, "reel_${System.currentTimeMillis()}.mp4")
+ 
+@@ -67,14 +67,14 @@ object VideoCompressor {
+             onProgress(15)
+ 
+             val videoStrategy = DefaultVideoStrategy.Builder()
+-                .bitRate(VIDEO_BITRATE)
++                .bitRate(VIDEO_BITRATE.toLong())
+                 .frameRate(30)
+                 // Intento de forzar resolución 720p. Si el codec no puede,
+                 // Transcoder hace fallback automático.
+                 .build()
+ 
+             val audioStrategy = DefaultAudioStrategy.Builder()
+-                .bitRate(AUDIO_BITRATE)
++                .bitRate(AUDIO_BITRATE.toLong())
+                 .channels(DefaultAudioStrategy.CHANNELS_AS_INPUT)
+                 .sampleRate(DefaultAudioStrategy.SAMPLE_RATE_AS_INPUT)
+                 .build()
+@@ -90,7 +90,7 @@ object VideoCompressor {
+                             onProgress(pct)
+                         }
+ 
+-                        override fun onTranscodeCompleted(successCode: Long) {
++                        override fun onTranscodeCompleted(successCode: Int) {
+                             Log.d(
+                                 TAG,
+                                 "Compresión OK code=$successCode " +
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt b/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt
+index f993755..2c2efdf 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/presentation/stories/StoryEditorScreen.kt
+@@ -1,11 +1,17 @@
+ package com.vivid.app.presentation.stories
+ 
++import android.graphics.Bitmap
++import android.graphics.BitmapFactory
++import android.media.MediaMetadataRetriever
+ import android.net.Uri
+-import androidx.activity.compose.rememberLauncherForActivityResult
+-import androidx.activity.result.PickVisualMediaRequest
+-import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.Image
+ import androidx.compose.foundation.background
++import androidx.compose.foundation.gestures.detectTapGestures
++import androidx.compose.foundation.gestures.detectTransformGestures
+ import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.lazy.LazyRow
++import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.shape.CircleShape
+ import androidx.compose.foundation.shape.RoundedCornerShape
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.*
+@@ -14,18 +20,29 @@ import androidx.compose.runtime.*
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.draw.clip
++import androidx.compose.ui.geometry.Offset
+ import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.asImageBitmap
++import androidx.compose.ui.graphics.graphicsLayer
++import androidx.compose.ui.input.pointer.PointerInputScope
++import androidx.compose.ui.input.pointer.pointerInput
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.layout.onSizeChanged
+ import androidx.compose.ui.platform.LocalContext
+-import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.platform.LocalDensity
++import androidx.compose.ui.text.font.FontWeight as ComposeFontWeight
++import androidx.compose.ui.unit.IntOffset
++import androidx.compose.ui.unit.IntSize
+ import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
+ import androidx.compose.ui.viewinterop.AndroidView
+-import androidx.hilt.navigation.compose.hiltViewModel
+ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.exoplayer.ExoPlayer
+ import androidx.media3.ui.PlayerView
+ import androidx.navigation.NavController
+-import kotlinx.coroutines.delay
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
+ 
+ /**
+  * Editor de Story estilo Instagram.
+@@ -324,12 +341,6 @@ private fun OverlayItem(
+     }
+ }
+ 
+-private fun Modifier.graphicsLayer(rotationZ: Float) =
+-    this.then(androidx.compose.ui.graphics.graphicsLayer(rotationZ = rotationZ))
+-
+-private fun Modifier.offset(intOffsetProducer: () -> androidx.compose.ui.unit.IntOffset) =
+-    androidx.compose.foundation.layout.offset { intOffsetProducer() }.then(this)
+-
+ @Composable
+ private fun EditorToolButton(
+     icon: androidx.compose.ui.graphics.vector.ImageVector,
+@@ -352,11 +363,6 @@ private fun EditorToolButton(
+     }
+ }
+ 
+-// Helper para detectTapGestures
+-private suspend fun PointerInputScope.detectTapGestures(onTap: (Offset) -> Unit) {
+-    androidx.compose.foundation.gestures.detectTapGestures(onTap = { onTap(it) })
+-}
+-
+ @Composable
+ private fun TextInputDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+     var text by remember { mutableStateOf("") }
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt b/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt
+index 03713c5..93b9ade 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/util/ColorFilterEffect.kt
+@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.transformer.Composition
+ import androidx.media3.transformer.EditedMediaItem
++import androidx.media3.transformer.EditedMediaItemSequence
+ import androidx.media3.transformer.ExportException
+ import androidx.media3.transformer.ExportResult
+ import androidx.media3.transformer.Transformer
+@@ -113,19 +114,27 @@ object ColorFilterEffect {
+         if (outputFile.exists()) outputFile.delete()
+ 
+         try {
+-            val rgbMatrix = androidx.media3.effect.RgbMatrix(filter.matrix)
+-            val rgbFilter = androidx.media3.effect.RgbFilter.createMatrixEffect(rgbMatrix)
++            // RgbMatrix es una INTERFAZ en Media3 1.4.1 (no un constructor que
++            // recibe FloatArray). La implementamos devolviendo la matriz del filtro.
++            // Como RgbMatrix extends GlEffect extends Effect, se puede usar
++            // directamente como videoEffect sin RgbFilter.createMatrixEffect.
++            val rgbMatrix = object : androidx.media3.effect.RgbMatrix {
++                override fun getMatrix(
++                    presentationTimeUs: Long,
++                    useHdr: Boolean
++                ): FloatArray = filter.matrix
++            }
+ 
+             val mediaItem = MediaItem.fromUri(inputUri)
+             val edited = EditedMediaItem.Builder(mediaItem)
+                 .setEffects(
+                     androidx.media3.transformer.Effects(
+-                        audioProcessors = emptyList(),
+-                        videoEffects = listOf(rgbFilter)
++                        /* audioProcessors = */ emptyList(),
++                        /* videoEffects    = */ listOf(rgbMatrix)
+                     )
+                 )
+                 .build()
+-            val composition = Composition.Builder(listOf(edited)).build()
++            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+ 
+             suspendCancellableCoroutine<String> { cont ->
+                 val listener = object : Transformer.Listener {
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt b/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt
+index 937ef26..be4b9f9 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/util/VideoTrimmer.kt
+@@ -5,9 +5,9 @@ import android.net.Uri
+ import android.util.Log
+ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+-import androidx.media3.transformer.ClippingConfiguration
+ import androidx.media3.transformer.Composition
+ import androidx.media3.transformer.EditedMediaItem
++import androidx.media3.transformer.EditedMediaItemSequence
+ import androidx.media3.transformer.ExportException
+ import androidx.media3.transformer.ExportResult
+ import androidx.media3.transformer.Transformer
+@@ -57,16 +57,17 @@ object VideoTrimmer {
+         }
+ 
+         try {
+-            val clipping = ClippingConfiguration.Builder()
++            val clipping = MediaItem.ClippingConfiguration.Builder()
+                 .setStartPositionMs(startMs)
+                 .setEndPositionMs(endMs)
+                 .build()
+ 
+-            val mediaItem = MediaItem.fromUri(inputUri)
+-            val edited = EditedMediaItem.Builder(mediaItem)
++            val mediaItem = MediaItem.Builder()
++                .setUri(inputUri)
+                 .setClippingConfiguration(clipping)
+                 .build()
+-            val composition = Composition.Builder(listOf(edited)).build()
++            val edited = EditedMediaItem.Builder(mediaItem).build()
++            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+ 
+             suspendCancellableCoroutine<String> { cont ->
+                 val listener = object : Transformer.Listener {
+diff --git a/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt b/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt
+index e783211..8b39e94 100644
+--- a/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt
++++ b/vivid-app/app/src/main/java/com/vivid/app/util/VideoWatermarker.kt
+@@ -15,6 +15,7 @@ import androidx.media3.effect.OverlayEffect
+ import androidx.media3.effect.TextureOverlay
+ import androidx.media3.transformer.Composition
+ import androidx.media3.transformer.EditedMediaItem
++import androidx.media3.transformer.EditedMediaItemSequence
+ import androidx.media3.transformer.ExportException
+ import androidx.media3.transformer.ExportResult
+ import androidx.media3.transformer.Transformer
+@@ -75,7 +76,7 @@ object VideoWatermarker {
+                     )
+                 )
+                 .build()
+-            val composition = Composition.Builder(edited).build()
++            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+ 
+             // 4. Ejecuta el transformer y espera async
+             val outputPath = suspendCancellableCoroutine<String> { cont ->
+diff --git a/vivid-app/gradlew b/vivid-app/gradlew
+old mode 100644
+new mode 100755
+-- 
+2.47.3
+

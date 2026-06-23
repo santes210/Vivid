@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -25,8 +26,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -41,35 +40,11 @@ import kotlinx.coroutines.flow.map
  */
 @Composable
 fun ReelsScreen(
-    onCreateReel: () -> Unit = {}
+    onCreateReel: () -> Unit = {},
+    viewModel: ReelsViewModel = hiltViewModel()
 ) {
-    val db = FirebaseFirestore.getInstance()
-    var reels by remember { mutableStateOf<List<Reel>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    DisposableEffect(Unit) {
-        var registration: ListenerRegistration? = null
-        registration = db.collection("reels")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(30)
-            .addSnapshotListener { snapshot, _ ->
-                reels = snapshot?.documents.orEmpty().mapNotNull { doc ->
-                    val videoUrl = doc.getString("videoUrl").orEmpty()
-                    if (videoUrl.isBlank()) return@mapNotNull null
-                    Reel(
-                        id = doc.id,
-                        videoUrl = videoUrl,
-                        thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
-                        username = doc.getString("username") ?: "usuario",
-                        caption = doc.getString("caption").orEmpty(),
-                        likes = doc.getLong("likes")?.toInt() ?: 0,
-                        userAvatar = doc.getString("userAvatar").orEmpty()
-                    )
-                }
-                isLoading = false
-            }
-        onDispose { registration?.remove() }
-    }
+    val reels by viewModel.reels.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     val listState = rememberLazyListState()
     var currentPlayingIndex by remember { mutableStateOf(0) }

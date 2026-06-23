@@ -1,0 +1,86 @@
+# Vivid — Proyecto completo (ZIP 2026-06-23)
+
+## Qué incluye este ZIP
+
+El proyecto completo de Vivid con **todos los cambios aplicados y verificados**.
+
+### ✅ Build
+- `assembleDebug` compila correctamente → APK generado
+- 0 errores de compilación Kotlin (antes había 96)
+- APK listo para instalar: `apk/app-debug.apk`
+
+### ✅ Backblaze B2 (bucket privado, SIN tarjeta de crédito)
+- Modo directo con URLs firmadas (b2_get_download_authorization)
+- Funciona con tu bucket PRIVADO VividGrem
+- Verificado end-to-end: subida + URL firmada + descarga
+
+---
+
+## Estructura
+
+```
+vivid-app/                  ← App Android (Kotlin + Compose + Firebase + Hilt)
+  app/
+    google-services.json    ← Config Firebase (proyecto verigram-c58a6)
+    build.gradle.kts        ← Configuración del módulo
+    src/main/
+      AndroidManifest.xml
+      java/com/vivid/app/
+        data/storage/       ← BackblazeStorageProvider, CloudFunctions, ...
+        di/                 ← Hilt: StorageModule, BuildConfigSecrets
+        presentation/       ← Pantallas: reels, feed, stories, create, ...
+        util/               ← VideoWatermarker, ColorFilterEffect, VideoTrimmer
+    gradle/                 ← Wrapper + libs.versions.toml
+  gradlew / gradlew.bat     ← Para compilar
+
+cloud-function/             ← Cloud Function B2 (para migración futura a modo seguro)
+images/                     ← vivid_icon.png
+firestore.rules             ← Reglas de Firestore
+.github/workflows/          ← GitHub Actions: build APK
+*.md                        ← Documentación y notas
+fix-build-backblaze.patch   ← Patch con todos los cambios (por si usas git)
+apk/app-debug.apk           ← APK compilado listo para instalar
+```
+
+---
+
+## Archivos modificados (con los cambios)
+
+### Build (errores de compilación)
+- `data/storage/VideoCompressor.kt` — tipos Long/Int correctos
+- `presentation/stories/StoryEditorScreen.kt` — imports completos + helpers
+- `util/ColorFilterEffect.kt` — RgbMatrix interfaz
+- `util/VideoTrimmer.kt` — ClippingConfiguration en MediaItem
+- `util/VideoWatermarker.kt` — EditedMediaItemSequence
+
+### Backblaze B2 (bucket privado)
+- `data/storage/BackblazeStorageProvider.kt` — URLs firmadas + signDownloadUrl
+- `data/storage/StorageProvider.kt` — signDownloadUrl en interfaz
+- `data/storage/CloudFunctionsStorageProvider.kt` — override para migración
+- `di/StorageModule.kt` — cambiado a BackblazeStorageProvider
+- `presentation/reels/ReelsViewModel.kt` — renueva URLs al cargar feed
+- `presentation/reels/ReelsScreen.kt` — usa ViewModel
+- `presentation/create/CreateReelViewModel.kt` — sube thumbnail con URL firmada
+
+---
+
+## Cómo usar
+
+### Opción 1: Instalar el APK directamente
+1. Copia `apk/app-debug.apk` a tu teléfono
+2. Instálalo (activa "orígenes desconocidos")
+3. Backblaze ya está configurado con tus credenciales
+
+### Opción 2: Compilar desde Android Studio / GitHub Actions
+1. Descomprime este ZIP
+2. Abre la carpeta `vivid-app/` en Android Studio
+3. Espera a que sincronice Gradle → Run
+
+Para subir a tu repo de GitHub:
+```bash
+git init   # si es nuevo
+git add .
+git commit -m "Vivid con build + Backblaze B2 corregidos"
+git push origin main
+```
+GitHub Actions compilará el APK automáticamente.

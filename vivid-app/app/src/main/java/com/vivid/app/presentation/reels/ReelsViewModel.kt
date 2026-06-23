@@ -34,6 +34,9 @@ class ReelsViewModel @Inject constructor(
     private val _reels = MutableStateFlow<List<Reel>>(emptyList())
     val reels: StateFlow<List<Reel>> = _reels
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
     init {
         loadReels()
     }
@@ -48,7 +51,14 @@ class ReelsViewModel @Inject constructor(
                     .await()
 
                 _reels.value = snapshot.documents.mapNotNull { doc ->
-                    val videoUrl = doc.getString("videoUrl").orEmpty()
+                    val storageKey = doc.getString("storageKey").orEmpty()
+                    val savedUrl = doc.getString("videoUrl").orEmpty()
+                    // Regenerar URL firmada fresca desde el storageKey (las URLs
+                    // firmadas expiran a los 7 días). Si falla, usar la guardada.
+                    val videoUrl = if (storageKey.isNotBlank()) {
+                        try { storage.signDownloadUrl(storageKey) }
+                        catch (_: Exception) { savedUrl }
+                    } else savedUrl
                     if (videoUrl.isBlank()) return@mapNotNull null
                     Reel(
                         id = doc.id,
@@ -61,6 +71,8 @@ class ReelsViewModel @Inject constructor(
                 }
             } catch (_: Exception) {
                 _reels.value = emptyList()
+            } finally {
+                _isLoading.value = false
             }
         }
     }

@@ -53,7 +53,7 @@ object VideoCompressor {
     suspend fun compress(
         context: Context,
         inputUri: Uri,
-        onProgress: (Long) -> Unit = {}
+        onProgress: (Int) -> Unit = {}
     ): String = withContext(Dispatchers.IO) {
         val outputFile = File(context.cacheDir, "reel_${System.currentTimeMillis()}.mp4")
 
@@ -67,14 +67,14 @@ object VideoCompressor {
             onProgress(15)
 
             val videoStrategy = DefaultVideoStrategy.Builder()
-                .bitRate(VIDEO_BITRATE)
+                .bitRate(VIDEO_BITRATE.toLong())
                 .frameRate(30)
                 // Intento de forzar resolución 720p. Si el codec no puede,
                 // Transcoder hace fallback automático.
                 .build()
 
             val audioStrategy = DefaultAudioStrategy.Builder()
-                .bitRate(AUDIO_BITRATE)
+                .bitRate(AUDIO_BITRATE.toLong())
                 .channels(DefaultAudioStrategy.CHANNELS_AS_INPUT)
                 .sampleRate(DefaultAudioStrategy.SAMPLE_RATE_AS_INPUT)
                 .build()
@@ -90,7 +90,7 @@ object VideoCompressor {
                             onProgress(pct)
                         }
 
-                        override fun onTranscodeCompleted(successCode: Long) {
+                        override fun onTranscodeCompleted(successCode: Int) {
                             Log.d(
                                 TAG,
                                 "Compresión OK code=$successCode " +
