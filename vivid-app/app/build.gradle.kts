@@ -133,7 +133,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
-    implementation("com.otalii:android-transcoder:0.3.2")
+    implementation("com.otaliastudios:transcoder:0.10.5")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
