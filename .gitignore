@@ -1,0 +1,30 @@
+# =====================================================
+#  Vivid - .gitignore (seguro para repo publico)
+# =====================================================
+
+# Credenciales locales
+local.properties
+app/src/main/java/com/vivid/app/di/BuildConfigSecrets.kt
+*.keystore
+*.jks
+
+# Build outputs
+/build
+/app/build
+**/build/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Gradle
+.gradle/
+.kotlin/
+
+# Secrets locales (por si acaso)
+secrets.properties
+*.env
+.env.local

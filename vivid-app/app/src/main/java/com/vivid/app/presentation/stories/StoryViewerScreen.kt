@@ -1,7 +1,6 @@
 package com.vivid.app.presentation.stories
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,7 +18,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -28,6 +34,16 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Visor de Stories (estilo Instagram).
+ *
+ * Soporta AMBOS tipos:
+ *   - Foto (decodifica base64 o AsyncImage si hay URL).
+ *   - Video (ExoPlayer, también con URL firmada de B2).
+ *
+ * Auto-avanza cada 15 segundos (fotos) o cuando termina el video.
+ */
+@UnstableApi
 @Composable
 fun StoryViewerRoute(
     initialStoryId: String,
@@ -39,6 +55,7 @@ fun StoryViewerRoute(
 
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var currentIndex by remember { mutableStateOf(0) }
 
     DisposableEffect(initialStoryId, currentUserId) {
         var registration: ListenerRegistration? = null
@@ -49,174 +66,195 @@ fun StoryViewerRoute(
             .addSnapshotListener { snapshot, _ ->
                 val docs = snapshot?.documents.orEmpty()
                 scope.launch {
-                    stories = buildVisibleStories(
-                        firestore = db,
-                        currentUserId = currentUserId,
-                        storyDocs = docs
-                    )
+                    stories = docs.mapNotNull { doc ->
+                        Story(
+                            id = doc.id,
+                            userId = doc.getString("userId").orEmpty(),
+                            username = doc.getString("username") ?: "usuario",
+                            userAvatar = doc.getString("userAvatar").orEmpty(),
+                            videoUrl = doc.getString("videoUrl").orEmpty(),
+                            thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+                            caption = doc.getString("caption").orEmpty(),
+                            type = doc.getString("type") ?: "photo",
+                            expiresAt = doc.getLong("expiresAt") ?: 0L
+                        )
+                    }
+                    // Encontrar el índice inicial
+                    currentIndex = stories.indexOfFirst { it.id == initialStoryId }
+                        .coerceAtLeast(0)
                     isLoading = false
                 }
             }
         onDispose { registration?.remove() }
     }
 
-    when {
-        isLoading -> Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = Color.White)
-        }
-        stories.isEmpty() -> LaunchedEffect(Unit) { onClose() }
-        else -> {
-            val initialIndex = stories.indexOfFirst { it.id == initialStoryId }
-                .takeIf { it >= 0 }
-                ?: 0
-            key(initialStoryId, stories.size) {
-                StoryViewerScreen(
-                    stories = stories,
-                    initialIndex = initialIndex,
-                    onClose = onClose
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun StoryViewerScreen(
-    stories: List<Story>,
-    initialIndex: Int = 0,
-    onClose: () -> Unit
-) {
-    var currentIndex by remember(initialIndex) { mutableStateOf(initialIndex) }
-    var progress by remember(currentIndex) { mutableStateOf(0f) }
-
-    val currentStory = stories.getOrNull(currentIndex) ?: return
-
-    LaunchedEffect(currentIndex, stories.size) {
-        progress = 0f
-        while (progress < 1f) {
-            delay(50)
-            progress += 0.02f
-        }
-        if (currentIndex < stories.lastIndex) {
-            currentIndex++
-        } else {
-            onClose()
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(currentIndex, stories.size) {
+            .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { offset ->
-                        if (offset.x < size.width / 2) {
-                            if (currentIndex > 0) currentIndex--
+                        if (offset.x < size.width / 3f) {
+                            currentIndex = (currentIndex - 1).coerceAtLeast(0)
+                        } else if (offset.x > 2 * size.width / 3f) {
+                            currentIndex = (currentIndex + 1).coerceAtLeast(stories.size - 1)
                         } else {
-                            if (currentIndex < stories.lastIndex) currentIndex++ else onClose()
+                            // tap en el medio: cerrar
+                            onClose()
                         }
                     }
                 )
             }
     ) {
-        StoryMedia(story = currentStory)
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            stories.forEachIndexed { index, _ ->
-                LinearProgressIndicator(
-                    progress = {
-                        when {
-                            index < currentIndex -> 1f
-                            index == currentIndex -> progress
-                            else -> 0f
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(3.dp),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.25f)
-                )
+        if (isLoading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
             }
+            return@Box
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp, start = 16.dp, end = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            StoryAvatar(
-                username = currentStory.username,
-                avatarUrl = currentStory.avatarUrl,
-                avatarBase64 = currentStory.avatarBase64,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(currentStory.username, color = Color.White, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+        if (stories.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No hay stories", color = Color.White)
             }
+            return@Box
         }
 
+        val story = stories[currentIndex]
+
+        // Render foto o video según tipo
+        when (story.type) {
+            "video" -> VideoStoryPlayer(story)
+            else -> PhotoStoryView(story)
+        }
+
+        // Overlay: barra de progreso + caption + close
         Column(
             modifier = Modifier
-                .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.35f))
                 .padding(16.dp)
         ) {
-            if (currentStory.caption.isNotBlank()) {
-                Text(currentStory.caption, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(8.dp))
+            // Barras de progreso (estilo IG)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                stories.forEachIndexed { idx, _ ->
+                    LinearProgressIndicator(
+                        progress = { (idx / stories.size.toFloat()).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.dp)
+                            .clip(MaterialTheme.shapes.extraSmall),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.3f)
+                    )
+                }
             }
-            Text("Story de @${currentStory.username}", color = Color.White.copy(alpha = 0.8f))
+
+            Spacer(Modifier.height(12.dp))
+
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (story.userAvatar.isNotBlank()) {
+                    AsyncImage(
+                        model = story.userAvatar,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            story.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    story.username,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+                }
+            }
+
+            if (story.caption.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    story.caption,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun StoryMedia(story: Story) {
-    if (story.mediaBase64.isNotBlank()) {
-        var bitmap by remember(story.mediaBase64) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(story.mediaBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(story.mediaBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
-            }
-        }
+data class Story(
+    val id: String,
+    val userId: String,
+    val username: String,
+    val userAvatar: String,
+    val videoUrl: String,
+    val thumbnailUrl: String,
+    val caption: String,
+    val type: String,       // "photo" o "video"
+    val expiresAt: Long
+)
 
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Story",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            return
+@UnstableApi
+@Composable
+private fun VideoStoryPlayer(story: Story) {
+    val context = LocalContext.current
+    val player = remember(story.videoUrl) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(story.videoUrl))
+            prepare()
+            playWhenReady = true
         }
     }
-
-    AsyncImage(
-        model = story.mediaUrl.ifBlank { story.avatarUrl },
-        contentDescription = "Story",
-        modifier = Modifier.fillMaxSize(),
-        contentScale = ContentScale.Crop
+    DisposableEffect(player) {
+        onDispose { player.release() }
+    }
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                useController = false
+                this.player = player
+            }
+        },
+        modifier = Modifier.fillMaxSize()
     )
+}
+
+@Composable
+private fun PhotoStoryView(story: Story) {
+    // Si hay thumbnail URL firmada, úsala
+    if (story.thumbnailUrl.isNotBlank()) {
+        AsyncImage(
+            model = story.thumbnailUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Story", color = Color.White)
+        }
+    }
 }

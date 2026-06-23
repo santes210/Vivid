@@ -1,6 +1,5 @@
 package com.vivid.app.presentation.create
 
-import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,9 +31,18 @@ import java.util.*
 
 private enum class CreateContentType {
     POST,
-    STORY
+    STORY,
+    REEL
 }
 
+/**
+ * CreatePostScreen v2 — punto de entrada único para crear contenido.
+ *
+ * Opciones:
+ *   - POST: foto con caption
+ *   - STORY: foto o video, expira a 24h
+ *   - REEL: video para el feed, con trim/watermark opcional
+ */
 @Composable
 fun CreatePostScreen(
     navController: NavController,
@@ -81,7 +89,11 @@ fun CreatePostScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                if (selectedContentType == CreateContentType.POST) "Crear publicación" else "Crear story",
+                when (selectedContentType) {
+                    CreateContentType.POST -> "Crear publicación"
+                    CreateContentType.STORY -> "Crear story"
+                    CreateContentType.REEL -> "Crear Reel"
+                },
                 style = MaterialTheme.typography.headlineSmall
             )
             IconButton(onClick = { navController.popBackStack() }) {
@@ -89,38 +101,100 @@ fun CreatePostScreen(
             }
         }
 
+        // Selector de tipo (3 chips)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
                 selected = selectedContentType == CreateContentType.POST,
                 onClick = { selectedContentType = CreateContentType.POST },
                 label = { Text("Publicación") },
+                leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
                 selected = selectedContentType == CreateContentType.STORY,
                 onClick = { selectedContentType = CreateContentType.STORY },
                 label = { Text("Story") },
+                leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = selectedContentType == CreateContentType.REEL,
+                onClick = { selectedContentType = CreateContentType.REEL },
+                label = { Text("Reel") },
+                leadingIcon = { Icon(Icons.Default.MovieCreation, contentDescription = null) },
                 modifier = Modifier.weight(1f)
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Si eligió Reel, redirigir a CreateReelScreen
+        if (selectedContentType == CreateContentType.REEL) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    Icons.Default.MovieCreation,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(80.dp)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Para crear un Reel con video:",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    "Elige o graba → ajusta el trim → agrega watermark → publica",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = { navController.navigate("create_reel") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Ir a crear Reel")
+                }
+            }
+            return@Column
+        }
+
         if (selectedContentType == CreateContentType.STORY) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedButton(
+                    onClick = { navController.navigate("create_story") },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Foto / Video")
+                }
+            }
             Text(
-                "Tu story se verá 24 horas y respetará tu privacidad.",
+                "Las stories duran 24 horas y respetan tu privacidad.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Image preview or buttons
+        // Image preview o botones (solo para POST)
         if (selectedImageUri != null) {
             AsyncImage(
                 model = selectedImageUri,
@@ -145,8 +219,11 @@ fun CreatePostScreen(
                     modifier = Modifier.size(80.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Selecciona o toma una foto", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Selecciona o toma una foto",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -161,11 +238,11 @@ fun CreatePostScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(Modifier.width(8.dp))
                 Text("Galería")
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(Modifier.width(12.dp))
 
             Button(
                 onClick = {
@@ -174,251 +251,88 @@ fun CreatePostScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(Modifier.width(8.dp))
                 Text("Cámara")
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         OutlinedTextField(
             value = caption,
             onValueChange = { caption = it },
-            label = {
-                Text(
-                    if (selectedContentType == CreateContentType.POST) {
-                        "Descripción / Caption"
-                    } else {
-                        "Texto de la story (opcional)"
-                    }
-                )
-            },
+            label = { Text("Caption") },
             modifier = Modifier.fillMaxWidth(),
-            maxLines = 4,
-            supportingText = {
-                if (selectedContentType == CreateContentType.STORY) {
-                    Text("Las stories privadas solo podrán verlas tus seguidores aprobados.")
-                }
-            }
+            maxLines = 4
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Mensaje de error
-        errorMessage?.let { error ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-            ) {
-                Text(
-                    text = error,
-                    modifier = Modifier.padding(12.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        // Progreso
-        if (uploadProgress.isNotBlank()) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = uploadProgress,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        } else {
-            Spacer(modifier = Modifier.height(24.dp))
-        }
+        Spacer(modifier = Modifier.height(20.dp))
 
         Button(
             onClick = {
-                selectedImageUri?.let { uri ->
-                    if (selectedContentType == CreateContentType.POST && caption.isBlank()) {
-                        errorMessage = "Por favor escribe una descripción"
-                        return@let
-                    }
+                if (selectedContentType == CreateContentType.POST && selectedImageUri != null) {
                     isUploading = true
                     errorMessage = null
-                    uploadProgress = if (selectedContentType == CreateContentType.POST) {
-                        "Comprimiendo imagen..."
-                    } else {
-                        "Preparando story..."
-                    }
+                    uploadProgress = "Comprimiendo..."
                     scope.launch {
                         try {
-                            val wasSuccessful = when (selectedContentType) {
-                                CreateContentType.POST -> uploadPostWithCompression(
-                                    uri = uri,
-                                    caption = caption,
-                                    context = context,
-                                    onProgress = { status ->
-                                        uploadProgress = status
-                                    }
-                                )
+                            val auth = FirebaseAuth.getInstance()
+                            val user = auth.currentUser
+                                ?: throw IllegalStateException("No autenticado")
+                            val db = FirebaseFirestore.getInstance()
+                            val userSnapshot = db.collection("users").document(user.uid).get().await()
+                            val username = userSnapshot.getString("username")
+                                ?: user.displayName
+                                ?: user.email?.substringBefore('@')
+                                ?: "usuario"
+                            val compressed = ImageCompressor.compressToBase64(
+                                selectedImageUri!!, context
+                            ) ?: throw IllegalStateException("No se pudo comprimir")
 
-                                CreateContentType.STORY -> {
-                                    val result = uploadStoryWithCompression(
-                                        context = context,
-                                        uri = uri,
-                                        caption = caption.trim()
-                                    )
-                                    result.onFailure { throwable ->
-                                        errorMessage = throwable.message ?: "No se pudo subir la story"
-                                        uploadProgress = ""
-                                    }
-                                    result.isSuccess
-                                }
-                            }
-
-                            if (wasSuccessful) {
-                                uploadProgress = if (selectedContentType == CreateContentType.POST) {
-                                    "¡Publicado con éxito! 🎉"
-                                } else {
-                                    "¡Story compartida con éxito! ✨"
-                                }
-                                selectedImageUri = null
-                                caption = ""
-                                onPostCreated()
-                                navController.navigate("feed") {
-                                    popUpTo("feed") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            } else if (errorMessage.isNullOrBlank()) {
-                                errorMessage = if (selectedContentType == CreateContentType.POST) {
-                                    "Error al publicar. Intenta de nuevo."
-                                } else {
-                                    "Error al subir la story. Intenta de nuevo."
-                                }
-                                uploadProgress = ""
-                            }
+                            uploadProgress = "Guardando..."
+                            val postId = "post_${user.uid}_${System.currentTimeMillis()}"
+                            val postData = hashMapOf(
+                                "userId" to user.uid,
+                                "username" to username,
+                                "imageBase64" to compressed,
+                                "caption" to caption,
+                                "timestamp" to System.currentTimeMillis()
+                            )
+                            db.collection("posts").document(postId).set(postData).await()
+                            uploadProgress = "¡Publicado!"
+                            isUploading = false
+                            onPostCreated()
+                            navController.popBackStack()
                         } catch (e: Exception) {
-                            errorMessage = "Error: ${e.message}"
-                            uploadProgress = ""
+                            uploadProgress = "Error: ${e.message}"
+                            isUploading = false
+                            errorMessage = e.message
                         }
-                        isUploading = false
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = selectedImageUri != null && !isUploading
+            enabled = !isUploading && selectedImageUri != null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
         ) {
             if (isUploading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (selectedContentType == CreateContentType.POST) "Publicando..." else "Subiendo story...")
+                Spacer(Modifier.width(10.dp))
+                Text(uploadProgress)
             } else {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (selectedContentType == CreateContentType.POST) "Publicar en Vivid" else "Compartir story")
+                Icon(Icons.Default.Send, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Publicar")
             }
         }
-    }
-}
 
-/**
- * Sube una imagen comprimida a Firebase SIN usar Firebase Storage.
- * La imagen se comprime, convierte a Base64 y se guarda en Firestore.
- * También se guarda localmente en Room.
- */
-private suspend fun uploadPostWithCompression(
-    uri: Uri,
-    caption: String,
-    context: Context,
-    onProgress: (String) -> Unit
-): Boolean = withContext(Dispatchers.IO) {
-    try {
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user == null) {
-            onProgress("Error: No hay sesión iniciada")
-            return@withContext false
+        errorMessage?.let { msg ->
+            Spacer(Modifier.height(12.dp))
+            Text(msg, color = MaterialTheme.colorScheme.error)
         }
-
-        // Paso 1: Comprimir imagen
-        onProgress("Comprimiendo imagen...")
-        val compressedBase64 = ImageCompressor.compressToBase64(uri, context)
-        if (compressedBase64.isNullOrEmpty()) {
-            onProgress("Error: No se pudo comprimir la imagen")
-            return@withContext false
-        }
-
-        val base64SizeKB = compressedBase64.length / 1024
-        onProgress("Imagen comprimida: ${base64SizeKB}KB")
-
-        // Paso 2: Preparar datos
-        val db = FirebaseFirestore.getInstance()
-        val userSnapshot = db.collection("users").document(user.uid).get().await()
-        val postId = UUID.randomUUID().toString()
-        val username = userSnapshot.getString("username")
-            ?: user.displayName
-            ?: user.email?.substringBefore("@")
-            ?: "usuario"
-        val profilePic = userSnapshot.getString("avatarUrl") ?: user.photoUrl?.toString().orEmpty()
-        val profilePicBase64 = userSnapshot.getString("avatarBase64").orEmpty()
-
-        val postData = hashMapOf(
-            "userId" to user.uid,
-            "username" to username,
-            "userProfilePicture" to profilePic,
-            "userProfilePictureBase64" to profilePicBase64,
-            "imageBase64" to compressedBase64,
-            "caption" to caption,
-            "likesCount" to 0,
-            "commentsCount" to 0,
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        // Paso 3: Subir a Firestore (SIN Firebase Storage!)
-        onProgress("Guardando en la nube...")
-        return@withContext try {
-            val task = db.collection("posts").document(postId).set(postData)
-            
-            // Esperar a que Firestore confirme
-            task.await()
-            db.collection("users").document(user.uid).set(
-                mapOf(
-                    "postsCount" to com.google.firebase.firestore.FieldValue.increment(1),
-                    "updatedAt" to System.currentTimeMillis()
-                ),
-                com.google.firebase.firestore.SetOptions.merge()
-            ).await()
-            onProgress("¡Publicado exitosamente! 🎉")
-            true
-        } catch (e: Exception) {
-            onProgress("Error de conexión, guardando localmente...")
-            // Guardar local aunque falle Firebase
-            try {
-                val localPost = PostEntity(
-                    id = postId,
-                    userId = user.uid,
-                    username = username,
-                    userProfilePicture = profilePic,
-                    imageUrl = "",
-                    imageBase64 = compressedBase64,
-                    caption = caption,
-                    likesCount = 0,
-                    commentsCount = 0,
-                    timestamp = System.currentTimeMillis(),
-                    isLiked = false
-                )
-                // Aquí se guardaría en Room
-                onProgress("Guardado localmente ✓")
-            } catch (e2: Exception) {
-                // Silenciar error de guardado local
-            }
-            false
-        }
-    } catch (e: Exception) {
-        onProgress("Error: ${e.message}")
-        false
     }
 }

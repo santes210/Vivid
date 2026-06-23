@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Watermark "Vivid ✦" — Vector drawable para usar como logo.
+
+  Si tienes un PNG real (vivid_logo.png) reemplaza el uso en
+  VideoWatermarker.kt por:
+    val bmp = BitmapFactory.decodeResource(context.resources, R.drawable.vivid_logo)
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="60dp"
+    android:viewportWidth="240"
+    android:viewportHeight="60">
+
+    <!-- Fondo sutil con bordes redondeados (semi-transparente) -->
+    <path
+        android:pathData="M8,4 L232,4 A4,4 0 0 1 236,8 L236,52 A4,4 0 0 1 232,56 L8,56 A4,4 0 0 1 4,52 L4,8 A4,4 0 0 1 8,4 Z"
+        android:fillColor="#80000000" />
+
+    <!-- Texto "Vivid" -->
+    <path
+        android:pathData="M30,42 L42,18 L48,18 L60,42 L54,42 L51,34 L39,34 L36,42 Z M41,30 L49,30 L45,20 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Sparkle ✦ -->
+    <path
+        android:pathData="M180,30 L185,22 L190,30 L198,32 L190,34 L185,42 L180,34 L172,32 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- "id" -->
+    <path
+        android:pathData="M205,28 L205,44 M205,28 L220,28 L220,32 L210,32 L210,36 L218,36 L218,40 L210,40 L210,44 L222,44"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000" />
+</vector>

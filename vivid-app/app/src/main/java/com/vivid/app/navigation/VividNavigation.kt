@@ -3,12 +3,7 @@ package com.vivid.app.navigation
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,27 +19,28 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.domain.repository.ChatRepository
 import com.vivid.app.presentation.auth.AuthScreen
-import com.vivid.app.presentation.create.CameraScreen
-import com.vivid.app.presentation.create.CreatePostScreen
+import com.vivid.app.presentation.create.*
 import com.vivid.app.presentation.feed.FeedScreen
 import com.vivid.app.presentation.messages.ChatListScreen
 import com.vivid.app.presentation.messages.ChatScreen
-import com.vivid.app.presentation.profile.BlockedUsersScreen
-import com.vivid.app.presentation.profile.CloseFriendsScreen
-import com.vivid.app.presentation.profile.EditProfileScreen
-import com.vivid.app.presentation.profile.FollowRequestsScreen
-import com.vivid.app.presentation.profile.ProfileScreen
-import com.vivid.app.presentation.profile.SettingsScreen
+import com.vivid.app.presentation.profile.*
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.presentation.search.SearchScreen
 import com.vivid.app.presentation.search.SearchUser
+import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
 
-sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+sealed class Screen(
+    val route: String,
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+) {
     object Auth : Screen("auth", "Auth")
     object Feed : Screen("feed", "Inicio", Icons.Default.Home)
     object Search : Screen("search", "Buscar", Icons.Default.Search)
     object Create : Screen("create", "Crear", Icons.Default.Add)
+    object CreateReel : Screen("create_reel", "Reel", Icons.Default.MovieCreation)
+    object CreateStory : Screen("create_story", "Story", Icons.Default.AutoAwesome)
     object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow)
     object Profile : Screen("profile", "Perfil", Icons.Default.Person)
     object OtherProfile : Screen("profile/{userId}", "Perfil")
@@ -54,6 +50,8 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object CloseFriends : Screen("close_friends", "Mejores amigos")
     object BlockedUsers : Screen("blocked_users", "Bloqueados")
     object Settings : Screen("settings", "Ajustes")
+    object CameraVideo : Screen("camera_video", "Grabar")
+    object VideoTrimmer : Screen("video_trimmer", "Trim")
 }
 
 @Composable
@@ -68,8 +66,13 @@ fun VividNavigation(navController: NavHostController) {
     Scaffold(
         bottomBar = {
             if (currentRoute != Screen.Auth.route) {
-                NavigationBar {
-                    val items = listOf(Screen.Feed, Screen.Search, Screen.Create, Screen.Reels, Screen.Profile)
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    val items = listOf(
+                        Screen.Feed, Screen.Search, Screen.Create,
+                        Screen.Reels, Screen.Profile
+                    )
                     items.forEach { screen ->
                         NavigationBarItem(
                             icon = { Icon(screen.icon ?: Icons.Default.Home, contentDescription = null) },
@@ -121,16 +124,58 @@ fun VividNavigation(navController: NavHostController) {
             composable(Screen.Create.route) {
                 CreatePostScreen(navController = navController)
             }
+            composable(Screen.CreateReel.route) {
+                CreateReelScreen(navController = navController)
+            }
+            composable(Screen.CreateStory.route) {
+                CreateStoryScreen(navController = navController)
+            }
+            composable(Screen.CameraVideo.route) {
+                CameraVideoScreen(
+                    navController = navController,
+                    onVideoRecorded = { uri ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("recordedVideo", uri.toString())
+                        navController.popBackStack()
+                    }
+                )
+            }
+            composable(Screen.VideoTrimmer.route) {
+                val trimInput = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<String>("trimInputUri")
+                    ?: ""
+                if (trimInput.isNotBlank()) {
+                    VideoTrimmerScreen(
+                        navController = navController,
+                        inputUri = Uri.parse(trimInput),
+                        onTrimConfirmed = { _, _ ->
+                            // Para simplificar, en esta versión el trim solo
+                            // previsualiza; el archivo recortado final lo
+                            // genera CreateReelViewModel al subir.
+                            // Si quieres pasarlo como nuevo Uri, agrega
+                            // savedStateHandle.set("trimmedVideo", path).
+                            navController.popBackStack()
+                        }
+                    )
+                }
+            }
             composable("camera") {
                 CameraScreen(
                     onPhotoTaken = { uri ->
-                        navController.previousBackStackEntry?.savedStateHandle?.set("capturedPhoto", uri.toString())
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle?.set("capturedPhoto", uri.toString())
                         navController.popBackStack()
                     },
                     onBack = { navController.popBackStack() }
                 )
             }
-            composable(Screen.Reels.route) { ReelsScreen() }
+            composable(Screen.Reels.route) {
+                ReelsScreen(
+                    onCreateReel = { navController.navigate(Screen.CreateReel.route) }
+                )
+            }
             composable(Screen.Profile.route) {
                 ProfileScreen(
                     userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty(),
@@ -150,11 +195,13 @@ fun VividNavigation(navController: NavHostController) {
                 val userId = backStackEntry.arguments?.getString("userId") ?: ""
                 ProfileScreen(
                     userId = userId,
-                    onLogout = { navController.popBackStack() }, // Using onLogout as onBack here
+                    onLogout = { navController.popBackStack() },
                     onEditProfile = {},
                     onSettings = {},
                     onNavigateToChat = { chatId, receiverId, receiverName ->
-                        navController.navigate("chat/${Uri.encode(chatId)}/${Uri.encode(receiverId)}/${Uri.encode(receiverName)}")
+                        navController.navigate(
+                            "chat/${Uri.encode(chatId)}/${Uri.encode(receiverId)}/${Uri.encode(receiverName)}"
+                        )
                     }
                 )
             }
@@ -166,7 +213,10 @@ fun VividNavigation(navController: NavHostController) {
                 )
             }
             composable("edit_profile") {
-                EditProfileScreen(onSave = { navController.popBackStack() }, onCancel = { navController.popBackStack() })
+                EditProfileScreen(
+                    onSave = { navController.popBackStack() },
+                    onCancel = { navController.popBackStack() }
+                )
             }
             composable(Screen.Messages.route) {
                 ChatListScreen(onChatClick = { chatId, receiverId, receiverName ->
@@ -224,7 +274,6 @@ private fun NavHostController.openChatWithUser(user: SearchUser) {
     if (currentUserId.isBlank() || user.uid.isBlank()) return
     val chatId = ChatRepository.buildChatId(currentUserId, user.uid)
     val name = user.displayName.ifBlank { user.username.ifBlank { "Usuario" } }
-    // Store avatarBase64 and avatarUrl so ChatViewModel/ChatScreen can use it if needed
     previousBackStackEntry?.savedStateHandle?.set("avatarBase64", user.avatarBase64)
     previousBackStackEntry?.savedStateHandle?.set("avatarUrl", user.avatarUrl)
     navigate("chat/${Uri.encode(chatId)}/${Uri.encode(user.uid)}/${Uri.encode(name)}")
