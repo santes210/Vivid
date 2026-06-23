@@ -14,15 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
-data class Reel(
-    val id: String,
-    val videoUrl: String,
-    val username: String,
-    val caption: String,
-    val likes: Int,
-    val userAvatar: String = ""
-)
-
 /**
  * ViewModel de Reels.
  *

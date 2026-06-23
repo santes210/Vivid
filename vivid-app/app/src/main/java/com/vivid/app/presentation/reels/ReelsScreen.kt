@@ -30,16 +30,6 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-data class Reel(
-    val id: String,
-    val videoUrl: String,
-    val thumbnailUrl: String = "",
-    val username: String,
-    val caption: String,
-    val likes: Int,
-    val userAvatar: String = ""
-)
-
 /**
  * ReelsScreen v2 — Material You 3.
  *

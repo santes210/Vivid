@@ -11,11 +11,36 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -91,6 +116,7 @@ fun CameraVideoScreen(
 
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
+    var currentRecording by remember { mutableStateOf<Recording?>(null) }
     var isRecording by remember { mutableStateOf(false) }
     var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
 
@@ -105,7 +131,7 @@ fun CameraVideoScreen(
                 .setQualitySelector(
                     QualitySelector.from(
                         Quality.HD,
-                        androidx.camera.video.FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                        FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
                     )
                 )
                 .build()
@@ -158,10 +184,11 @@ fun CameraVideoScreen(
         // Botón grabar (estilo IG: círculo grande, rojo cuando graba)
         FloatingActionButton(
             onClick = {
+                val capture = videoCapture ?: return@FloatingActionButton
                 if (isRecording) {
                     // Detener
-                    @SuppressLint("MissingPermission")
-                    videoCapture?.record?.stop()
+                    currentRecording?.stop()
+                    currentRecording = null
                     isRecording = false
                 } else {
                     // Iniciar
@@ -169,26 +196,22 @@ fun CameraVideoScreen(
                     val outFile = File(context.cacheDir, name)
                     val output = FileOutputOptions.Builder(outFile).build()
 
-                    @SuppressLint("MissingPermission")
-                    val recording = videoCapture?.record?.output?.prepareRecording(context, output)
-
-                    // Con audio
-                    recording?.withAudioEnabled()?.start(
-                        ContextCompat.getMainExecutor(context)
-                    ) { event ->
-                        when (event) {
-                            is VideoRecordEvent.Finalize -> {
-                                if (event.hasError()) {
-                                    // error
-                                } else {
-                                    onVideoRecorded(Uri.fromFile(outFile))
-                                    navController.popBackStack()
+                    currentRecording = capture.output
+                        .prepareRecording(context, output)
+                        .withAudioEnabled()
+                        .start(ContextCompat.getMainExecutor(context)) { event ->
+                            when (event) {
+                                is VideoRecordEvent.Start -> isRecording = true
+                                is VideoRecordEvent.Finalize -> {
+                                    isRecording = false
+                                    currentRecording = null
+                                    if (!event.hasError()) {
+                                        onVideoRecorded(Uri.fromFile(outFile))
+                                        navController.popBackStack()
+                                    }
                                 }
                             }
-                            is VideoRecordEvent.Start -> isRecording = true
-                            else -> {}
                         }
-                    }
                 }
             },
             modifier = Modifier

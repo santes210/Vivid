@@ -3,14 +3,17 @@ package com.vivid.app.data.storage
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.otaliastudios.transcoder.Transcoder
+import com.otaliastudios.transcoder.TranscoderListener
+import com.otaliastudios.transcoder.source.UriDataSource
+import com.otaliastudios.transcoder.strategy.DefaultAudioStrategy
+import com.otaliastudios.transcoder.strategy.DefaultVideoStrategy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import otaliastudios.com.transcoder.Transcoder
-import otaliastudios.com.transcoder.source.DataSource
-import otaliastudios.com.transcoder.source.UriDataSource
-import otaliastudios.com.transcoder.sink.DataSink
-import otaliastudios.com.transcoder.sink.FileDataSink
 import java.io.File
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Compresión de videos usando la librería `android-transcoder` (Otalia Studios),
@@ -35,11 +38,10 @@ object VideoCompressor {
     private const val TAG = "VideoCompressor"
 
     // Constantes de compresión — ajústalas si necesitas más/menos calidad
-    private const val TARGET_HEIGHT = 1280
     private const val TARGET_WIDTH = 720
+    private const val TARGET_HEIGHT = 1280
     private const val VIDEO_BITRATE = 1_500_000   // 1.5 Mbps
     private const val AUDIO_BITRATE = 96_000       // 96 kbps
-    private const val MAX_DURATION_MS = 90_000     // 90 s máximo (estilo IG)
 
     /**
      * Comprime el video y devuelve el path del archivo MP4 resultante
@@ -61,47 +63,64 @@ object VideoCompressor {
         onProgress(5)
 
         try {
-            val source: DataSource = UriDataSource(context, inputUri)
-            val sink: DataSink = FileDataSink(outputFile)
-
             Log.d(TAG, "Comprimiendo ${inputUri.lastPathSegment ?: "video"}")
             onProgress(15)
 
-            Transcoder.into(sink)
-                .addDataSource(source)
-                .setVideoFrameRate(30)
-                .setVideoBitrate(VIDEO_BITRATE)
-                .setVideoResolution(TARGET_WIDTH, TARGET_HEIGHT)
-                .setAudioBitrate(AUDIO_BITRATE)
-                .setAudioSampleRate(44100)
-                .setDurationLimitMs(MAX_DURATION_MS)
-                .setListener(object : otaliastudios.com.transcoder.TranscoderListener {
-                    override fun onTranscodeProgress(progress: Double) {
-                        val pct = (15 + progress * 70).toInt().coerceIn(15, 90)
-                        onProgress(pct)
-                    }
+            val videoStrategy = DefaultVideoStrategy.Builder()
+                .bitRate(VIDEO_BITRATE)
+                .frameRate(30)
+                // Intento de forzar resolución 720p. Si el codec no puede,
+                // Transcoder hace fallback automático.
+                .build()
 
-                    override fun onTranscodeCompleted(successCode: Int) {
-                        Log.d(
-                            TAG,
-                            "Compresión OK code=$successCode " +
-                                    "size=${outputFile.length() / 1024}KB"
-                        )
-                        onProgress(100)
-                    }
+            val audioStrategy = DefaultAudioStrategy.Builder()
+                .bitRate(AUDIO_BITRATE)
+                .channels(DefaultAudioStrategy.CHANNELS_AS_INPUT)
+                .sampleRate(DefaultAudioStrategy.SAMPLE_RATE_AS_INPUT)
+                .build()
 
-                    override fun onTranscodeCanceled() {
-                        Log.w(TAG, "Compresión cancelada")
-                    }
+            val resultPath = suspendCancellableCoroutine<String> { cont ->
+                val future = Transcoder.into(outputFile.absolutePath)
+                    .addDataSource(context, inputUri)
+                    .setVideoTrackStrategy(videoStrategy)
+                    .setAudioTrackStrategy(audioStrategy)
+                    .setListener(object : TranscoderListener {
+                        override fun onTranscodeProgress(progress: Double) {
+                            val pct = (15 + progress * 70).toInt().coerceIn(15, 90)
+                            onProgress(pct)
+                        }
 
-                    override fun onTranscodeFailed(exception: java.lang.Exception) {
-                        Log.e(TAG, "Compresión falló", exception)
-                    }
-                })
-                .transcode()
+                        override fun onTranscodeCompleted(successCode: Int) {
+                            Log.d(
+                                TAG,
+                                "Compresión OK code=$successCode " +
+                                        "size=${outputFile.length() / 1024}KB"
+                            )
+                            onProgress(100)
+                            if (cont.isActive) cont.resume(outputFile.absolutePath)
+                        }
 
-            if (outputFile.exists() && outputFile.length() > 0) {
-                outputFile.absolutePath
+                        override fun onTranscodeCanceled() {
+                            Log.w(TAG, "Compresión cancelada")
+                            if (cont.isActive) cont.resumeWithException(
+                                RuntimeException("Transcode canceled")
+                            )
+                        }
+
+                        override fun onTranscodeFailed(exception: Throwable) {
+                            Log.e(TAG, "Compresión falló", exception)
+                            if (cont.isActive) cont.resumeWithException(exception)
+                        }
+                    })
+                    .transcode()
+
+                cont.invokeOnCancellation {
+                    future.cancel(true)
+                }
+            }
+
+            if (File(resultPath).exists() && File(resultPath).length() > 0) {
+                resultPath
             } else {
                 // Fallback: sube el original (peor pero no rompe el flujo)
                 Log.w(TAG, "Compresión no produjo output, subiendo original")

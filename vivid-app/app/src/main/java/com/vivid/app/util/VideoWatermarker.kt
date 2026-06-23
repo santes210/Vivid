@@ -7,13 +7,18 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.net.Uri
 import android.util.Log
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -56,20 +61,21 @@ object VideoWatermarker {
             val logo = renderVividLogo(widthPx = 480, heightPx = 120)
 
             // 2. Construye el overlay (esquina inferior derecha, 70% opacidad)
-            val bitmapOverlay = androidx.media3.effect.BitmapOverlay
-                .createStaticBitmapOverlay(logo)
+            val bitmapOverlay = androidx.media3.effect.BitmapOverlay.createStaticBitmapOverlay(logo)
+
+            val overlayEffect = OverlayEffect(ImmutableList.of<TextureOverlay>(bitmapOverlay))
 
             // 3. Composición con el overlay aplicado
             val mediaItem = MediaItem.fromUri(inputUri)
             val edited = EditedMediaItem.Builder(mediaItem)
                 .setEffects(
                     androidx.media3.transformer.Effects(
-                        audioProcessors = emptyList(),
-                        videoEffects = listOf(bitmapOverlay)
+                        emptyList(),
+                        listOf<Effect>(overlayEffect)
                     )
                 )
                 .build()
-            val composition = Composition.Builder(listOf(edited)).build()
+            val composition = Composition.Builder(edited).build()
 
             // 4. Ejecuta el transformer y espera async
             val outputPath = suspendCancellableCoroutine<String> { cont ->
@@ -94,6 +100,8 @@ object VideoWatermarker {
 
                 val transformer = Transformer.Builder(context)
                     .addListener(listener)
+                    .setVideoMimeType(MimeTypes.VIDEO_H264)
+                    .setAudioMimeType(MimeTypes.AUDIO_AAC)
                     .build()
 
                 cont.invokeOnCancellation { transformer.cancel() }

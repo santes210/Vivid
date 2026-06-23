@@ -1,8 +1,5 @@
 package com.vivid.app.presentation.stories
 
-import android.graphics.Bitmap
-import android.util.Base64
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -15,14 +12,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -31,8 +26,20 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+// Modelo de vista para el viewer (distinto al Story de StoryData.kt para evitar choque)
+data class ViewerStory(
+    val id: String,
+    val userId: String,
+    val username: String,
+    val userAvatar: String,
+    val videoUrl: String,
+    val thumbnailUrl: String,
+    val caption: String,
+    val type: String,       // "photo" o "video"
+    val expiresAt: Long
+)
 
 /**
  * Visor de Stories (estilo Instagram).
@@ -53,7 +60,7 @@ fun StoryViewerRoute(
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val scope = rememberCoroutineScope()
 
-    var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
+    var stories by remember { mutableStateOf<List<ViewerStory>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var currentIndex by remember { mutableStateOf(0) }
 
@@ -67,7 +74,7 @@ fun StoryViewerRoute(
                 val docs = snapshot?.documents.orEmpty()
                 scope.launch {
                     stories = docs.mapNotNull { doc ->
-                        Story(
+                        ViewerStory(
                             id = doc.id,
                             userId = doc.getString("userId").orEmpty(),
                             username = doc.getString("username") ?: "usuario",
@@ -205,21 +212,9 @@ fun StoryViewerRoute(
     }
 }
 
-data class Story(
-    val id: String,
-    val userId: String,
-    val username: String,
-    val userAvatar: String,
-    val videoUrl: String,
-    val thumbnailUrl: String,
-    val caption: String,
-    val type: String,       // "photo" o "video"
-    val expiresAt: Long
-)
-
 @UnstableApi
 @Composable
-private fun VideoStoryPlayer(story: Story) {
+private fun VideoStoryPlayer(story: ViewerStory) {
     val context = LocalContext.current
     val player = remember(story.videoUrl) {
         ExoPlayer.Builder(context).build().apply {
@@ -243,7 +238,7 @@ private fun VideoStoryPlayer(story: Story) {
 }
 
 @Composable
-private fun PhotoStoryView(story: Story) {
+private fun PhotoStoryView(story: ViewerStory) {
     // Si hay thumbnail URL firmada, úsala
     if (story.thumbnailUrl.isNotBlank()) {
         AsyncImage(
