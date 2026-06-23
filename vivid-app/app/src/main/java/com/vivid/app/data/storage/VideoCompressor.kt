@@ -53,7 +53,7 @@ object VideoCompressor {
     suspend fun compress(
         context: Context,
         inputUri: Uri,
-        onProgress: (Int) -> Unit = {}
+        onProgress: (Long) -> Unit = {}
     ): String = withContext(Dispatchers.IO) {
         val outputFile = File(context.cacheDir, "reel_${System.currentTimeMillis()}.mp4")
 
@@ -90,7 +90,7 @@ object VideoCompressor {
                             onProgress(pct)
                         }
 
-                        override fun onTranscodeCompleted(successCode: Int) {
+                        override fun onTranscodeCompleted(successCode: Long) {
                             Log.d(
                                 TAG,
                                 "Compresión OK code=$successCode " +
