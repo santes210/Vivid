@@ -1,0 +1,42 @@
+diff --git a/vivid-app/gradle.properties b/vivid-app/gradle.properties
+index 98b77fa..a58c68b 100644
+--- a/vivid-app/gradle.properties
++++ b/vivid-app/gradle.properties
+@@ -1,7 +1,7 @@
+ # Memoria y estabilidad para compilar en GitHub Actions.
+ # El error de las capturas era: java.lang.OutOfMemoryError / Gradle daemon disappeared.
+ # 384m/256m es insuficiente para Android + Kotlin + Compose + Firebase + Hilt.
+-org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC -XX:+HeapDumpOnOutOfMemoryError
++org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -Dfile.encoding=UTF-8 -XX:+UseParallelGC -XX:+HeapDumpOnOutOfMemoryError
+ 
+ android.useAndroidX=true
+ kotlin.code.style=official
+diff --git a/vivid-app/settings.gradle.kts b/vivid-app/settings.gradle.kts
+index d861a01..acc5110 100644
+--- a/vivid-app/settings.gradle.kts
++++ b/vivid-app/settings.gradle.kts
+@@ -1,7 +1,23 @@
+ pluginManagement {
++    resolutionStrategy {
++        eachPlugin {
++            if (requested.id.id == "com.google.devtools.ksp") {
++                useModule("com.google.devtools.ksp:symbol-processing-gradle-plugin:${requested.version}")
++            }
++        }
++    }
+     repositories {
+-        google()
++        // KSP plugin marker lives in Maven Central. The explicit Maven URL avoids Gradle resolving
++        // com.google.devtools.ksp only against Google's Android repository in some environments.
++        maven(url = "https://repo.maven.apache.org/maven2") {
++            name = "MavenCentralExplicit"
++        }
+         mavenCentral()
++        google {
++            content {
++                excludeGroup("com.google.devtools.ksp")
++            }
++        }
+         gradlePluginPortal()
+     }
+ }

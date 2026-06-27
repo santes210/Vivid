@@ -6,9 +6,12 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.net.URLEncoder
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
@@ -22,7 +25,7 @@ import java.util.concurrent.TimeUnit
  *
  * Flujo:
  *   1. App llama a /uploadReel → recibe uploadUrl + signedDownloadUrl
- *   2. App PUT el archivo directo a B2
+ *   2. App POST el archivo directo a B2
  *   3. App guarda el signedDownloadUrl en Firestore
  *   4. Antes de que expire (1h), ReelsScreen llama a /signDownload para renovar
  *
@@ -60,18 +63,18 @@ class CloudFunctionsStorageProvider(
         }
         onProgress(20)
 
-        // 2. PUT directo del archivo a B2
-        val bytes = file.readBytes()
+        // 2. POST directo del archivo a B2. La API nativa b2_upload_file NO acepta PUT.
         val putReq = Request.Builder()
             .url(uploadUrl)
             .header("Authorization", uploadAuthToken)
             .header("Content-Type", "video/mp4")
-            .header("X-Bz-File-Name", remoteKey)
-            .put(bytes.toRequestBody(BINARY_MEDIA))
+            .header("X-Bz-File-Name", b2EncodeFileName(remoteKey))
+            .header("X-Bz-Content-Sha1", sha1Hex(file))
+            .post(file.asRequestBody(BINARY_MEDIA))
             .build()
 
         okHttp.newCall(putReq).execute().use { resp ->
-            if (!resp.isSuccessful) error("PUT a B2 falló (${resp.code}): ${resp.body?.string()}")
+            if (!resp.isSuccessful) error("POST a B2 falló (${resp.code}): ${resp.body?.string()}")
         }
         onProgress(90)
 
@@ -86,16 +89,16 @@ class CloudFunctionsStorageProvider(
                     File(dir, "thumb_${File(localFilePath).nameWithoutExtension}.jpg")
                 }
                 if (thumbFile != null && thumbFile.exists()) {
-                    val thumbBytes = thumbFile.readBytes()
                     val thumbPutReq = Request.Builder()
                         .url(thumbUploadUrl)
                         .header("Authorization", thumbUploadToken)
                         .header("Content-Type", "image/jpeg")
-                        .header("X-Bz-File-Name", thumbKey)
-                        .put(thumbBytes.toRequestBody(THUMB_MEDIA))
+                        .header("X-Bz-File-Name", b2EncodeFileName(thumbKey))
+                        .header("X-Bz-Content-Sha1", sha1Hex(thumbFile))
+                        .post(thumbFile.asRequestBody(THUMB_MEDIA))
                         .build()
                     okHttp.newCall(thumbPutReq).execute().use { resp ->
-                        if (!resp.isSuccessful) Log.w(TAG, "Thumbnail PUT falló: ${resp.code}")
+                        if (!resp.isSuccessful) Log.w(TAG, "Thumbnail POST falló: ${resp.code}")
                     }
                 }
             }
@@ -166,6 +169,22 @@ class CloudFunctionsStorageProvider(
             return JSONObject(respBody)
         }
     }
+
+    private fun sha1Hex(file: File): String {
+        val md = MessageDigest.getInstance("SHA-1")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                md.update(buffer, 0, read)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun b2EncodeFileName(fileName: String): String =
+        URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
 
     companion object {
         private const val TAG = "CFStorage"

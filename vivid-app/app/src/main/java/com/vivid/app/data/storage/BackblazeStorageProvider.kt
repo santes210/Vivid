@@ -9,9 +9,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
@@ -33,7 +35,7 @@ import java.util.concurrent.TimeUnit
  * Flujo de B2:
  *   1. b2_authorize_account        → apiUrl + authToken + downloadUrl
  *   2. b2_get_upload_url           → uploadUrl + uploadAuthToken (1 por archivo)
- *   3. b2_upload_file              → PUT del binario con SHA1
+ *   3. b2_upload_file              → POST del binario con SHA1
  *   4. b2_get_download_authorization → token de descarga firmado (TTL máx 7d)
  *      → URL reproducible = downloadUrl + "/file/" + bucketName + "/" + key
  *                            + "?Authorization=" + {token}
@@ -71,10 +73,9 @@ class BackblazeStorageProvider(
     ): String = withContext(Dispatchers.IO) {
         val file = File(localFilePath)
         require(file.exists()) { "No existe el archivo: $localFilePath" }
-        val fileBytes = file.readBytes()
-        val sha1 = sha1Hex(fileBytes)
+        val sha1 = sha1Hex(file)
 
-        Log.d(TAG, "Subiendo ${file.name} (${fileBytes.size / 1024} KB) → $remoteKey")
+        Log.d(TAG, "Subiendo ${file.name} (${file.length() / 1024} KB) → $remoteKey")
 
         onProgress(5)
 
@@ -88,7 +89,7 @@ class BackblazeStorageProvider(
 
         // 3. Subir archivo
         val contentType = guessContentType(remoteKey)
-        uploadBinary(uploadUrl, uploadAuthToken, fileBytes, sha1, remoteKey, contentType)
+        uploadBinary(uploadUrl, uploadAuthToken, file, sha1, remoteKey, contentType)
         onProgress(95)
 
         // 4. Generar URL FIRMADA (funciona en bucket privado, TTL 7 días = máx de B2)
@@ -194,7 +195,7 @@ class BackblazeStorageProvider(
     private fun uploadBinary(
         uploadUrl: String,
         uploadAuthToken: String,
-        bytes: ByteArray,
+        file: File,
         sha1: String,
         remoteKey: String,
         contentType: String
@@ -203,16 +204,18 @@ class BackblazeStorageProvider(
         val req = Request.Builder()
             .url(uploadUrl)
             .header("Authorization", uploadAuthToken)
-            .header("X-Bz-File-Name", remoteKey)   // ← nombre real del archivo
+            .header("X-Bz-File-Name", b2EncodeFileName(remoteKey))
             .header("Content-Type", contentType)
             .header("X-Bz-Content-Sha1", sha1)
-            .put(bytes.toRequestBody(media))
+            // La API nativa de Backblaze B2 usa POST para b2_upload_file.
+            // PUT provoca 405 Method Not Allowed.
+            .post(file.asRequestBody(media))
             .build()
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) error("b2_upload_file falló (${resp.code}): $body")
-            Log.d(TAG, "b2_upload_file OK (${bytes.size} bytes)")
+            Log.d(TAG, "b2_upload_file OK (${file.length()} bytes)")
         }
     }
 
@@ -224,10 +227,21 @@ class BackblazeStorageProvider(
         else -> "video/mp4"
     }
 
-    private fun sha1Hex(bytes: ByteArray): String {
+    private fun sha1Hex(file: File): String {
         val md = MessageDigest.getInstance("SHA-1")
-        return md.digest(bytes).joinToString("") { "%02x".format(it) }
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                md.update(buffer, 0, read)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
+
+    private fun b2EncodeFileName(fileName: String): String =
+        URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
 
     companion object {
         private const val TAG = "BackblazeStorage"
