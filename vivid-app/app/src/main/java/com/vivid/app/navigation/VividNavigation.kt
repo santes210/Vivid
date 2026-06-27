@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -29,6 +31,9 @@ import com.vivid.app.presentation.search.SearchScreen
 import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
+import com.vivid.app.util.VideoTrimmer
+import kotlinx.coroutines.launch
+import java.io.File
 
 sealed class Screen(
     val route: String,
@@ -142,21 +147,41 @@ fun VividNavigation(navController: NavHostController) {
                 )
             }
             composable(Screen.VideoTrimmer.route) {
+                val context = LocalContext.current
+                val scope = rememberCoroutineScope()
                 val trimInput = navController.previousBackStackEntry
                     ?.savedStateHandle
                     ?.get<String>("trimInputUri")
                     ?: ""
                 if (trimInput.isNotBlank()) {
+                    val inputUri = Uri.parse(trimInput)
                     VideoTrimmerScreen(
                         navController = navController,
-                        inputUri = Uri.parse(trimInput),
-                        onTrimConfirmed = { _, _ ->
-                            // Para simplificar, en esta versión el trim solo
-                            // previsualiza; el archivo recortado final lo
-                            // genera CreateReelViewModel al subir.
-                            // Si quieres pasarlo como nuevo Uri, agrega
-                            // savedStateHandle.set("trimmedVideo", path).
-                            navController.popBackStack()
+                        inputUri = inputUri,
+                        onTrimConfirmed = { startMs, endMs ->
+                            scope.launch {
+                                val outFile = File(
+                                    context.cacheDir,
+                                    "trimmed_reel_${System.currentTimeMillis()}.mp4"
+                                )
+                                val trimmedPath = VideoTrimmer.trim(
+                                    context = context,
+                                    inputUri = inputUri,
+                                    outputFile = outFile,
+                                    startMs = startMs,
+                                    endMs = endMs
+                                )
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set("trimmedVideo", Uri.fromFile(File(trimmedPath)).toString())
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set("trimStartMs", startMs)
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set("trimEndMs", endMs)
+                                navController.popBackStack()
+                            }
                         }
                     )
                 }

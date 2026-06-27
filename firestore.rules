@@ -12,6 +12,7 @@ service cloud.firestore {
           'followingCount',
           'likesCount',
           'commentsCount',
+          'reelsCount',
           'updatedAt'
         ]);
     }

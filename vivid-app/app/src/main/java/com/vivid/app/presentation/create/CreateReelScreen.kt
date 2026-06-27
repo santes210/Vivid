@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,21 +46,41 @@ fun CreateReelScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
-    var selectedUri by remember { mutableStateOf<Uri?>(null) }
-    var caption by remember { mutableStateOf("") }
-    var withWatermark by remember { mutableStateOf(true) }
+    var selectedUriString by rememberSaveable { mutableStateOf("") }
+    val selectedUri = selectedUriString.takeIf { it.isNotBlank() }?.let(Uri::parse)
+    var caption by rememberSaveable { mutableStateOf("") }
+    var withWatermark by rememberSaveable { mutableStateOf(true) }
+    var trimStartMs by rememberSaveable { mutableStateOf(0L) }
+    var trimEndMs by rememberSaveable { mutableStateOf(-1L) }
 
     // Recoger el video grabado o trimeado
     val backStackEntry = navController.currentBackStackEntry
     val recordedFlow = backStackEntry?.savedStateHandle?.getStateFlow("recordedVideo", "")
     val recordedPathState = recordedFlow?.collectAsState(initial = "")
     val recordedPath = recordedPathState?.value ?: ""
+    val trimmedFlow = backStackEntry?.savedStateHandle?.getStateFlow("trimmedVideo", "")
+    val trimmedPathState = trimmedFlow?.collectAsState(initial = "")
+    val trimmedPath = trimmedPathState?.value ?: ""
 
     LaunchedEffect(recordedPath) {
         if (recordedPath.isNotBlank()) {
-            selectedUri = Uri.parse(recordedPath)
+            selectedUriString = recordedPath
+            trimStartMs = 0L
+            trimEndMs = -1L
             viewModel.reset()
             backStackEntry?.savedStateHandle?.remove<String>("recordedVideo")
+        }
+    }
+
+    LaunchedEffect(trimmedPath) {
+        if (trimmedPath.isNotBlank()) {
+            selectedUriString = trimmedPath
+            trimStartMs = 0L
+            trimEndMs = -1L
+            viewModel.reset()
+            backStackEntry?.savedStateHandle?.remove<String>("trimmedVideo")
+            backStackEntry?.savedStateHandle?.remove<Long>("trimStartMs")
+            backStackEntry?.savedStateHandle?.remove<Long>("trimEndMs")
         }
     }
 
@@ -67,7 +88,9 @@ fun CreateReelScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
-            selectedUri = it
+            selectedUriString = it.toString()
+            trimStartMs = 0L
+            trimEndMs = -1L
             viewModel.reset()
         }
     }
@@ -182,7 +205,7 @@ fun CreateReelScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            selectedUri = null
+                            selectedUriString = ""
                             viewModel.reset()
                         },
                         modifier = Modifier.weight(1f)
@@ -194,7 +217,7 @@ fun CreateReelScreen(
                     FilledTonalButton(
                         onClick = {
                             // Pasa el URI a la pantalla de trim
-                            backStackEntry?.savedStateHandle?.set(
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
                                 "trimInputUri", selectedUri.toString()
                             )
                             navController.navigate("video_trimmer")
@@ -275,6 +298,8 @@ fun CreateReelScreen(
                             context = context,
                             videoUri = it,
                             caption = caption,
+                            trimStartMs = trimStartMs,
+                            trimEndMs = trimEndMs,
                             withWatermark = withWatermark
                         )
                     }

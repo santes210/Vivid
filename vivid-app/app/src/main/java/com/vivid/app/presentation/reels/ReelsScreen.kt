@@ -17,6 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
@@ -45,6 +48,19 @@ fun ReelsScreen(
 ) {
     val reels by viewModel.reels.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Al volver de Crear Reel, esta pantalla vuelve a ON_RESUME pero el
+    // ViewModel puede ser el mismo. Forzamos refresh para mostrar el video nuevo.
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshReels()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val listState = rememberLazyListState()
     var currentPlayingIndex by remember { mutableStateOf(0) }
