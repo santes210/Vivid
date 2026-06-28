@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,9 +27,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -42,6 +47,7 @@ data class ProfileUiState(
     val avatarUrl: String = "",
     val avatarBase64: String = "",
     val postsCount: Int = 0,
+    val reelsCount: Int = 0,
     val followersCount: Int = 0,
     val followingCount: Int = 0,
     val isPrivate: Boolean = false
@@ -51,6 +57,9 @@ data class ProfilePost(
     val id: String,
     val imageUrl: String = "",
     val imageBase64: String = "",
+    val videoUrl: String = "",
+    val thumbnailUrl: String = "",
+    val isVideo: Boolean = false,
     val caption: String = "",
     val timestamp: Long = 0L,
     val username: String = ""
@@ -101,6 +110,7 @@ fun ProfileScreen(
     DisposableEffect(userId) {
         var profileListener: ListenerRegistration? = null
         var postsListener: ListenerRegistration? = null
+        var reelsListener: ListenerRegistration? = null
 
         if (userId.isNotBlank()) {
             profileListener = db.collection("users").document(userId)
@@ -114,16 +124,23 @@ fun ProfileScreen(
                         avatarUrl = data["avatarUrl"] as? String ?: "",
                         avatarBase64 = data["avatarBase64"] as? String ?: "",
                         postsCount = (data["postsCount"] as? Long)?.toInt() ?: 0,
+                        reelsCount = (data["reelsCount"] as? Long)?.toInt() ?: 0,
                         followersCount = (data["followersCount"] as? Long)?.toInt() ?: 0,
                         followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0,
                         isPrivate = data["isPrivate"] as? Boolean ?: false
                     )
                 }
 
+            var photoPosts = emptyList<ProfilePost>()
+            var reelPosts = emptyList<ProfilePost>()
+            fun publishProfileContent() {
+                posts = (photoPosts + reelPosts).sortedByDescending { it.timestamp }
+            }
+
             postsListener = db.collection("posts")
                 .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, _ ->
-                    val loadedPosts = snapshot?.documents.orEmpty().map { doc ->
+                    photoPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
                             id = doc.id,
                             imageUrl = doc.getString("imageUrl").orEmpty(),
@@ -133,13 +150,34 @@ fun ProfileScreen(
                             username = doc.getString("username").orEmpty()
                         )
                     }
-                    posts = loadedPosts
+                    publishProfileContent()
+                }
+
+            reelsListener = db.collection("reels")
+                .whereEqualTo("userId", userId)
+                .addSnapshotListener { snapshot, _ ->
+                    reelPosts = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                        val videoUrl = doc.getString("videoUrl").orEmpty()
+                        if (videoUrl.isBlank()) return@mapNotNull null
+                        ProfilePost(
+                            id = "reel_${doc.id}",
+                            imageUrl = doc.getString("thumbnailUrl").orEmpty(),
+                            videoUrl = videoUrl,
+                            thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+                            isVideo = true,
+                            caption = doc.getString("caption").orEmpty(),
+                            timestamp = doc.getLong("timestamp") ?: 0L,
+                            username = doc.getString("username").orEmpty()
+                        )
+                    }
+                    publishProfileContent()
                 }
         }
 
         onDispose {
             profileListener?.remove()
             postsListener?.remove()
+            reelsListener?.remove()
         }
     }
 
@@ -239,7 +277,7 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    ProfileStat(profile.postsCount.toString(), "Posts")
+                    ProfileStat((profile.postsCount + profile.reelsCount).toString(), "Posts/Reels")
                     ProfileStat(profile.followersCount.toString(), "Seguidores")
                     ProfileStat(profile.followingCount.toString(), "Siguiendo")
                 }
@@ -373,7 +411,7 @@ private fun ProfilePostsGrid(
     onPostClick: (ProfilePost) -> Unit
 ) {
     Text(
-        "Publicaciones",
+        "Publicaciones y reels",
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(16.dp)
     )
@@ -469,34 +507,42 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
         } else null
     }
 
-    when {
-        bitmap != null -> Image(
-            bitmap = bitmap!!.asImageBitmap(),
-            contentDescription = null,
-            modifier = Modifier
-                .aspectRatio(1f)
-                .padding(2.dp)
-                .clickable { onClick() },
-            contentScale = ContentScale.Crop
-        )
-        post.imageUrl.isNotBlank() -> AsyncImage(
-            model = post.imageUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .aspectRatio(1f)
-                .padding(2.dp)
-                .clickable { onClick() },
-            contentScale = ContentScale.Crop
-        )
-        else -> Box(
-            modifier = Modifier
-                .aspectRatio(1f)
-                .padding(2.dp)
-                .clickable { onClick() }
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Vivid", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .padding(2.dp)
+            .clickable { onClick() }
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            bitmap != null -> Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            post.imageUrl.isNotBlank() -> AsyncImage(
+                model = post.imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            else -> Text("Vivid", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (post.isVideo) {
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Reel",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(8.dp).size(28.dp)
+                )
+            }
         }
     }
 }
@@ -533,6 +579,23 @@ private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     when {
+                        post.isVideo && post.videoUrl.isNotBlank() -> {
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val player = remember(post.videoUrl) {
+                                ExoPlayer.Builder(context).build().apply {
+                                    setMediaItem(MediaItem.fromUri(post.videoUrl))
+                                    repeatMode = ExoPlayer.REPEAT_MODE_ALL
+                                    prepare()
+                                    playWhenReady = true
+                                }
+                            }
+                            DisposableEffect(player) { onDispose { player.release() } }
+                            AndroidView(
+                                factory = { ctx -> PlayerView(ctx).apply { this.player = player } },
+                                update = { it.player = player },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                         post.imageBase64.isNotBlank() -> {
                             val bitmap = remember(post.imageBase64) {
                                 try {

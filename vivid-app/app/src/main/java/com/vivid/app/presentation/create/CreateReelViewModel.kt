@@ -12,7 +12,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.data.storage.VideoCompressor
 import com.vivid.app.util.VideoThumbnailer
-import com.vivid.app.util.VideoTrimmer
 import com.vivid.app.util.VideoWatermarker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,27 +64,9 @@ class CreateReelViewModel @Inject constructor(
                 val user = auth.currentUser
                     ?: throw IllegalStateException("No hay sesión iniciada")
 
-                // 0. Si el usuario recortó el video, generar primero el archivo recortado.
-                val inputForCompression = if (trimEndMs > trimStartMs && trimStartMs >= 0) {
-                    val trimmedFile = File(context.cacheDir, "reel_trim_${System.currentTimeMillis()}.mp4")
-                    Uri.fromFile(
-                        File(
-                            VideoTrimmer.trim(
-                                context = context,
-                                inputUri = videoUri,
-                                outputFile = trimmedFile,
-                                startMs = trimStartMs,
-                                endMs = trimEndMs
-                            )
-                        )
-                    )
-                } else {
-                    videoUri
-                }
-
                 // 1. Comprimir (a 720x1280, 1.5 Mbps)
                 _state.value = CreateReelUiState.Compressing(0)
-                val compressedPath = VideoCompressor.compress(context, inputForCompression) { pct ->
+                val compressedPath = VideoCompressor.compress(context, videoUri) { pct ->
                     _state.value = CreateReelUiState.Compressing(pct)
                 }
 
@@ -120,7 +101,7 @@ class CreateReelViewModel @Inject constructor(
                 }
 
                 // Subir miniatura a B2 (URL firmada)
-                val thumbKey = remoteKey.replace(".mp4", "_thumb.jpg")
+                val thumbKey = "${remoteKey.replace(".mp4", "_thumb.jpg")}"
                 val thumbUrl = if (thumbFile.exists() && thumbFile.length() > 0) {
                     storage.uploadFile(thumbFile.absolutePath, thumbKey) { pct ->
                         _state.value = CreateReelUiState.Uploading(50 + pct / 2)
@@ -129,18 +110,12 @@ class CreateReelViewModel @Inject constructor(
 
                 // 5. Metadata
                 _state.value = CreateReelUiState.SavingMetadata
-                writeReelMetadata(user.uid, publicUrl, thumbUrl, caption, remoteKey, thumbKey)
+                writeReelMetadata(user.uid, publicUrl, thumbUrl, caption, remoteKey)
 
-                // No dejes que un fallo de contador (reglas de Firestore) marque como fallida
-                // una publicación que ya subió video y metadata correctamente.
-                try {
-                    firestore.collection("users").document(user.uid).update(
-                        "reelsCount", FieldValue.increment(1),
-                        "updatedAt", System.currentTimeMillis()
-                    ).await()
-                } catch (counterError: Exception) {
-                    Log.w(TAG, "No se pudo actualizar reelsCount; reel ya publicado", counterError)
-                }
+                firestore.collection("users").document(user.uid).update(
+                    "reelsCount", FieldValue.increment(1),
+                    "updatedAt", System.currentTimeMillis()
+                ).await()
 
                 _state.value = CreateReelUiState.Success
                 Log.d(TAG, "Reel publicado OK")
@@ -156,8 +131,7 @@ class CreateReelViewModel @Inject constructor(
         videoUrl: String,
         thumbnailUrl: String,
         caption: String,
-        storageKey: String,
-        thumbnailStorageKey: String
+        storageKey: String
     ) {
         val userDoc = firestore.collection("users").document(uid).get().await()
         val username = userDoc.getString("username")
@@ -172,7 +146,6 @@ class CreateReelViewModel @Inject constructor(
             "userAvatar" to avatar,
             "videoUrl" to videoUrl,
             "thumbnailUrl" to thumbnailUrl,
-            "thumbnailStorageKey" to thumbnailStorageKey,
             "storageKey" to storageKey,
             "provider" to "backblaze-direct",
             "caption" to caption.trim(),

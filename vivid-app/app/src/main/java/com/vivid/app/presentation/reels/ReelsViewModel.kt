@@ -38,49 +38,31 @@ class ReelsViewModel @Inject constructor(
     val isLoading: StateFlow<Boolean> = _isLoading
 
     init {
-        refreshReels()
+        loadReels()
     }
 
-    /**
-     * Recarga los reels desde Firestore.
-     *
-     * Antes solo se cargaban en init; al volver de Crear Reel el ViewModel
-     * se conserva en el back stack y la lista quedaba vieja/vacía. Por eso
-     * parecía que el video “no aparecía” aunque sí se hubiera subido.
-     */
-    fun refreshReels() {
+    private fun loadReels() {
         viewModelScope.launch {
-            _isLoading.value = true
             try {
                 val snapshot = firestore.collection("reels")
                     .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(50)
+                    .limit(20)
                     .get()
                     .await()
 
                 _reels.value = snapshot.documents.mapNotNull { doc ->
                     val storageKey = doc.getString("storageKey").orEmpty()
                     val savedUrl = doc.getString("videoUrl").orEmpty()
-                    val thumbStorageKey = doc.getString("thumbnailStorageKey").orEmpty()
-                    val savedThumbUrl = doc.getString("thumbnailUrl").orEmpty()
-
                     // Regenerar URL firmada fresca desde el storageKey (las URLs
-                    // firmadas expiran). Si falla, usar la URL guardada.
+                    // firmadas expiran a los 7 días). Si falla, usar la guardada.
                     val videoUrl = if (storageKey.isNotBlank()) {
                         try { storage.signDownloadUrl(storageKey) }
                         catch (_: Exception) { savedUrl }
                     } else savedUrl
-
-                    val thumbnailUrl = if (thumbStorageKey.isNotBlank()) {
-                        try { storage.signDownloadUrl(thumbStorageKey) }
-                        catch (_: Exception) { savedThumbUrl }
-                    } else savedThumbUrl
-
                     if (videoUrl.isBlank()) return@mapNotNull null
                     Reel(
                         id = doc.id,
                         videoUrl = videoUrl,
-                        thumbnailUrl = thumbnailUrl,
                         username = doc.getString("username") ?: "usuario",
                         caption = doc.getString("caption").orEmpty(),
                         likes = doc.getLong("likes")?.toInt() ?: 0,
@@ -132,7 +114,7 @@ class ReelsViewModel @Inject constructor(
             )
 
             val docRef = firestore.collection("reels").add(reelData).await()
-            refreshReels()
+            loadReels()
             Result.success(docRef.id)
         } catch (e: Exception) {
             Result.failure(e)

@@ -1,6 +1,7 @@
 package com.vivid.app.presentation.reels
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -17,9 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
@@ -27,6 +25,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -48,18 +47,14 @@ fun ReelsScreen(
 ) {
     val reels by viewModel.reels.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val lifecycleOwner = LocalLifecycleOwner.current
+    var autoplayReels by remember { mutableStateOf(true) }
 
-    // Al volver de Crear Reel, esta pantalla vuelve a ON_RESUME pero el
-    // ViewModel puede ser el mismo. Forzamos refresh para mostrar el video nuevo.
-    DisposableEffect(lifecycleOwner, viewModel) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshReels()
-            }
+    LaunchedEffect(Unit) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        if (uid.isNotBlank()) {
+            FirebaseFirestore.getInstance().collection("users").document(uid).get()
+                .addOnSuccessListener { autoplayReels = it.getBoolean("autoplayReels") ?: true }
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val listState = rememberLazyListState()
@@ -107,10 +102,27 @@ fun ReelsScreen(
                 itemsIndexed(reels, key = { _, reel -> reel.id }) { index, reel ->
                     ReelItem(
                         reel = reel,
-                        isPlaying = index == currentPlayingIndex,
+                        isPlaying = autoplayReels && index == currentPlayingIndex,
                         onLike = { isLiked -> updateReelLikeInFirebase(reel.id, isLiked) }
                     )
                 }
+            }
+        }
+
+        Surface(
+            color = Color.Black.copy(alpha = 0.35f),
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                Spacer(Modifier.width(6.dp))
+                Text("Reels", color = Color.White, style = MaterialTheme.typography.titleMedium)
             }
         }
 
@@ -170,8 +182,9 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: (Boolean) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(680.dp)
+            .height(720.dp)
             .background(Color.Black)
+            .clickable { isPausedByUser = !isPausedByUser }
     ) {
         // Thumbnail mientras carga el video
         if (!isPlayerReady && reel.thumbnailUrl.isNotBlank()) {
@@ -200,6 +213,28 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: (Boolean) -> Unit) {
             update = { playerView -> playerView.player = exoPlayer },
             modifier = Modifier.fillMaxSize()
         )
+
+        if (!isPlayerReady) {
+            CircularProgressIndicator(
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+
+        if (isPausedByUser) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.45f),
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Reproducir",
+                    tint = Color.White,
+                    modifier = Modifier.padding(18.dp).size(48.dp)
+                )
+            }
+        }
 
         // Gradiente inferior para legibilidad (Material You surface tint)
         Box(

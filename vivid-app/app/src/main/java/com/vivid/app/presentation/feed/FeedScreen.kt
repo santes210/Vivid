@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -40,6 +42,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.vivid.app.presentation.stories.StoriesTray
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -55,6 +60,9 @@ data class PostData(
     val userProfilePictureBase64: String = "",
     val imageUrl: String = "",
     val imageBase64: String = "",
+    val videoUrl: String = "",
+    val thumbnailUrl: String = "",
+    val isVideo: Boolean = false,
     val caption: String,
     val likesCount: Int = 0,
     val commentsCount: Int = 0,
@@ -262,8 +270,8 @@ private fun loadPostsFromFirebase(
         .orderBy("timestamp")
         .limit(50)
         .get()
-        .addOnSuccessListener { documents ->
-            val posts = documents.map { doc ->
+        .addOnSuccessListener { postDocs ->
+            val posts = postDocs.map { doc ->
                 PostData(
                     id = doc.id,
                     userId = doc.getString("userId") ?: "",
@@ -279,7 +287,53 @@ private fun loadPostsFromFirebase(
                     isLiked = false
                 )
             }
-            onSuccess(posts.sortedByDescending { it.timestamp })
+
+            val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+            val loadReels = {
+                db.collection("reels")
+                    .orderBy("timestamp")
+                    .limit(50)
+                    .get()
+                    .addOnSuccessListener { reelDocs ->
+                        val reels = reelDocs.mapNotNull { doc ->
+                            val videoUrl = doc.getString("videoUrl").orEmpty()
+                            if (videoUrl.isBlank()) return@mapNotNull null
+                            PostData(
+                                id = "reel_${doc.id}",
+                                userId = doc.getString("userId") ?: "",
+                                username = doc.getString("username") ?: "usuario",
+                                userProfilePicture = doc.getString("userAvatar") ?: "",
+                                videoUrl = videoUrl,
+                                thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+                                imageUrl = doc.getString("thumbnailUrl").orEmpty(),
+                                isVideo = true,
+                                caption = doc.getString("caption").orEmpty(),
+                                likesCount = doc.getLong("likes")?.toInt() ?: 0,
+                                commentsCount = doc.getLong("comments")?.toInt() ?: 0,
+                                timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
+                                isLiked = false
+                            )
+                        }
+                        onSuccess((posts + reels).sortedByDescending { it.timestamp })
+                    }
+                    .addOnFailureListener {
+                        onSuccess(posts.sortedByDescending { it.timestamp })
+                    }
+            }
+
+            if (currentUid.isBlank()) {
+                loadReels()
+            } else {
+                db.collection("users").document(currentUid).get()
+                    .addOnSuccessListener { userDoc ->
+                        if (userDoc.getBoolean("showReelsInFeed") == false) {
+                            onSuccess(posts.sortedByDescending { it.timestamp })
+                        } else {
+                            loadReels()
+                        }
+                    }
+                    .addOnFailureListener { loadReels() }
+            }
         }
         .addOnFailureListener {
             onFallback()
@@ -288,10 +342,16 @@ private fun loadPostsFromFirebase(
 
 private fun updateLikeInFirebase(postId: String, isLiked: Boolean) {
     val db = FirebaseFirestore.getInstance()
-    val postRef = db.collection("posts").document(postId)
-
     val increment = if (isLiked) 1L else -1L
-    postRef.update("likesCount", FieldValue.increment(increment))
+    if (postId.startsWith("reel_")) {
+        db.collection("reels")
+            .document(postId.removePrefix("reel_"))
+            .update("likes", FieldValue.increment(increment), "updatedAt", System.currentTimeMillis())
+    } else {
+        db.collection("posts")
+            .document(postId)
+            .update("likesCount", FieldValue.increment(increment))
+    }
 }
 
 private suspend fun deletePostFromFirebase(post: PostData): Boolean {
@@ -602,11 +662,15 @@ fun PostItem(
                 }
             )
         ) {
-            PostImage(
-                imageBase64 = post.imageBase64,
-                imageUrl = post.imageUrl,
-                username = post.username
-            )
+            if (post.isVideo && post.videoUrl.isNotBlank()) {
+                FeedVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
+            } else {
+                PostImage(
+                    imageBase64 = post.imageBase64,
+                    imageUrl = post.imageUrl,
+                    username = post.username
+                )
+            }
         }
 
         Row(
@@ -644,6 +708,57 @@ fun PostItem(
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+
+@Composable
+private fun FeedVideoPlayer(videoUrl: String, thumbnailUrl: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val player = remember(videoUrl) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(videoUrl))
+            repeatMode = ExoPlayer.REPEAT_MODE_ALL
+            volume = 0f
+            prepare()
+            playWhenReady = true
+        }
+    }
+    DisposableEffect(player) { onDispose { player.release() } }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(520.dp)
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (thumbnailUrl.isNotBlank()) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = true
+                    this.player = player
+                }
+            },
+            update = { it.player = player },
+            modifier = Modifier.fillMaxSize()
+        )
+        AssistChip(
+            onClick = {},
+            label = { Text("Reel") },
+            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+        )
     }
 }
 

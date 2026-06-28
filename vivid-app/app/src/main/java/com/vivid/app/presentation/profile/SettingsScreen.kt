@@ -51,7 +51,11 @@ fun SettingsScreen(
     val screenOpenedAt = remember { System.currentTimeMillis() }
 
     var isPrivateAccount by remember { mutableStateOf(false) }
+    var autoplayReels by remember { mutableStateOf(true) }
+    var showReelsInFeed by remember { mutableStateOf(true) }
+    var dataSaverMode by remember { mutableStateOf(false) }
     var postsCount by remember { mutableIntStateOf(0) }
+    var reelsCount by remember { mutableIntStateOf(0) }
     var followersCount by remember { mutableIntStateOf(0) }
     var followingCount by remember { mutableIntStateOf(0) }
     var closeFriendsCount by remember { mutableIntStateOf(0) }
@@ -70,6 +74,10 @@ fun SettingsScreen(
             }.onSuccess { snapshot ->
                 isPrivateAccount = snapshot.getBoolean("isPrivate") ?: false
                 postsCount = snapshot.getLong("postsCount")?.toInt() ?: 0
+                reelsCount = snapshot.getLong("reelsCount")?.toInt() ?: 0
+                autoplayReels = snapshot.getBoolean("autoplayReels") ?: true
+                showReelsInFeed = snapshot.getBoolean("showReelsInFeed") ?: true
+                dataSaverMode = snapshot.getBoolean("dataSaverMode") ?: false
                 followersCount = snapshot.getLong("followersCount")?.toInt() ?: 0
                 followingCount = snapshot.getLong("followingCount")?.toInt() ?: 0
                 closeFriendsCount = (snapshot.get("closeFriends") as? List<*>)?.size ?: 0
@@ -84,6 +92,12 @@ fun SettingsScreen(
         isPrivateAccount = enabled
         user?.uid?.let { uid ->
             firestore.collection("users").document(uid).update("isPrivate", enabled)
+        }
+    }
+
+    fun updateUserSetting(field: String, value: Boolean) {
+        user?.uid?.let { uid ->
+            firestore.collection("users").document(uid).update(field, value)
         }
     }
 
@@ -159,6 +173,46 @@ fun SettingsScreen(
                 )
             }
 
+            item {
+                SettingsListItem(
+                    title = "Verificar correo",
+                    subtitle = if (user?.isEmailVerified == true) "Correo verificado" else "Enviar correo de verificación",
+                    icon = Icons.Outlined.MarkEmailRead,
+                    onClick = {
+                        scope.launch {
+                            if (user == null) {
+                                snackbarHostState.showSnackbar("No hay sesión activa")
+                            } else if (user.isEmailVerified) {
+                                snackbarHostState.showSnackbar("Tu correo ya está verificado")
+                            } else {
+                                runCatching { user.sendEmailVerification().await() }
+                                    .onSuccess { snackbarHostState.showSnackbar("Correo de verificación enviado") }
+                                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "No se pudo enviar el correo") }
+                            }
+                        }
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Cambiar contraseña",
+                    subtitle = "Enviar enlace de restablecimiento al correo",
+                    icon = Icons.Outlined.Password,
+                    onClick = {
+                        scope.launch {
+                            val email = user?.email.orEmpty()
+                            if (email.isBlank()) {
+                                snackbarHostState.showSnackbar("Tu cuenta no tiene correo")
+                            } else {
+                                runCatching { auth.sendPasswordResetEmail(email).await() }
+                                    .onSuccess { snackbarHostState.showSnackbar("Enlace enviado a $email") }
+                                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "No se pudo enviar el enlace") }
+                            }
+                        }
+                    }
+                )
+            }
+
             item { SettingsSectionHeader("Cómo usas Vivid") }
             item {
                 SettingsListItem(
@@ -200,6 +254,58 @@ fun SettingsScreen(
                 )
             }
 
+            item {
+                SettingsListItem(
+                    title = "Autoplay en Reels",
+                    subtitle = if (autoplayReels) "Los reels se reproducen automáticamente" else "Reproducción manual",
+                    icon = Icons.Outlined.PlayCircle,
+                    trailingContent = {
+                        Switch(checked = autoplayReels, onCheckedChange = { checked ->
+                            autoplayReels = checked
+                            updateUserSetting("autoplayReels", checked)
+                        })
+                    },
+                    onClick = {
+                        autoplayReels = !autoplayReels
+                        updateUserSetting("autoplayReels", autoplayReels)
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Mostrar reels en feed",
+                    subtitle = if (showReelsInFeed) "Tus videos también aparecen en Inicio" else "Solo en pestaña Reels y perfil",
+                    icon = Icons.Outlined.DynamicFeed,
+                    trailingContent = {
+                        Switch(checked = showReelsInFeed, onCheckedChange = { checked ->
+                            showReelsInFeed = checked
+                            updateUserSetting("showReelsInFeed", checked)
+                        })
+                    },
+                    onClick = {
+                        showReelsInFeed = !showReelsInFeed
+                        updateUserSetting("showReelsInFeed", showReelsInFeed)
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Ahorro de datos",
+                    subtitle = if (dataSaverMode) "Modo ahorro activado" else "Calidad normal",
+                    icon = Icons.Outlined.DataSaverOn,
+                    trailingContent = {
+                        Switch(checked = dataSaverMode, onCheckedChange = { checked ->
+                            dataSaverMode = checked
+                            updateUserSetting("dataSaverMode", checked)
+                        })
+                    },
+                    onClick = {
+                        dataSaverMode = !dataSaverMode
+                        updateUserSetting("dataSaverMode", dataSaverMode)
+                    }
+                )
+            }
+
             item { SettingsSectionHeader("Quién puede ver tu contenido") }
             item {
                 SettingsListItem(
@@ -215,6 +321,62 @@ fun SettingsScreen(
                     subtitle = if (blockedUsersCount == 0) "No tienes cuentas bloqueadas" else "$blockedUsersCount cuentas bloqueadas",
                     icon = Icons.Outlined.Block,
                     onClick = onOpenBlockedUsers
+                )
+            }
+
+            item { SettingsSectionHeader("Almacenamiento y datos") }
+            item {
+                SettingsListItem(
+                    title = "Resumen de contenido",
+                    subtitle = "$postsCount fotos · $reelsCount reels · $followersCount seguidores",
+                    icon = Icons.Outlined.Analytics,
+                    onClick = {
+                        infoDialog = SettingsInfoDialog(
+                            title = "Resumen de contenido",
+                            message = buildString {
+                                appendLine("Fotos publicadas: $postsCount")
+                                appendLine("Reels publicados: $reelsCount")
+                                appendLine("Seguidores: $followersCount")
+                                appendLine("Siguiendo: $followingCount")
+                                appendLine("Mejores amigos: $closeFriendsCount")
+                                appendLine("Bloqueados: $blockedUsersCount")
+                            }
+                        )
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Limpiar caché local",
+                    subtitle = "Borra archivos temporales de edición y preview",
+                    icon = Icons.Outlined.CleaningServices,
+                    onClick = {
+                        scope.launch {
+                            val deleted = runCatching { context.cacheDir.deleteRecursively() }.getOrDefault(false)
+                            snackbarHostState.showSnackbar(if (deleted) "Caché limpiada" else "No se pudo limpiar toda la caché")
+                        }
+                    }
+                )
+            }
+            item {
+                SettingsListItem(
+                    title = "Exportar resumen de cuenta",
+                    subtitle = "Copia tus datos básicos al portapapeles",
+                    icon = Icons.Outlined.Download,
+                    onClick = {
+                        val summary = buildString {
+                            appendLine("Vivid - Resumen de cuenta")
+                            appendLine("Nombre: $displayName")
+                            appendLine("Usuario: @$username")
+                            appendLine("Correo: ${user?.email ?: "No disponible"}")
+                            appendLine("Fotos: $postsCount")
+                            appendLine("Reels: $reelsCount")
+                            appendLine("Seguidores: $followersCount")
+                            appendLine("Siguiendo: $followingCount")
+                        }
+                        clipboardManager.setText(AnnotatedString(summary))
+                        scope.launch { snackbarHostState.showSnackbar("Resumen copiado") }
+                    }
                 )
             }
 
@@ -237,6 +399,7 @@ fun SettingsScreen(
                             message = buildString {
                                 appendLine("Perfil: ${if (isPrivateAccount) "Privado" else "Público"}")
                                 appendLine("Publicaciones: $postsCount")
+                                appendLine("Reels: $reelsCount")
                                 appendLine("Seguidores: $followersCount")
                                 appendLine("Siguiendo: $followingCount")
                                 appendLine("Correo verificado: ${if (user?.isEmailVerified == true) "Sí" else "No"}")
