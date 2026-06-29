@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -65,6 +67,7 @@ data class ProfilePost(
     val username: String = ""
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     userId: String,
@@ -185,7 +188,12 @@ fun ProfileScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(if (isOwnProfile) "Mi Perfil" else "@${profile.username}") },
+                title = { 
+                    Text(
+                        if (isOwnProfile) "Mi Perfil" else "@${profile.username}",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                    ) 
+                },
                 navigationIcon = {
                     if (!isOwnProfile) {
                         IconButton(onClick = onLogout) {
@@ -196,13 +204,13 @@ fun ProfileScreen(
                 actions = {
                     if (isOwnProfile) {
                         IconButton(onClick = onSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+                            Icon(Icons.Default.Settings, contentDescription = "Ajustes", tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = {
                             auth.signOut()
                             onLogout()
                         }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión")
+                            Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión", tint = MaterialTheme.colorScheme.error)
                         }
                     } else {
                         Box {
@@ -211,10 +219,11 @@ fun ProfileScreen(
                             }
                             DropdownMenu(
                                 expanded = showProfileMenu,
-                                onDismissRequest = { showProfileMenu = false }
+                                onDismissRequest = { showProfileMenu = false },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text(if (relationshipState.isBlocked) "Desbloquear" else "Bloquear") },
+                                    text = { Text(if (relationshipState.isBlocked) "Desbloquear" else "Bloquear", style = MaterialTheme.typography.bodyLarge) },
                                     onClick = {
                                         showProfileMenu = false
                                         if (relationshipState.isBlocked) {
@@ -227,126 +236,160 @@ fun ProfileScreen(
                             }
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(
+            ElevatedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
+                shape = RoundedCornerShape(28.dp)
             ) {
-                ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = profile.displayName,
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                Text("@${profile.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(8.dp))
-                AssistChip(
-                    onClick = { },
-                    label = { Text(if (profile.isPrivate) "Cuenta privada" else "Cuenta pública") }
-                )
-                if (profile.bio.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        shape = MaterialTheme.shapes.medium,
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = profile.displayName,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text("@${profile.username}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AssistChip(
+                        onClick = { },
+                        label = { Text(if (profile.isPrivate) "Cuenta privada" else "Cuenta pública", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                    if (profile.bio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = profile.bio,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = profile.bio,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    ProfileStat((profile.postsCount + profile.reelsCount).toString(), "Posts/Reels")
-                    ProfileStat(profile.followersCount.toString(), "Seguidores")
-                    ProfileStat(profile.followingCount.toString(), "Siguiendo")
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (isOwnProfile) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    ) {
-                        Button(onClick = onEditProfile, modifier = Modifier.weight(1f)) {
-                            Text("Editar perfil")
-                        }
-                        OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f)) {
-                            Text("Ajustes")
-                        }
-                    }
-                } else if (!relationshipState.isBlocked) {
-                    val followButtonText = when {
-                        relationshipState.isFollowing -> "Siguiendo"
-                        relationshipState.hasPendingRequest -> "Pendiente"
-                        profile.isPrivate -> "Solicitar"
-                        else -> "Seguir"
+                        ProfileStat((profile.postsCount + profile.reelsCount).toString(), "Posts/Reels")
+                        ProfileStat(profile.followersCount.toString(), "Seguidores")
+                        ProfileStat(profile.followingCount.toString(), "Siguiendo")
                     }
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    ) {
-                        Button(
-                            onClick = { viewModel.toggleFollow(userId) },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isFollowActionLoading,
-                            colors = if (relationshipState.isFollowing || relationshipState.hasPendingRequest) {
-                                ButtonDefaults.filledTonalButtonColors()
-                            } else {
-                                ButtonDefaults.buttonColors()
-                            }
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    if (isOwnProfile) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            if (isFollowActionLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            } else {
-                                Text(followButtonText)
+                            Button(
+                                onClick = onEditProfile, 
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Editar perfil", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                            }
+                            OutlinedButton(
+                                onClick = onSettings, 
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Text("Ajustes", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
                             }
                         }
+                    } else if (!relationshipState.isBlocked) {
+                        val followButtonText = when {
+                            relationshipState.isFollowing -> "Siguiendo"
+                            relationshipState.hasPendingRequest -> "Pendiente"
+                            profile.isPrivate -> "Solicitar"
+                            else -> "Seguir"
+                        }
 
-                        if (!profile.isPrivate || relationshipState.isFollowing) {
-                            OutlinedButton(
-                                onClick = {
-                                    val chatId = ChatRepository.buildChatId(currentUserId, userId)
-                                    onNavigateToChat(chatId, userId, profile.displayName)
-                                },
-                                modifier = Modifier.weight(1f)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = { viewModel.toggleFollow(userId) },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isFollowActionLoading,
+                                shape = RoundedCornerShape(20.dp),
+                                colors = if (relationshipState.isFollowing || relationshipState.hasPendingRequest) {
+                                    ButtonDefaults.filledTonalButtonColors()
+                                } else {
+                                    ButtonDefaults.buttonColors()
+                                }
                             ) {
-                                Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Mensaje")
+                                if (isFollowActionLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Text(followButtonText, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                                }
+                            }
+
+                            if (!profile.isPrivate || relationshipState.isFollowing) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val chatId = ChatRepository.buildChatId(currentUserId, userId)
+                                        onNavigateToChat(chatId, userId, profile.displayName)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Mensaje", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                                }
                             }
                         }
                     }
                 }
             }
 
-            HorizontalDivider()
+            Spacer(modifier = Modifier.height(4.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), modifier = Modifier.padding(horizontal = 16.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             if (relationshipState.isBlocked) {
                 BlockedAccountOverlay()
@@ -366,19 +409,18 @@ fun ProfileScreen(
 @Composable
 private fun PrivateAccountOverlay(hasPendingRequest: Boolean) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
-        Text("Esta cuenta es privada", style = MaterialTheme.typography.titleMedium)
+        Text("Esta cuenta es privada", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+        Spacer(Modifier.height(8.dp))
         Text(
-            if (hasPendingRequest) {
-                "Tu solicitud está pendiente de aprobación."
-            } else {
-                "Envía una solicitud para ver sus fotos y videos."
-            },
+            if (hasPendingRequest) "Tu solicitud de seguimiento está pendiente de aprobación." else "Sigue a esta cuenta para ver sus fotos y videos.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -389,13 +431,16 @@ private fun PrivateAccountOverlay(hasPendingRequest: Boolean) {
 @Composable
 private fun BlockedAccountOverlay() {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(16.dp))
-        Text("Has bloqueado esta cuenta", style = MaterialTheme.typography.titleMedium)
+        Text("Has bloqueado esta cuenta", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+        Spacer(Modifier.height(8.dp))
         Text(
             "Desbloquéala desde el menú de opciones para volver a ver su contenido.",
             style = MaterialTheme.typography.bodyMedium,
@@ -411,26 +456,31 @@ private fun ProfilePostsGrid(
     onPostClick: (ProfilePost) -> Unit
 ) {
     Text(
-        "Publicaciones y reels",
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(16.dp)
+        "Publicaciones y Reels",
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
     )
 
     if (posts.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 "Aún no hay publicaciones.",
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(4.dp),
-            modifier = Modifier.fillMaxSize()
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(posts, key = { it.id }) { post ->
                 ProfilePostThumbnail(post = post, onClick = { onPostClick(post) })
@@ -486,7 +536,7 @@ private fun fallbackAvatar(displayName: String) {
     ) {
         Text(
             displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
-            style = MaterialTheme.typography.displayMedium,
+            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
@@ -510,7 +560,7 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .padding(2.dp)
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
@@ -532,14 +582,14 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
         }
         if (post.isVideo) {
             Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
                 shape = CircleShape,
                 modifier = Modifier.align(Alignment.Center)
             ) {
                 Icon(
                     Icons.Default.PlayArrow,
                     contentDescription = "Reel",
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(8.dp).size(28.dp)
                 )
             }
@@ -563,14 +613,14 @@ private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(post.username.ifBlank { "Publicación" }, style = MaterialTheme.typography.titleMedium)
+                        Text(post.username.ifBlank { "Publicación" }, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                         Text(
                             if (post.timestamp > 0) java.text.SimpleDateFormat("dd MMM yyyy · HH:mm", java.util.Locale.getDefault()).format(java.util.Date(post.timestamp)) else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                    TextButton(onClick = onDismiss) { Text("Cerrar", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)) }
                 }
                 Box(
                     modifier = Modifier
@@ -627,7 +677,7 @@ private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
                 if (post.caption.isNotBlank()) {
                     Text(
                         post.caption,
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(20.dp),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -639,7 +689,8 @@ private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
 @Composable
 fun ProfileStat(count: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(count, style = MaterialTheme.typography.titleLarge)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(count, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

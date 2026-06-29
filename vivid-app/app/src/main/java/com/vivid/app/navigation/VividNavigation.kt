@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -67,17 +68,34 @@ fun VividNavigation(navController: NavHostController) {
         bottomBar = {
             if (currentRoute != Screen.Auth.route) {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                    tonalElevation = 4.dp,
+                    windowInsets = WindowInsets.navigationBars
                 ) {
                     val items = listOf(
                         Screen.Feed, Screen.Search, Screen.Create,
                         Screen.Reels, Screen.Profile
                     )
                     items.forEach { screen ->
+                        val isSelected = currentRoute == screen.route
                         NavigationBarItem(
-                            icon = { Icon(screen.icon ?: Icons.Default.Home, contentDescription = null) },
-                            label = { Text(screen.title) },
-                            selected = currentRoute == screen.route,
+                            icon = { Icon(screen.icon ?: Icons.Default.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
+                            label = { 
+                                Text(
+                                    text = screen.title, 
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                ) 
+                            },
+                            selected = isSelected,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
                             onClick = {
                                 if (currentRoute != screen.route) {
                                     navController.navigate(screen.route) {
@@ -91,7 +109,8 @@ fun VividNavigation(navController: NavHostController) {
                     }
                 }
             }
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         NavHost(
             navController = navController,
@@ -151,11 +170,6 @@ fun VividNavigation(navController: NavHostController) {
                         navController = navController,
                         inputUri = Uri.parse(trimInput),
                         onTrimConfirmed = { _, _ ->
-                            // Para simplificar, en esta versión el trim solo
-                            // previsualiza; el archivo recortado final lo
-                            // genera CreateReelViewModel al subir.
-                            // Si quieres pasarlo como nuevo Uri, agrega
-                            // savedStateHandle.set("trimmedVideo", path).
                             navController.popBackStack()
                         }
                     )

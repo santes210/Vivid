@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -80,6 +82,7 @@ data class PostComment(
     val avatarBase64: String = ""
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
     onOpenMessages: () -> Unit,
@@ -132,25 +135,41 @@ fun FeedScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Vivid", style = MaterialTheme.typography.headlineMedium) },
+                title = { 
+                    Text(
+                        "Vivid", 
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    ) 
+                },
                 actions = {
                     BadgedBox(
                         badge = {
                             if (followRequestsCount > 0) {
-                                Badge { Text(followRequestsCount.coerceAtMost(9).toString()) }
+                                Badge(containerColor = MaterialTheme.colorScheme.error) { 
+                                    Text(followRequestsCount.coerceAtMost(9).toString(), color = MaterialTheme.colorScheme.onError) 
+                                }
                             }
-                        }
+                        },
+                        modifier = Modifier.padding(end = 8.dp)
                     ) {
                         IconButton(onClick = onOpenRequests) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Solicitudes")
+                            Icon(Icons.Default.Notifications, contentDescription = "Solicitudes", tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                     IconButton(onClick = onOpenMessages) {
-                        Icon(Icons.Default.Email, contentDescription = "Mensajes")
+                        Icon(Icons.Default.Email, contentDescription = "Mensajes", tint = MaterialTheme.colorScheme.onSurface)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -159,24 +178,31 @@ fun FeedScreen(
         ) {
             StoriesTray(onStoryClick = { story -> onOpenStoryViewer(story.id) })
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else if (posts.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No hay publicaciones aún")
+                    Text(
+                        "No hay publicaciones aún",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
-                LazyColumn {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
                     itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
                         PostItem(
                             post = post,
@@ -234,29 +260,34 @@ fun FeedScreen(
     selectedPostForDelete?.let { post ->
         AlertDialog(
             onDismissRequest = { selectedPostForDelete = null },
-            title = { Text("Eliminar publicación") },
-            text = { Text("Esta acción borrará la publicación y sus comentarios.") },
+            title = { Text("Eliminar publicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
+            text = { Text("Esta acción borrará la publicación y sus comentarios de forma permanente.") },
             confirmButton = {
-                TextButton(onClick = {
-                    selectedPostForDelete = null
-                    scope.launch {
-                        val success = deletePostFromFirebase(post)
-                        if (success) {
-                            posts = posts.filterNot { it.id == post.id }
-                            snackbarHostState.showSnackbar("Publicación eliminada")
-                        } else {
-                            snackbarHostState.showSnackbar("No se pudo eliminar la publicación")
+                Button(
+                    onClick = {
+                        selectedPostForDelete = null
+                        scope.launch {
+                            val success = deletePostFromFirebase(post)
+                            if (success) {
+                                posts = posts.filterNot { it.id == post.id }
+                                snackbarHostState.showSnackbar("Publicación eliminada")
+                            } else {
+                                snackbarHostState.showSnackbar("No se pudo eliminar la publicación")
+                            }
                         }
-                    }
-                }) {
-                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.onError)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { selectedPostForDelete = null }) {
-                    Text("Cancelar")
+                    Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 6.dp
         )
     }
 }
@@ -411,16 +442,17 @@ private fun PostDetailsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Detalles de la publicación") },
+        title = { Text("Detalles de la publicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Autor: @${post.username}")
-                Text("Fecha: ${formatPostDate(post.timestamp)}")
-                Text("Likes: ${post.likesCount}")
-                Text("Comentarios: ${post.commentsCount}")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Autor: @${post.username}", style = MaterialTheme.typography.titleMedium)
+                Text("Fecha: ${formatPostDate(post.timestamp)}", style = MaterialTheme.typography.bodyMedium)
+                Text("Likes: ${post.likesCount}", style = MaterialTheme.typography.bodyMedium)
+                Text("Comentarios: ${post.commentsCount}", style = MaterialTheme.typography.bodyMedium)
                 if (post.caption.isNotBlank()) {
-                    Text("Descripción:")
-                    Text(post.caption, style = MaterialTheme.typography.bodyMedium)
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Text("Descripción:", style = MaterialTheme.typography.titleSmall.copy(color = MaterialTheme.colorScheme.primary))
+                    Text(post.caption, style = MaterialTheme.typography.bodyLarge)
                 }
             }
         },
@@ -428,7 +460,9 @@ private fun PostDetailsDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cerrar")
             }
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 6.dp
     )
 }
 
@@ -537,7 +571,7 @@ private fun EditPostDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Editar publicación") },
+        title = { Text("Editar publicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -545,7 +579,8 @@ private fun EditPostDialog(
                     onValueChange = { caption = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Descripción") },
-                    maxLines = 5
+                    maxLines = 5,
+                    shape = RoundedCornerShape(16.dp)
                 )
                 if (!errorMessage.isNullOrBlank()) {
                     Text(errorMessage.orEmpty(), color = MaterialTheme.colorScheme.error)
@@ -553,7 +588,7 @@ private fun EditPostDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 enabled = !isSaving,
                 onClick = {
                     scope.launch {
@@ -575,7 +610,9 @@ private fun EditPostDialog(
             TextButton(enabled = !isSaving, onClick = onDismiss) {
                 Text("Cancelar")
             }
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 6.dp
     )
 }
 
@@ -595,122 +632,139 @@ fun PostItem(
     var commentCount by remember { mutableStateOf(post.commentsCount) }
     var showMenu by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            PostAuthorAvatar(post = post)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(post.username, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    formatPostDate(post.timestamp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(28.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PostAuthorAvatar(post = post)
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(post.username, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Text(
+                        formatPostDate(post.timestamp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Ver detalles") },
-                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            onOpenDetails()
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Ver detalles", style = MaterialTheme.typography.bodyLarge) },
+                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            onClick = {
+                                showMenu = false
+                                onOpenDetails()
+                            }
+                        )
+                        if (post.userId == currentUserId) {
+                            DropdownMenuItem(
+                                text = { Text("Editar publicación", style = MaterialTheme.typography.bodyLarge) },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showMenu = false
+                                    onEditPost()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Eliminar publicación", style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.error)) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showMenu = false
+                                    onDeletePost()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .combinedClickable(
+                        onClick = { onOpenPost() },
+                        onDoubleClick = {
+                            if (!isLiked) {
+                                isLiked = true
+                                likeCount += 1
+                                updateLikeInFirebase(post.id, true)
+                            }
                         }
                     )
-                    if (post.userId == currentUserId) {
-                        DropdownMenuItem(
-                            text = { Text("Editar publicación") },
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                onEditPost()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Eliminar publicación") },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                onDeletePost()
-                            }
-                        )
-                    }
+            ) {
+                if (post.isVideo && post.videoUrl.isNotBlank()) {
+                    FeedVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
+                } else {
+                    PostImage(
+                        imageBase64 = post.imageBase64,
+                        imageUrl = post.imageUrl,
+                        username = post.username
+                    )
                 }
             }
-        }
 
-        Box(
-            modifier = Modifier.combinedClickable(
-                onClick = { onOpenPost() },
-                onDoubleClick = {
-                    if (!isLiked) {
-                        isLiked = true
-                        likeCount += 1
-                        updateLikeInFirebase(post.id, true)
-                    }
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    isLiked = !isLiked
+                    likeCount += if (isLiked) 1 else -1
+                    updateLikeInFirebase(post.id, isLiked)
+                }) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = "Like",
+                        tint = if (isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
-            )
-        ) {
-            if (post.isVideo && post.videoUrl.isNotBlank()) {
-                FeedVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
-            } else {
-                PostImage(
-                    imageBase64 = post.imageBase64,
-                    imageUrl = post.imageUrl,
-                    username = post.username
+                Text("$likeCount", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                Spacer(modifier = Modifier.width(24.dp))
+                IconButton(onClick = {
+                    commentCount = maxOf(commentCount, post.commentsCount)
+                    onOpenComments()
+                }) {
+                    Icon(Icons.Default.Email, contentDescription = "Comentarios", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(26.dp))
+                }
+                Text("$commentCount", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+            }
+
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                if (post.caption.isNotBlank()) {
+                    Text(text = post.caption, style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Text(
+                    text = if (commentCount > 0) "Ver los $commentCount comentarios" else "Sé la primera persona en comentar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onOpenComments() }
                 )
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
-
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
-                isLiked = !isLiked
-                likeCount += if (isLiked) 1 else -1
-                updateLikeInFirebase(post.id, isLiked)
-            }) {
-                Icon(
-                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = "Like",
-                    tint = if (isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Text("$likeCount", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.width(16.dp))
-            IconButton(onClick = {
-                commentCount = maxOf(commentCount, post.commentsCount)
-                onOpenComments()
-            }) {
-                Icon(Icons.Default.Email, contentDescription = "Comentarios")
-            }
-            Text("$commentCount", style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            Text(text = post.caption, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = if (commentCount > 0) "Ver $commentCount comentarios" else "Sé la primera persona en comentar",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
-
 
 @Composable
 private fun FeedVideoPlayer(videoUrl: String, thumbnailUrl: String) {
@@ -753,11 +807,16 @@ private fun FeedVideoPlayer(videoUrl: String, thumbnailUrl: String) {
         )
         AssistChip(
             onClick = {},
-            label = { Text("Reel") },
+            label = { Text("Reel", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
             leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) },
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(12.dp)
+                .padding(16.dp),
+            colors = AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
         )
     }
 }
@@ -809,21 +868,24 @@ private fun PostCommentsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
         ) {
-            Text("Comentarios", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text("Comentarios", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = if (post.caption.isBlank()) "Publicación de @${post.username}" else post.caption,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             Spacer(modifier = Modifier.height(12.dp))
 
             when {
@@ -842,7 +904,8 @@ private fun PostCommentsSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "Todavía no hay comentarios.",
+                            "Todavía no hay comentarios. ¡Sé el primero!",
+                            style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -850,7 +913,7 @@ private fun PostCommentsSheet(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 360.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(comments, key = { it.id }) { comment ->
                             CommentRow(comment = comment)
@@ -859,7 +922,7 @@ private fun PostCommentsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -870,9 +933,10 @@ private fun PostCommentsSheet(
                     onValueChange = { commentText = it },
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Escribe un comentario...") },
-                    maxLines = 3
+                    maxLines = 3,
+                    shape = RoundedCornerShape(24.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Button(
                     enabled = commentText.isNotBlank() && !isSending && currentUser != null,
                     onClick = {
@@ -923,12 +987,13 @@ private fun PostCommentsSheet(
                                 isSending = false
                             }
                         }
-                    }
+                    },
+                    shape = RoundedCornerShape(24.dp)
                 ) {
-                    Text(if (isSending) "..." else "Enviar")
+                    Text(if (isSending) "..." else "Enviar", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -950,7 +1015,7 @@ private fun PostAuthorAvatar(post: PostData) {
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = "Avatar",
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(44.dp)
                     .clip(CircleShape),
                 contentScale = ContentScale.Crop
             )
@@ -963,21 +1028,21 @@ private fun PostAuthorAvatar(post: PostData) {
             model = post.userProfilePicture,
             contentDescription = "Avatar",
             modifier = Modifier
-                .size(36.dp)
+                .size(44.dp)
                 .clip(CircleShape),
             contentScale = ContentScale.Crop
         )
     } else {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onPrimary
             )
         }
@@ -991,9 +1056,10 @@ private fun CommentRow(comment: PostComment) {
         verticalAlignment = Alignment.Top
     ) {
         CommentAvatar(comment = comment)
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(comment.username, style = MaterialTheme.typography.titleSmall)
+            Text(comment.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(comment.text, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -1016,7 +1082,7 @@ private fun CommentAvatar(comment: PostComment) {
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = comment.username,
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(40.dp)
                     .clip(CircleShape),
                 contentScale = ContentScale.Crop
             )
@@ -1029,14 +1095,14 @@ private fun CommentAvatar(comment: PostComment) {
             model = comment.avatarUrl,
             contentDescription = comment.username,
             modifier = Modifier
-                .size(36.dp)
+                .size(40.dp)
                 .clip(CircleShape),
             contentScale = ContentScale.Crop
         )
     } else {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
@@ -1044,7 +1110,7 @@ private fun CommentAvatar(comment: PostComment) {
             Text(
                 comment.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                style = MaterialTheme.typography.labelLarge
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
         }
     }
@@ -1134,7 +1200,7 @@ fun PostImage(
     ) {
         when {
             isLoading -> {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.primary)
             }
             hasError -> {
                 Box(
