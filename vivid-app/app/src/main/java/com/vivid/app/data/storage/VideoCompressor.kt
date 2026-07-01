@@ -66,10 +66,18 @@ object VideoCompressor {
             Log.d(TAG, "Comprimiendo ${inputUri.lastPathSegment ?: "video"}")
             onProgress(15)
 
+            val isHd = com.vivid.app.util.SettingsManager.hdUploadsEnabled
+            val isDataSaver = com.vivid.app.util.SettingsManager.dataSaverMode
+            val targetBitrate = when {
+                isDataSaver -> 800_000L      // 0.8 Mbps
+                isHd -> 3_500_000L           // 3.5 Mbps (Alta Definición HD)
+                else -> 1_500_000L           // 1.5 Mbps (Estándar)
+            }
+
             val videoStrategy = DefaultVideoStrategy.Builder()
-                .bitRate(VIDEO_BITRATE.toLong())
+                .bitRate(targetBitrate)
                 .frameRate(30)
-                // Intento de forzar resolución 720p. Si el codec no puede,
+                // Intento de forzar resolución. Si el codec no puede,
                 // Transcoder hace fallback automático.
                 .build()
 

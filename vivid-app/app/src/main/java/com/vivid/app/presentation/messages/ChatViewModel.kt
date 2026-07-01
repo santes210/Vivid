@@ -115,4 +115,21 @@ class ChatViewModel @Inject constructor(
             _messages.value = _messages.value.filterNot { it.id == messageId }
         }
     }
+
+    fun reactToMessage(chatId: String, messageId: String, reaction: String) {
+        viewModelScope.launch {
+            // Actualizar localmente para feedback instantáneo
+            _messages.value = _messages.value.map { msg ->
+                if (msg.id == messageId) msg.copy(reaction = reaction) else msg
+            }
+            // Guardar en Firestore
+            try {
+                firestore.collection("chats")
+                    .document(chatId)
+                    .collection("messages")
+                    .document(messageId)
+                    .update("reaction", reaction)
+            } catch (_: Exception) {}
+        }
+    }
 }

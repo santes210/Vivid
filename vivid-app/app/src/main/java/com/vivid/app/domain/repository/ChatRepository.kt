@@ -182,7 +182,8 @@ class ChatRepository @Inject constructor(
                         text = change.document.getString("text").orEmpty(),
                         senderId = change.document.getString("senderId").orEmpty(),
                         timestamp = timestamp,
-                        isRead = change.document.getBoolean("isRead") ?: false
+                        isRead = change.document.getBoolean("isRead") ?: false,
+                        reaction = change.document.getString("reaction").orEmpty()
                     )
 
                     when (change.type) {

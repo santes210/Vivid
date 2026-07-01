@@ -47,15 +47,7 @@ fun ReelsScreen(
 ) {
     val reels by viewModel.reels.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    var autoplayReels by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-        if (uid.isNotBlank()) {
-            FirebaseFirestore.getInstance().collection("users").document(uid).get()
-                .addOnSuccessListener { autoplayReels = it.getBoolean("autoplayReels") ?: true }
-        }
-    }
+    val autoplayReels = com.vivid.app.util.SettingsManager.autoplayReels
 
     val listState = rememberLazyListState()
     var currentPlayingIndex by remember { mutableStateOf(0) }
@@ -310,7 +302,7 @@ fun ReelItem(reel: Reel, isPlaying: Boolean, onLike: (Boolean) -> Unit) {
                     modifier = Modifier.size(36.dp)
                 )
             }
-            Text("$likeCount", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(if (com.vivid.app.util.SettingsManager.hideLikesCount) "—" else "$likeCount", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
 
             Spacer(modifier = Modifier.height(20.dp))
 

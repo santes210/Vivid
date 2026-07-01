@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -28,11 +26,11 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
+import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 private const val APP_VERSION_NAME = "2.1.0 - Material You 3 Design"
-private const val APP_BUILD_NUMBER = 210
 
 data class SettingsInfoDialog(
     val title: String,
@@ -53,13 +51,9 @@ fun SettingsScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val screenOpenedAt = remember { System.currentTimeMillis() }
 
-    // Estados de configuración de Firebase / Cuenta
+    // Remote stats and private state
     var isPrivateAccount by remember { mutableStateOf(false) }
-    var autoplayReels by remember { mutableStateOf(true) }
-    var showReelsInFeed by remember { mutableStateOf(true) }
-    var dataSaverMode by remember { mutableStateOf(false) }
     var postsCount by remember { mutableIntStateOf(0) }
     var reelsCount by remember { mutableIntStateOf(0) }
     var followersCount by remember { mutableIntStateOf(0) }
@@ -69,22 +63,25 @@ fun SettingsScreen(
     var username by remember { mutableStateOf("vivid_user") }
     var displayName by remember { mutableStateOf("Usuario Vivid") }
 
-    // Nuevos estados agregados para Material You 3 Design y más ajustes
-    var activityStatusEnabled by remember { mutableStateOf(true) }
-    var twoFactorAuthEnabled by remember { mutableStateOf(false) }
-    var dynamicColorEnabled by remember { mutableStateOf(true) }
-    var smoothAnimationsEnabled by remember { mutableStateOf(true) }
-    var selectedThemeOption by remember { mutableStateOf("Sistema") }
-    var hdUploadsEnabled by remember { mutableStateOf(true) }
-    var offensiveWordsFilter by remember { mutableStateOf(true) }
-    var hideLikesCount by remember { mutableStateOf(false) }
-    var notifyLikesComments by remember { mutableStateOf(true) }
-    var notifyNewFollowers by remember { mutableStateOf(true) }
-    var notifyDirectMessages by remember { mutableStateOf(true) }
-    var notifyStoryReminders by remember { mutableStateOf(true) }
-    var creatorDashboardEnabled by remember { mutableStateOf(false) }
-    var downloadQualityOption by remember { mutableStateOf("Alta (HD)") }
-    var simulatedCacheSizeMB by remember { mutableStateOf(48.5f) }
+    // Bind other settings directly to reactive SettingsManager
+    val autoplayReels = SettingsManager.autoplayReels
+    val showReelsInFeed = SettingsManager.showReelsInFeed
+    val dataSaverMode = SettingsManager.dataSaverMode
+    val activityStatusEnabled = SettingsManager.activityStatusEnabled
+    val twoFactorAuthEnabled = SettingsManager.twoFactorAuthEnabled
+    val dynamicColorEnabled = SettingsManager.dynamicColorEnabled
+    val smoothAnimationsEnabled = SettingsManager.smoothAnimationsEnabled
+    val selectedThemeOption = SettingsManager.selectedThemeOption
+    val hdUploadsEnabled = SettingsManager.hdUploadsEnabled
+    val offensiveWordsFilter = SettingsManager.offensiveWordsFilter
+    val hideLikesCount = SettingsManager.hideLikesCount
+    val notifyLikesComments = SettingsManager.notifyLikesComments
+    val notifyNewFollowers = SettingsManager.notifyNewFollowers
+    val notifyDirectMessages = SettingsManager.notifyDirectMessages
+    val notifyStoryReminders = SettingsManager.notifyStoryReminders
+    val creatorDashboardEnabled = SettingsManager.creatorDashboardEnabled
+    val downloadQualityOption = SettingsManager.downloadQualityOption
+    val simulatedCacheSizeMB = SettingsManager.simulatedCacheSizeMB
 
     // Controladores de modales
     var showSignOutDialog by remember { mutableStateOf(false) }
@@ -101,20 +98,22 @@ fun SettingsScreen(
                 isPrivateAccount = snapshot.getBoolean("isPrivate") ?: false
                 postsCount = snapshot.getLong("postsCount")?.toInt() ?: 0
                 reelsCount = snapshot.getLong("reelsCount")?.toInt() ?: 0
-                autoplayReels = snapshot.getBoolean("autoplayReels") ?: true
-                showReelsInFeed = snapshot.getBoolean("showReelsInFeed") ?: true
-                dataSaverMode = snapshot.getBoolean("dataSaverMode") ?: false
                 followersCount = snapshot.getLong("followersCount")?.toInt() ?: 0
                 followingCount = snapshot.getLong("followingCount")?.toInt() ?: 0
                 closeFriendsCount = (snapshot.get("closeFriends") as? List<*>)?.size ?: 0
                 blockedUsersCount = (snapshot.get("blockedUsers") as? List<*>)?.size ?: 0
                 username = snapshot.getString("username") ?: username
                 displayName = snapshot.getString("displayName") ?: displayName
-                activityStatusEnabled = snapshot.getBoolean("activityStatusEnabled") ?: true
-                hdUploadsEnabled = snapshot.getBoolean("hdUploadsEnabled") ?: true
-                offensiveWordsFilter = snapshot.getBoolean("offensiveWordsFilter") ?: true
-                hideLikesCount = snapshot.getBoolean("hideLikesCount") ?: false
-                creatorDashboardEnabled = snapshot.getBoolean("creatorDashboardEnabled") ?: false
+
+                // Sincronizar configuraciones en la base de datos a SharedPreferences (local)
+                snapshot.getBoolean("autoplayReels")?.let { SettingsManager.setAutoplayReels(context, it) }
+                snapshot.getBoolean("showReelsInFeed")?.let { SettingsManager.setShowReelsInFeed(context, it) }
+                snapshot.getBoolean("dataSaverMode")?.let { SettingsManager.setDataSaver(context, it) }
+                snapshot.getBoolean("activityStatusEnabled")?.let { SettingsManager.setActivityStatus(context, it) }
+                snapshot.getBoolean("hdUploadsEnabled")?.let { SettingsManager.setHdUploads(context, it) }
+                snapshot.getBoolean("offensiveWordsFilter")?.let { SettingsManager.setOffensiveWords(context, it) }
+                snapshot.getBoolean("hideLikesCount")?.let { SettingsManager.setHideLikes(context, it) }
+                snapshot.getBoolean("creatorDashboardEnabled")?.let { SettingsManager.setCreatorDashboard(context, it) }
             }
         }
     }
@@ -248,14 +247,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = activityStatusEnabled,
                                 onCheckedChange = { checked ->
-                                    activityStatusEnabled = checked
+                                    SettingsManager.setActivityStatus(context, checked)
                                     updateUserSetting("activityStatusEnabled", checked)
                                 }
                             )
                         },
                         onClick = {
-                            activityStatusEnabled = !activityStatusEnabled
-                            updateUserSetting("activityStatusEnabled", activityStatusEnabled)
+                            val nextVal = !activityStatusEnabled
+                            SettingsManager.setActivityStatus(context, nextVal)
+                            updateUserSetting("activityStatusEnabled", nextVal)
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -267,14 +267,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = twoFactorAuthEnabled,
                                 onCheckedChange = { checked ->
-                                    twoFactorAuthEnabled = checked
+                                    SettingsManager.set2FA(context, checked)
                                     scope.launch { snackbarHostState.showSnackbar(if (checked) "2FA activada exitosamente" else "2FA desactivada") }
                                 }
                             )
                         },
                         onClick = {
-                            twoFactorAuthEnabled = !twoFactorAuthEnabled
-                            scope.launch { snackbarHostState.showSnackbar(if (twoFactorAuthEnabled) "2FA activada exitosamente" else "2FA desactivada") }
+                            val nextVal = !twoFactorAuthEnabled
+                            SettingsManager.set2FA(context, nextVal)
+                            scope.launch { snackbarHostState.showSnackbar(if (nextVal) "2FA activada exitosamente" else "2FA desactivada") }
                         }
                     )
                 }
@@ -298,14 +299,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = dynamicColorEnabled,
                                 onCheckedChange = { checked ->
-                                    dynamicColorEnabled = checked
+                                    SettingsManager.setDynamicColor(context, checked)
                                     scope.launch { snackbarHostState.showSnackbar(if (checked) "Material You activado" else "Paleta Vivid clásica activada") }
                                 }
                             )
                         },
                         onClick = {
-                            dynamicColorEnabled = !dynamicColorEnabled
-                            scope.launch { snackbarHostState.showSnackbar(if (dynamicColorEnabled) "Material You activado" else "Paleta Vivid clásica activada") }
+                            val nextVal = !dynamicColorEnabled
+                            SettingsManager.setDynamicColor(context, nextVal)
+                            scope.launch { snackbarHostState.showSnackbar(if (nextVal) "Material You activado" else "Paleta Vivid clásica activada") }
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -316,10 +318,10 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = smoothAnimationsEnabled,
-                                onCheckedChange = { checked -> smoothAnimationsEnabled = checked }
+                                onCheckedChange = { checked -> SettingsManager.setSmoothAnimations(context, checked) }
                             )
                         },
-                        onClick = { smoothAnimationsEnabled = !smoothAnimationsEnabled }
+                        onClick = { SettingsManager.setSmoothAnimations(context, !smoothAnimationsEnabled) }
                     )
                 }
             }
@@ -335,14 +337,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = autoplayReels,
                                 onCheckedChange = { checked ->
-                                    autoplayReels = checked
+                                    SettingsManager.setAutoplayReels(context, checked)
                                     updateUserSetting("autoplayReels", checked)
                                 }
                             )
                         },
                         onClick = {
-                            autoplayReels = !autoplayReels
-                            updateUserSetting("autoplayReels", autoplayReels)
+                            val nextVal = !autoplayReels
+                            SettingsManager.setAutoplayReels(context, nextVal)
+                            updateUserSetting("autoplayReels", nextVal)
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -354,14 +357,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = showReelsInFeed,
                                 onCheckedChange = { checked ->
-                                    showReelsInFeed = checked
+                                    SettingsManager.setShowReelsInFeed(context, checked)
                                     updateUserSetting("showReelsInFeed", checked)
                                 }
                             )
                         },
                         onClick = {
-                            showReelsInFeed = !showReelsInFeed
-                            updateUserSetting("showReelsInFeed", showReelsInFeed)
+                            val nextVal = !showReelsInFeed
+                            SettingsManager.setShowReelsInFeed(context, nextVal)
+                            updateUserSetting("showReelsInFeed", nextVal)
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -373,14 +377,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = hdUploadsEnabled,
                                 onCheckedChange = { checked ->
-                                    hdUploadsEnabled = checked
+                                    SettingsManager.setHdUploads(context, checked)
                                     updateUserSetting("hdUploadsEnabled", checked)
                                 }
                             )
                         },
                         onClick = {
-                            hdUploadsEnabled = !hdUploadsEnabled
-                            updateUserSetting("hdUploadsEnabled", hdUploadsEnabled)
+                            val nextVal = !hdUploadsEnabled
+                            SettingsManager.setHdUploads(context, nextVal)
+                            updateUserSetting("hdUploadsEnabled", nextVal)
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -392,14 +397,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = dataSaverMode,
                                 onCheckedChange = { checked ->
-                                    dataSaverMode = checked
+                                    SettingsManager.setDataSaver(context, checked)
                                     updateUserSetting("dataSaverMode", checked)
                                 }
                             )
                         },
                         onClick = {
-                            dataSaverMode = !dataSaverMode
-                            updateUserSetting("dataSaverMode", dataSaverMode)
+                            val nextVal = !dataSaverMode
+                            SettingsManager.setDataSaver(context, nextVal)
+                            updateUserSetting("dataSaverMode", nextVal)
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -411,14 +417,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = offensiveWordsFilter,
                                 onCheckedChange = { checked ->
-                                    offensiveWordsFilter = checked
+                                    SettingsManager.setOffensiveWords(context, checked)
                                     updateUserSetting("offensiveWordsFilter", checked)
                                 }
                             )
                         },
                         onClick = {
-                            offensiveWordsFilter = !offensiveWordsFilter
-                            updateUserSetting("offensiveWordsFilter", offensiveWordsFilter)
+                            val nextVal = !offensiveWordsFilter
+                            SettingsManager.setOffensiveWords(context, nextVal)
+                            updateUserSetting("offensiveWordsFilter", nextVal)
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -430,14 +437,15 @@ fun SettingsScreen(
                             Switch(
                                 checked = hideLikesCount,
                                 onCheckedChange = { checked ->
-                                    hideLikesCount = checked
+                                    SettingsManager.setHideLikes(context, checked)
                                     updateUserSetting("hideLikesCount", checked)
                                 }
                             )
                         },
                         onClick = {
-                            hideLikesCount = !hideLikesCount
-                            updateUserSetting("hideLikesCount", hideLikesCount)
+                            val nextVal = !hideLikesCount
+                            SettingsManager.setHideLikes(context, nextVal)
+                            updateUserSetting("hideLikesCount", nextVal)
                         }
                     )
                 }
@@ -470,10 +478,10 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyLikesComments,
-                                onCheckedChange = { checked -> notifyLikesComments = checked }
+                                onCheckedChange = { checked -> SettingsManager.setNotifyLikesComments(context, checked) }
                             )
                         },
-                        onClick = { notifyLikesComments = !notifyLikesComments }
+                        onClick = { SettingsManager.setNotifyLikesComments(context, !notifyLikesComments) }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
@@ -483,10 +491,10 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyNewFollowers,
-                                onCheckedChange = { checked -> notifyNewFollowers = checked }
+                                onCheckedChange = { checked -> SettingsManager.setNotifyFollowers(context, checked) }
                             )
                         },
-                        onClick = { notifyNewFollowers = !notifyNewFollowers }
+                        onClick = { SettingsManager.setNotifyFollowers(context, !notifyNewFollowers) }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
@@ -496,10 +504,10 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyDirectMessages,
-                                onCheckedChange = { checked -> notifyDirectMessages = checked }
+                                onCheckedChange = { checked -> SettingsManager.setNotifyDm(context, checked) }
                             )
                         },
-                        onClick = { notifyDirectMessages = !notifyDirectMessages }
+                        onClick = { SettingsManager.setNotifyDm(context, !notifyDirectMessages) }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
@@ -509,10 +517,10 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyStoryReminders,
-                                onCheckedChange = { checked -> notifyStoryReminders = checked }
+                                onCheckedChange = { checked -> SettingsManager.setNotifyStoryReminders(context, checked) }
                             )
                         },
-                        onClick = { notifyStoryReminders = !notifyStoryReminders }
+                        onClick = { SettingsManager.setNotifyStoryReminders(context, !notifyStoryReminders) }
                     )
                 }
             }
@@ -559,16 +567,17 @@ fun SettingsScreen(
                             Switch(
                                 checked = creatorDashboardEnabled,
                                 onCheckedChange = { checked ->
-                                    creatorDashboardEnabled = checked
+                                    SettingsManager.setCreatorDashboard(context, checked)
                                     updateUserSetting("creatorDashboardEnabled", checked)
                                     scope.launch { snackbarHostState.showSnackbar(if (checked) "Panel Profesional activado" else "Panel Profesional desactivado") }
                                 }
                             )
                         },
                         onClick = {
-                            creatorDashboardEnabled = !creatorDashboardEnabled
-                            updateUserSetting("creatorDashboardEnabled", creatorDashboardEnabled)
-                            scope.launch { snackbarHostState.showSnackbar(if (creatorDashboardEnabled) "Panel Profesional activado" else "Panel Profesional desactivado") }
+                            val nextVal = !creatorDashboardEnabled
+                            SettingsManager.setCreatorDashboard(context, nextVal)
+                            updateUserSetting("creatorDashboardEnabled", nextVal)
+                            scope.launch { snackbarHostState.showSnackbar(if (nextVal) "Panel Profesional activado" else "Panel Profesional desactivado") }
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -623,7 +632,7 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Cached,
                         onClick = {
                             if (simulatedCacheSizeMB > 0f) {
-                                simulatedCacheSizeMB = 0f
+                                SettingsManager.setCacheSize(context, 0f)
                                 scope.launch { snackbarHostState.showSnackbar("Caché limpiada exitosamente (0 MB).") }
                             } else {
                                 scope.launch { snackbarHostState.showSnackbar("La caché ya está limpia.") }
@@ -879,7 +888,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    selectedThemeOption = themeOption
+                                    SettingsManager.setThemeOption(context, themeOption)
                                     showThemeDialog = false
                                     scope.launch { snackbarHostState.showSnackbar("Tema cambiado a $themeOption") }
                                 }
@@ -889,7 +898,7 @@ fun SettingsScreen(
                             RadioButton(
                                 selected = selectedThemeOption == themeOption,
                                 onClick = {
-                                    selectedThemeOption = themeOption
+                                    SettingsManager.setThemeOption(context, themeOption)
                                     showThemeDialog = false
                                     scope.launch { snackbarHostState.showSnackbar("Tema cambiado a $themeOption") }
                                 }
@@ -919,7 +928,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    downloadQualityOption = qualityOption
+                                    SettingsManager.setDownloadQuality(context, qualityOption)
                                     showDownloadQualityDialog = false
                                     scope.launch { snackbarHostState.showSnackbar("Calidad de descarga configurada en $qualityOption") }
                                 }
@@ -929,7 +938,7 @@ fun SettingsScreen(
                             RadioButton(
                                 selected = downloadQualityOption == qualityOption,
                                 onClick = {
-                                    downloadQualityOption = qualityOption
+                                    SettingsManager.setDownloadQuality(context, qualityOption)
                                     showDownloadQualityDialog = false
                                     scope.launch { snackbarHostState.showSnackbar("Calidad de descarga configurada en $qualityOption") }
                                 }
@@ -969,6 +978,10 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        SettingsManager.unregisterToken() // or PushNotificationHelper
+                        // Wait, let's call PushNotificationHelper.unregisterToken() directly or import it.
+                        // Since PushNotificationHelper is in com.vivid.app.util, we can call com.vivid.app.util.PushNotificationHelper.unregisterToken()
+                        com.vivid.app.util.PushNotificationHelper.unregisterToken()
                         auth.signOut()
                         showSignOutDialog = false
                         onBack()

@@ -352,18 +352,10 @@ private fun loadPostsFromFirebase(
                     }
             }
 
-            if (currentUid.isBlank()) {
-                loadReels()
+            if (!com.vivid.app.util.SettingsManager.showReelsInFeed) {
+                onSuccess(posts.sortedByDescending { it.timestamp })
             } else {
-                db.collection("users").document(currentUid).get()
-                    .addOnSuccessListener { userDoc ->
-                        if (userDoc.getBoolean("showReelsInFeed") == false) {
-                            onSuccess(posts.sortedByDescending { it.timestamp })
-                        } else {
-                            loadReels()
-                        }
-                    }
-                    .addOnFailureListener { loadReels() }
+                loadReels()
             }
         }
         .addOnFailureListener {
@@ -447,7 +439,7 @@ private fun PostDetailsDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Autor: @${post.username}", style = MaterialTheme.typography.titleMedium)
                 Text("Fecha: ${formatPostDate(post.timestamp)}", style = MaterialTheme.typography.bodyMedium)
-                Text("Likes: ${post.likesCount}", style = MaterialTheme.typography.bodyMedium)
+                Text("Likes: ${if (com.vivid.app.util.SettingsManager.hideLikesCount) "Ocultos" else post.likesCount.toString()}", style = MaterialTheme.typography.bodyMedium)
                 Text("Comentarios: ${post.commentsCount}", style = MaterialTheme.typography.bodyMedium)
                 if (post.caption.isNotBlank()) {
                     Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -738,7 +730,7 @@ fun PostItem(
                         modifier = Modifier.size(28.dp)
                     )
                 }
-                Text("$likeCount", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                Text(if (com.vivid.app.util.SettingsManager.hideLikesCount) "—" else "$likeCount", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
                 Spacer(modifier = Modifier.width(24.dp))
                 IconButton(onClick = {
                     commentCount = maxOf(commentCount, post.commentsCount)
@@ -1060,7 +1052,7 @@ private fun CommentRow(comment: PostComment) {
         Column(modifier = Modifier.weight(1f)) {
             Text(comment.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
             Spacer(modifier = Modifier.height(2.dp))
-            Text(comment.text, style = MaterialTheme.typography.bodyMedium)
+            Text(com.vivid.app.util.SettingsManager.filterOffensiveWords(comment.text), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

@@ -377,8 +377,52 @@ exports.onFollow = functions.firestore
         },
         tag: `follow_${followerUid}`,
       });
-    } catch (e) {
+      } catch (e) {
       console.error("onFollow error:", e);
+    }
+    return null;
+  });
+
+/**
+ * Trigger: cuando se crea un mensaje en /chats/{chatId}/messages/{messageId}
+ *   -> envia push al otro participante del chat
+ */
+exports.onMessageCreated = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const chatId = context.params.chatId;
+    const message = snap.data();
+    if (!message) return null;
+
+    try {
+      // 1. Obtener el documento del chat padre
+      const chatDoc = await db.collection("chats").document(chatId).get();
+      const chatData = chatDoc.data();
+      if (!chatData) return null;
+
+      // 2. Encontrar al destinatario (el participante que NO es el emisor)
+      const participants = chatData.participants || [];
+      const senderId = message.senderId;
+      const receiverId = participants.find(p => p !== senderId);
+      if (!receiverId) return null;
+
+      // 3. Obtener el nombre del emisor
+      const senderDoc = await db.collection("users").document(senderId).get();
+      const senderName = senderDoc.data()?.username || "Alguien";
+
+      // 4. Enviar notificación push de alta prioridad al destinatario
+      await sendPushToUser(receiverId, {
+        title: senderName,
+        body: message.text?.substring(0, 150) || "Nuevo mensaje",
+        data: {
+          type: "message",
+          chatId,
+          fromUserId: senderId,
+        },
+        tag: `chat_msg_${chatId}`,
+      });
+    } catch (e) {
+      console.error("onMessageCreated error:", e);
     }
     return null;
   });

@@ -40,6 +40,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.domain.repository.ChatRepository
+import kotlinx.coroutines.launch
 
 data class ProfileUiState(
     val uid: String = "",
@@ -82,6 +83,7 @@ fun ProfileScreen(
     val isOwnProfile = userId == currentUserId
     val db = FirebaseFirestore.getInstance()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
@@ -207,6 +209,7 @@ fun ProfileScreen(
                             Icon(Icons.Default.Settings, contentDescription = "Ajustes", tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = {
+                            com.vivid.app.util.PushNotificationHelper.unregisterToken()
                             auth.signOut()
                             onLogout()
                         }) {
@@ -297,6 +300,45 @@ fun ProfileScreen(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
+                        }
+                    }
+
+                    if (isOwnProfile && com.vivid.app.util.SettingsManager.creatorDashboardEnabled) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Alcance de tus Reels este mes: 1,420 (+24%)")
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Panel para profesionales",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        "Ver métricas, alcance y analíticas avanzadas.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
                         }
                     }
 

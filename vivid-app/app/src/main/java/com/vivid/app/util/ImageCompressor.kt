@@ -9,14 +9,14 @@ import java.io.ByteArrayOutputStream
  * Utilidad para comprimir imágenes antes de convertirlas a Base64.
  * Firestore tiene un límite de 1MB por documento, así que comprimimos
  * la imagen para que quepa como texto Base64.
+ *
+ * Mejorado para respetar los ajustes dinámicos de:
+ *   - hdUploadsEnabled (mayor calidad, mayor tamaño máximo)
+ *   - dataSaverMode (menor calidad, menor tamaño para ahorrar datos)
  */
 object ImageCompressor {
 
-    private const val MAX_WIDTH = 720
-    private const val MAX_HEIGHT = 720
-    private const val INITIAL_COMPRESS_QUALITY = 72
     private const val MIN_COMPRESS_QUALITY = 20
-    private const val MAX_BINARY_SIZE_BYTES = 450_000
 
     /**
      * Comprime una imagen desde Uri y la devuelve como Base64.
@@ -38,12 +38,26 @@ object ImageCompressor {
 
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
+            val isHd = com.vivid.app.util.SettingsManager.hdUploadsEnabled
+            val isDataSaver = com.vivid.app.util.SettingsManager.dataSaverMode
+
+            val reqWidth = when {
+                isDataSaver -> 480
+                isHd -> 1200
+                else -> 720
+            }
+            val reqHeight = when {
+                isDataSaver -> 480
+                isHd -> 1200
+                else -> 720
+            }
+
             val decodeOptions = BitmapFactory.Options().apply {
                 inSampleSize = calculateInSampleSize(
                     originalWidth = bounds.outWidth,
                     originalHeight = bounds.outHeight,
-                    reqWidth = MAX_WIDTH,
-                    reqHeight = MAX_HEIGHT
+                    reqWidth = reqWidth,
+                    reqHeight = reqHeight
                 )
                 inJustDecodeBounds = false
                 inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -52,7 +66,7 @@ object ImageCompressor {
             val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, decodeOptions)
                 ?: return null
 
-            val scaledBitmap = scaleBitmapIfNeeded(bitmap)
+            val scaledBitmap = scaleBitmapIfNeeded(bitmap, reqWidth, reqHeight)
             compressIteratively(scaledBitmap)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -60,12 +74,12 @@ object ImageCompressor {
         }
     }
 
-    private fun scaleBitmapIfNeeded(bitmap: Bitmap): Bitmap {
-        if (bitmap.width <= MAX_WIDTH && bitmap.height <= MAX_HEIGHT) return bitmap
+    private fun scaleBitmapIfNeeded(bitmap: Bitmap, reqWidth: Int, reqHeight: Int): Bitmap {
+        if (bitmap.width <= reqWidth && bitmap.height <= reqHeight) return bitmap
 
         val ratio = kotlin.math.min(
-            MAX_WIDTH.toFloat() / bitmap.width,
-            MAX_HEIGHT.toFloat() / bitmap.height
+            reqWidth.toFloat() / bitmap.width,
+            reqHeight.toFloat() / bitmap.height
         )
 
         val targetWidth = (bitmap.width * ratio).toInt().coerceAtLeast(1)
@@ -94,8 +108,23 @@ object ImageCompressor {
     }
 
     private fun compressIteratively(initialBitmap: Bitmap): String? {
+        val isHd = com.vivid.app.util.SettingsManager.hdUploadsEnabled
+        val isDataSaver = com.vivid.app.util.SettingsManager.dataSaverMode
+
+        val initialQuality = when {
+            isDataSaver -> 45
+            isHd -> 88
+            else -> 72
+        }
+
+        val maxBinarySize = when {
+            isDataSaver -> 150_000 // 150 KB
+            isHd -> 900_000        // 900 KB
+            else -> 450_000        // 450 KB
+        }
+
         var bitmap = initialBitmap
-        var quality = INITIAL_COMPRESS_QUALITY
+        var quality = initialQuality
         var attempts = 0
 
         while (attempts < 6) {
@@ -104,7 +133,7 @@ object ImageCompressor {
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, byteArrayOutputStream)
                 val bytes = byteArrayOutputStream.toByteArray()
 
-                if (bytes.size <= MAX_BINARY_SIZE_BYTES) {
+                if (bytes.size <= maxBinarySize) {
                     return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 }
                 quality -= 10
@@ -116,14 +145,14 @@ object ImageCompressor {
             if (reducedWidth == bitmap.width && reducedHeight == bitmap.height) break
 
             bitmap = Bitmap.createScaledBitmap(bitmap, reducedWidth, reducedHeight, true)
-            quality = INITIAL_COMPRESS_QUALITY
+            quality = initialQuality
             attempts++
         }
 
         val fallback = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, MIN_COMPRESS_QUALITY, fallback)
         val fallbackBytes = fallback.toByteArray()
-        if (fallbackBytes.isEmpty() || fallbackBytes.size > MAX_BINARY_SIZE_BYTES) return null
+        if (fallbackBytes.isEmpty() || fallbackBytes.size > maxBinarySize) return null
 
         return android.util.Base64.encodeToString(fallbackBytes, android.util.Base64.NO_WRAP)
     }
@@ -138,30 +167,12 @@ object ImageCompressor {
     }
 
     fun createPlaceholderBitmap(width: Int = 400, height: Int = 400): Bitmap {
-        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
-            val canvas = android.graphics.Canvas(this)
-            canvas.drawColor(android.graphics.Color.parseColor("#2D2D3A"))
-            val paint = android.graphics.Paint().apply {
-                color = android.graphics.Color.parseColor("#55556A")
-                textSize = 60f
-                textAlign = android.graphics.Paint.Align.CENTER
-            }
-            canvas.drawText("Vivid", width / 2f, height / 2f + 20f, paint)
-        }
+        val config = Bitmap.Config.ARGB_8888
+        val bitmap = Bitmap.createBitmap(width, height, config)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint()
+        paint.color = android.graphics.Color.GRAY
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        return bitmap
     }
-
-    fun getImageInfo(uri: Uri, context: android.content.Context): ImageInfo {
-        return try {
-            val imageBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ImageInfo(0, 0)
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, options)
-            ImageInfo(options.outWidth, options.outHeight)
-        } catch (_: Exception) {
-            ImageInfo(0, 0)
-        }
-    }
-
-    data class ImageInfo(val width: Int, val height: Int)
 }
