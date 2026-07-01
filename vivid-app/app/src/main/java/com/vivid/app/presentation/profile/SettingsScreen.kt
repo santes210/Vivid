@@ -978,9 +978,6 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        SettingsManager.unregisterToken() // or PushNotificationHelper
-                        // Wait, let's call PushNotificationHelper.unregisterToken() directly or import it.
-                        // Since PushNotificationHelper is in com.vivid.app.util, we can call com.vivid.app.util.PushNotificationHelper.unregisterToken()
                         com.vivid.app.util.PushNotificationHelper.unregisterToken()
                         auth.signOut()
                         showSignOutDialog = false
