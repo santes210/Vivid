@@ -192,7 +192,7 @@ fun ProfileScreen(
             TopAppBar(
                 title = { 
                     Text(
-                        if (isOwnProfile) "Mi Perfil" else "@${profile.username}",
+                        if (isOwnProfile) "Perfil" else "@${profile.username}",
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     ) 
                 },
@@ -280,7 +280,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     AssistChip(
                         onClick = { },
-                        label = { Text(if (profile.isPrivate) "Cuenta privada" else "Cuenta pública", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
+                        label = { Text(if (profile.isPrivate) "Privada" else "Pública", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             labelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -312,7 +312,7 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Alcance de tus Reels este mes: 1,420 (+24%)")
+                                        snackbarHostState.showSnackbar("........")
                                     }
                                 }
                         ) {

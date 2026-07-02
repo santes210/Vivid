@@ -30,7 +30,7 @@ import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private const val APP_VERSION_NAME = "2.1.0 - Material You 3 Design"
+private const val APP_VERSION_NAME = "0.6.7-5 - Material You 3 Design"
 
 data class SettingsInfoDialog(
     val title: String,
@@ -166,7 +166,7 @@ fun SettingsScreen(
                 SettingsCardGroup(title = "Tu Cuenta") {
                     SettingsListItem(
                         title = "Privacidad de la cuenta",
-                        subtitle = if (isPrivateAccount) "Cuenta Privada" else "Cuenta Pública",
+                        subtitle = if (isPrivateAccount) "Privada" else "Pública",
                         icon = if (isPrivateAccount) Icons.Default.Lock else Icons.Default.Public,
                         trailingContent = {
                             Switch(

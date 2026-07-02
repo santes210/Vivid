@@ -204,7 +204,7 @@ object SettingsManager {
         if (!offensiveWordsFilter) return text
         val badWords = listOf(
             "puto", "puta", "mierda", "pendejo", "pendeja", "cabron", "cabrón", "culero", "culera", "marica", "maricón", "putita", "putito", "follar", "joder",
-            "fuck", "bitch", "asshole", "shit", "bastard", "cunt", "dick"
+            "fuck", "bitch", "asshole", "shit", "bastard", "cunt", "dick", "cp", "homosexual"
         )
         var filteredText = text
         for (word in badWords) {
