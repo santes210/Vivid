@@ -81,7 +81,11 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if signedIn();
         allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-        allow update, delete: if signedIn() && resource.data.userId == request.auth.uid;
+        allow update: if signedIn() && (
+        resource.data.userId == request.auth.uid ||
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes'])
+      );
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
       }
     }
 
@@ -89,14 +93,22 @@ service cloud.firestore {
     match /stories/{storyId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn() && (
+        resource.data.userId == request.auth.uid ||
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes'])
+      );
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     // ── Reels ───────────────────────────────────────
     match /reels/{reelId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn() && (
+        resource.data.userId == request.auth.uid ||
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes'])
+      );
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 
       match /likes/{userId} {
         allow read: if signedIn();
