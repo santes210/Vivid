@@ -13,10 +13,14 @@ import kotlinx.coroutines.tasks.await
 /**
  * Helper para registrar el token FCM del dispositivo en Firestore.
  *
- * La Cloud Function `onReelLike`, `onReelComment`, `onFollow`, `onMessageCreated`
- * busca tokens en /users/{uid}/fcmTokens para enviar pushes.
+ * Flujo:
+ *   1. Al iniciar sesión → registerTokenForCurrentUser()
+ *   2. Guarda el token en /users/{uid}/fcmTokens/{token}
+ *   3. Las Cloud Functions (onReelLike, onMessageCreated, etc.)
+ *      leen estos tokens para enviar pushes FCM.
  *
- * Llamar a `registerTokenForCurrentUser()` al iniciar sesión.
+ * ⚠️  Para que las notificaciones funcionen, las Cloud Functions DEBEN
+ *     estar desplegadas en Firebase. Sin ellas, nadie envía los pushes.
  */
 object PushNotificationHelper {
 
@@ -27,32 +31,39 @@ object PushNotificationHelper {
 
     /**
      * Suscribe el dispositivo actual a push notifications.
-     * Llamar tras login o cuando el token FCM se renueva (onNewToken).
+     * Se llama desde MainActivity.addAuthStateListener (cada login)
+     * y desde VividMessagingService.onNewToken (cuando FCM renueva el token).
      */
     fun registerTokenForCurrentUser() {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            Log.w(TAG, "registerTokenForCurrentUser: no hay usuario autenticado, abortando")
+            return
+        }
 
-        // Limpiar tokens viejos de este dispositivo (por si acaso)
         scope.launch {
             try {
+                // 1. Obtener el token FCM actual
+                val token = FirebaseMessaging.getInstance().token.await()
+                Log.i(TAG, "✅ Token FCM obtenido: ${token.take(25)}...")
+
+                // 2. Limpiar tokens viejos de este dispositivo (evita duplicados)
                 val oldTokens = db.collection("users").document(uid)
                     .collection("fcmTokens")
                     .whereEqualTo("platform", "android")
                     .get().await()
 
-                // Borrar tokens antiguos excepto el actual
-                val currentToken = FirebaseMessaging.getInstance().token.await()
                 for (doc in oldTokens.documents) {
-                    if (doc.id != currentToken) {
-                        doc.reference.delete()
-                        Log.d(TAG, "Token antiguo eliminado: ${doc.id.take(20)}...")
+                    if (doc.id != token) {
+                        doc.reference.delete().await()
+                        Log.d(TAG, "🗑️ Token antiguo eliminado: ${doc.id.take(20)}...")
                     }
                 }
 
-                // Registrar el token actual
+                // 3. Guardar el token actual en Firestore
                 db.collection("users").document(uid)
                     .collection("fcmTokens")
-                    .document(currentToken)
+                    .document(token)
                     .set(mapOf(
                         "createdAt" to System.currentTimeMillis(),
                         "platform" to "android",
@@ -60,9 +71,13 @@ object PushNotificationHelper {
                     ))
                     .await()
 
-                Log.d(TAG, "Token FCM registrado para $uid: ${currentToken.take(20)}...")
+                Log.i(TAG, "🎉 Token FCM registrado exitosamente para uid=$uid")
+                Log.i(TAG, "   Ruta: /users/$uid/fcmTokens/${token.take(20)}...")
+
             } catch (e: Exception) {
-                Log.e(TAG, "Error registrando token FCM", e)
+                Log.e(TAG, "❌ ERROR registrando token FCM: ${e.javaClass.simpleName}", e)
+                Log.e(TAG, "   ¿Están las Firestore Rules desplegadas con fcmTokens?")
+                Log.e(TAG, "   ¿Tiene el usuario permisos de red?")
             }
         }
     }
@@ -80,7 +95,7 @@ object PushNotificationHelper {
                     .document(token)
                     .delete()
                     .await()
-                Log.d(TAG, "Token eliminado para usuario $uid")
+                Log.i(TAG, "Token eliminado para usuario $uid")
             } catch (e: Exception) {
                 Log.e(TAG, "Error eliminando token", e)
             }

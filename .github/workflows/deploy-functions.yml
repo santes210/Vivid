@@ -7,7 +7,8 @@ on:
       - 'cloud-function/**'
       - 'firestore.rules'
       - 'firebase.json'
-  workflow_dispatch:  # Permite ejecutarlo manualmente desde GitHub
+      - '.firebaserc'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -21,19 +22,24 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install dependencies
+      - name: Install Cloud Function deps
         run: cd cloud-function && npm install
 
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
       - name: Deploy Firestore Rules
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only firestore:rules
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          echo "$FIREBASE_TOKEN" > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+          firebase deploy --only firestore:rules --project verigram-c58a6 --non-interactive
 
       - name: Deploy Cloud Functions
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only functions
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          echo "$FIREBASE_TOKEN" > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+          firebase deploy --only functions --project verigram-c58a6 --non-interactive --force

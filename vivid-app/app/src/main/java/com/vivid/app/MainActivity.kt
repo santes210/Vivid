@@ -31,6 +31,18 @@ class MainActivity : ComponentActivity() {
         // Leer extras de deep link desde notificación
         readNotificationExtras(intent)
 
+        // ── 🔧 FIX: AuthStateListener para registrar el token FCM en cada login ──
+        // Esto reemplaza el LaunchedEffect(currentUser) que NUNCA se re-ejecutaba
+        FirebaseAuth.getInstance().addAuthStateListener { auth ->
+            val user = auth.currentUser
+            if (user != null) {
+                android.util.Log.d("MainActivity", "Auth state: usuario conectado (${user.uid}), registrando token FCM...")
+                com.vivid.app.util.PushNotificationHelper.registerTokenForCurrentUser()
+            } else {
+                android.util.Log.d("MainActivity", "Auth state: sin sesión")
+            }
+        }
+
         // Solicitar permisos de notificación en Android 13+ de forma proactiva
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             val permission = android.Manifest.permission.POST_NOTIFICATIONS
@@ -46,14 +58,6 @@ class MainActivity : ComponentActivity() {
                 "Oscuro" -> true
                 "Claro" -> false
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
-            }
-
-            // Registrar el token FCM para notificaciones push cuando hay sesión activa
-            val currentUser = FirebaseAuth.getInstance().currentUser
-            LaunchedEffect(currentUser) {
-                if (currentUser != null) {
-                    com.vivid.app.util.PushNotificationHelper.registerTokenForCurrentUser()
-                }
             }
 
             // Guardar extras en remember para evitar lecturas repetidas
