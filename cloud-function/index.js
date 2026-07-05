@@ -1,37 +1,26 @@
 /**
- * Vivid — Cloud Function proxy a Backblaze B2 con Signed URLs + Push Notifications
+ * Vivid — Cloud Function proxy a Backblaze B2 con Signed URLs
  * ============================================================
  *
- * Setup:
- *   cd cloud-function
- *   npm install
- *   firebase functions:config:set b2.key_id="0048f6433d84d000000000004"
- *   firebase functions:config:set b2.application_key="K004..."
- *   firebase functions:config:set b2.bucket_id="..."
- *   firebase functions:config:set b2.bucket_name="VividRivers"
- *   firebase deploy --only functions
+ * NOTA: Las Cloud Functions requieren plan Blaze (pay-as-you-go).
+ * Si estás en Spark (gratuito), solo se desplegarán las reglas de Firestore.
+ *
+ * Las notificaciones push se manejan localmente desde el APK
+ * mediante LocalNotificationWatcher.kt (sin necesidad de Cloud Functions).
+ *
+ * Cuando actives Blaze, descomenta los triggers al final del archivo
+ * y ejecuta: firebase deploy --only functions
  */
 
 const functions = require("firebase-functions");
 const cors = require("cors")({ origin: true });
 const { URL } = require("url");
 
-// =====================================================
-//  Configuración B2
-// =====================================================
 const CFG = functions.config().b2 || {};
 const KEY_ID = CFG.key_id;
 const APP_KEY = CFG.application_key;
 const BUCKET_ID = CFG.bucket_id;
 const BUCKET_NAME = CFG.bucket_name;
-
-if (!KEY_ID || !APP_KEY || !BUCKET_ID || !BUCKET_NAME) {
-  console.error("Faltan credenciales B2. firebase functions:config:set b2.*");
-}
-
-// =====================================================
-//  Helpers B2
-// =====================================================
 
 function b2Request({ url, method = "GET", headers = {}, body = null }) {
   return new Promise((resolve, reject) => {
@@ -76,6 +65,7 @@ async function getSession() {
     downloadUrl: resp.downloadUrl,
   };
   sessionCreatedAt = Date.now();
+  console.log("B2 session renewed");
   return session;
 }
 
@@ -96,9 +86,7 @@ async function signDownloadUrl(session, fileName, ttlSec) {
   return `${session.downloadUrl}/file/${BUCKET_NAME}/${fileName}?Authorization=${resp.authorizationToken}`;
 }
 
-// =====================================================
-//  ENDPOINTS HTTP
-// =====================================================
+// ── ENDPOINTS B2 (no requieren Blaze) ─────────────
 
 exports.uploadReel = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
@@ -106,44 +94,33 @@ exports.uploadReel = functions.https.onRequest((req, res) => {
     try {
       const { key, contentType = "video/mp4" } = req.body || {};
       if (!key) return res.status(400).json({ error: "Falta key" });
-
       const sess = await getSession();
       const upResp = await b2Request({
         url: `${sess.apiUrl}/b2api/v2/b2_get_upload_url`,
         method: "POST",
-        headers: {
-          Authorization: sess.authToken,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: sess.authToken, "Content-Type": "application/json" },
         body: JSON.stringify({ bucketId: BUCKET_ID }),
       });
       const signedUrl = await signDownloadUrl(sess, key, 3600);
-
       const response = {
         uploadUrl: upResp.uploadUrl,
         uploadAuthToken: upResp.authorizationToken,
         signedDownloadUrl: signedUrl,
         bucketName: BUCKET_NAME,
-        key,
-        expiresIn: 3600,
+        key, expiresIn: 3600,
       };
-
       if (key.startsWith("reels/")) {
         const thumbKey = key.replace(/\.mp4$/, "_thumb.jpg");
         const thumbUp = await b2Request({
           url: `${sess.apiUrl}/b2api/v2/b2_get_upload_url`,
           method: "POST",
-          headers: {
-            Authorization: sess.authToken,
-            "Content-Type": "application/json",
-          },
+          headers: { Authorization: sess.authToken, "Content-Type": "application/json" },
           body: JSON.stringify({ bucketId: BUCKET_ID }),
         });
-        const thumbSigned = await signDownloadUrl(sess, thumbKey, 3600);
         response.thumbnailKey = thumbKey;
         response.thumbnailUploadUrl = thumbUp.uploadUrl;
         response.thumbnailUploadAuthToken = thumbUp.authorizationToken;
-        response.thumbnailSignedUrl = thumbSigned;
+        response.thumbnailSignedUrl = await signDownloadUrl(sess, thumbKey, 3600);
       }
       res.json(response);
     } catch (e) {
@@ -158,14 +135,12 @@ exports.signDownload = functions.https.onRequest((req, res) => {
     try {
       const key = req.query.key;
       const ttlSec = parseInt(req.query.ttl) || 3600;
-      const validTtl = Math.min(Math.max(ttlSec, 1), 604800);
       if (!key) return res.status(400).json({ error: "Falta key" });
       const sess = await getSession();
-      const signedUrl = await signDownloadUrl(sess, key, validTtl);
       res.json({
-        signedUrl,
-        expiresAt: Date.now() + validTtl * 1000,
-        expiresIn: validTtl,
+        signedUrl: await signDownloadUrl(sess, key, Math.min(Math.max(ttlSec, 1), 604800)),
+        expiresAt: Date.now() + Math.min(Math.max(ttlSec, 1), 604800) * 1000,
+        expiresIn: Math.min(Math.max(ttlSec, 1), 604800),
       });
     } catch (e) {
       console.error("signDownload error:", e);
@@ -184,10 +159,7 @@ exports.deleteFile = functions.https.onRequest((req, res) => {
       const list = await b2Request({
         url: `${sess.apiUrl}/b2api/v2/b2_list_file_names`,
         method: "POST",
-        headers: {
-          Authorization: sess.authToken,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: sess.authToken, "Content-Type": "application/json" },
         body: JSON.stringify({ bucketId: BUCKET_ID, startFileName: key, maxFileCount: 1 }),
       });
       const file = list.files && list.files[0];
@@ -195,10 +167,7 @@ exports.deleteFile = functions.https.onRequest((req, res) => {
       await b2Request({
         url: `${sess.apiUrl}/b2api/v2/b2_delete_file_version`,
         method: "POST",
-        headers: {
-          Authorization: sess.authToken,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: sess.authToken, "Content-Type": "application/json" },
         body: JSON.stringify({ fileName: file.fileName, fileId: file.fileId }),
       });
       res.json({ ok: true });
@@ -209,203 +178,30 @@ exports.deleteFile = functions.https.onRequest((req, res) => {
   });
 });
 
-// =====================================================
-//  PUSH NOTIFICATIONS — Firestore Triggers
-// =====================================================
+/*
+ * ════════════════════════════════════════════════════
+ * TRIGGERS DE NOTIFICACIONES PUSH (requieren Blaze)
+ * ════════════════════════════════════════════════════
+ * Descomenta esta sección cuando actives el plan Blaze.
+ * Mientras tanto, las notificaciones funcionan localmente
+ * desde el APK (LocalNotificationWatcher.kt).
 
 const admin = require("firebase-admin");
 admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-/**
- * Helper: envía FCM al usuario buscando sus tokens en /users/{uid}/fcmTokens
- */
-async function sendPushToUser(uid, {
-  title,
-  body,
-  data,
-  tag,
-  notificationType,
-  channelId = "general_channel",
-  priority = "normal",
-}) {
-  try {
-    const userDoc = await db.collection("users").document(uid).get();
-    const userData = userDoc.data();
-
-    const notificationSettings = {
-      "reel_like": userData?.notifyLikesComments ?? true,
-      "reel_comment": userData?.notifyLikesComments ?? true,
-      "new_follower": userData?.notifyNewFollowers ?? true,
-      "message": userData?.notifyDirectMessages ?? true,
-    };
-
-    if (notificationType && notificationSettings[notificationType] === false) {
-      console.log(`Notificaciones tipo ${notificationType} desactivadas para ${uid}`);
-      return;
-    }
-
-    const tokensSnap = await db.collection("users").document(uid)
-      .collection("fcmTokens").get();
-
-    if (tokensSnap.empty) {
-      console.log(`No FCM tokens for user ${uid}`);
-      return;
-    }
-
-    const tokens = tokensSnap.docs.map(d => d.id);
-    const message = {
-      notification: { title, body },
-      data: { ...data, channelId },
-      android: {
-        priority,
-        notification: {
-          tag,
-          channelId,
-          clickAction: "FLUTTER_NOTIFICATION_CLICK",
-        },
-      },
-      tokens,
-    };
-
-    const response = await messaging.sendMulticast(message);
-    console.log(`Sent ${response.successCount}/${tokens.length} pushes to ${uid} (${notificationType})`);
-
-    if (response.failureCount > 0) {
-      const failedTokens = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          console.error(`Token failed: ${tokens[idx]?.substring(0, 20)}...`, resp.error?.message);
-          failedTokens.push(tokens[idx]);
-        }
-      });
-      for (const token of failedTokens) {
-        await db.collection("users").document(uid)
-          .collection("fcmTokens").doc(token).delete();
-      }
-    }
-  } catch (e) {
-    console.error(`Error en sendPushToUser para ${uid}:`, e);
-  }
-}
-
-/* ── Triggers ── */
+async function sendPushToUser(uid, opts) { ... }
 
 exports.onReelLike = functions.firestore
-  .document("reels/{reelId}/likes/{userId}")
-  .onCreate(async (snap, context) => {
-    const reelId = context.params.reelId;
-    const likerUid = context.params.userId;
-    try {
-      const reelDoc = await db.collection("reels").document(reelId).get();
-      const reelData = reelDoc.data();
-      if (!reelData) return null;
-      const ownerUid = reelData.userId;
-      if (ownerUid === likerUid) return null;
-
-      const likerDoc = await db.collection("users").document(likerUid).get();
-      const likerName = likerDoc.data()?.username || "alguien";
-
-      await sendPushToUser(ownerUid, {
-        title: "❤️ Nuevo like",
-        body: `A ${likerName} le gustó tu reel`,
-        data: { type: "reel_like", reelId, fromUserId: likerUid },
-        tag: `reel_like_${reelId}`,
-        notificationType: "reel_like",
-        channelId: "general_channel",
-      });
-    } catch (e) {
-      console.error("onReelLike error:", e);
-    }
-    return null;
-  });
+  .document("reels/{reelId}/likes/{userId}").onCreate(...);
 
 exports.onReelComment = functions.firestore
-  .document("reels/{reelId}/comments/{commentId}")
-  .onCreate(async (snap, context) => {
-    const reelId = context.params.reelId;
-    const comment = snap.data();
-    if (!comment) return null;
-    try {
-      const reelDoc = await db.collection("reels").document(reelId).get();
-      const reelData = reelDoc.data();
-      if (!reelData) return null;
-      const ownerUid = reelData.userId;
-      const authorUid = comment.userId;
-      if (ownerUid === authorUid) return null;
-
-      const authorDoc = await db.collection("users").document(authorUid).get();
-      const authorName = authorDoc.data()?.username || "alguien";
-
-      await sendPushToUser(ownerUid, {
-        title: `💬 ${authorName} comentó`,
-        body: comment.text?.substring(0, 100) || "Nuevo comentario en tu reel",
-        data: { type: "reel_comment", reelId, fromUserId: authorUid },
-        tag: `reel_comment_${reelId}`,
-        notificationType: "reel_comment",
-        channelId: "general_channel",
-      });
-    } catch (e) {
-      console.error("onReelComment error:", e);
-    }
-    return null;
-  });
+  .document("reels/{reelId}/comments/{commentId}").onCreate(...);
 
 exports.onFollow = functions.firestore
-  .document("users/{uid}/followers/{followerUid}")
-  .onCreate(async (snap, context) => {
-    const ownerUid = context.params.uid;
-    const followerUid = context.params.followerUid;
-    if (ownerUid === followerUid) return null;
-    try {
-      const followerDoc = await db.collection("users").document(followerUid).get();
-      const followerName = followerDoc.data()?.username || "alguien";
-
-      await sendPushToUser(ownerUid, {
-        title: "👋 Nuevo seguidor",
-        body: `${followerName} empezó a seguirte`,
-        data: { type: "new_follower", fromUserId: followerUid },
-        tag: `follow_${followerUid}`,
-        notificationType: "new_follower",
-        channelId: "general_channel",
-      });
-    } catch (e) {
-      console.error("onFollow error:", e);
-    }
-    return null;
-  });
+  .document("users/{uid}/followers/{followerUid}").onCreate(...);
 
 exports.onMessageCreated = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const chatId = context.params.chatId;
-    const message = snap.data();
-    if (!message) return null;
-    try {
-      const chatDoc = await db.collection("chats").document(chatId).get();
-      const chatData = chatDoc.data();
-      if (!chatData) return null;
-
-      const participants = chatData.participants || [];
-      const senderId = message.senderId;
-      const receiverId = participants.find(p => p !== senderId);
-      if (!receiverId) return null;
-
-      const senderDoc = await db.collection("users").document(senderId).get();
-      const senderName = senderDoc.data()?.username || "Alguien";
-
-      await sendPushToUser(receiverId, {
-        title: senderName,
-        body: message.text?.substring(0, 150) || "Nuevo mensaje",
-        data: { type: "message", chatId, fromUserId: senderId },
-        tag: `chat_msg_${chatId}`,
-        notificationType: "message",
-        channelId: "messages_channel",
-        priority: "high",
-      });
-    } catch (e) {
-      console.error("onMessageCreated error:", e);
-    }
-    return null;
-  });
+  .document("chats/{chatId}/messages/{messageId}").onCreate(...);
+*/

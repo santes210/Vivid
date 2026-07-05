@@ -1,8 +1,4 @@
 {
-  "functions": {
-    "source": "cloud-function",
-    "runtime": "nodejs18"
-  },
   "firestore": {
     "rules": "firestore.rules"
   }
