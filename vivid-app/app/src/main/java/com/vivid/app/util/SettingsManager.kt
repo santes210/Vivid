@@ -1,11 +1,15 @@
 package com.vivid.app.util
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 object SettingsManager {
+    private const val TAG = "SettingsManager"
     private const val PREFS_NAME = "vivid_settings"
 
     // Keys
@@ -88,6 +92,23 @@ object SettingsManager {
         simulatedCacheSizeMB = prefs.getFloat(KEY_CACHE_SIZE, 48.5f)
     }
 
+    /** Sincroniza las preferencias de notificación a Firestore para que la Cloud Function las lea */
+    private fun syncNotificationPrefsToFirestore() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val db = FirebaseFirestore.getInstance()
+        val data = mapOf(
+            "notifyLikesComments" to notifyLikesComments,
+            "notifyNewFollowers" to notifyNewFollowers,
+            "notifyDirectMessages" to notifyDirectMessages,
+            "notifyStoryReminders" to notifyStoryReminders
+        )
+        db.collection("users").document(uid)
+            .set(data, com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Error syncing notification prefs to Firestore", e)
+            }
+    }
+
     // Setters
     fun setThemeOption(context: Context, value: String) {
         selectedThemeOption = value
@@ -147,24 +168,28 @@ object SettingsManager {
         notifyLikesComments = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_NOTIFY_LIKES_COMMENTS, value).apply()
+        syncNotificationPrefsToFirestore()
     }
 
     fun setNotifyFollowers(context: Context, value: Boolean) {
         notifyNewFollowers = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_NOTIFY_FOLLOWERS, value).apply()
+        syncNotificationPrefsToFirestore()
     }
 
     fun setNotifyDm(context: Context, value: Boolean) {
         notifyDirectMessages = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_NOTIFY_DM, value).apply()
+        syncNotificationPrefsToFirestore()
     }
 
     fun setNotifyStoryReminders(context: Context, value: Boolean) {
         notifyStoryReminders = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_NOTIFY_STORY_REMINDERS, value).apply()
+        syncNotificationPrefsToFirestore()
     }
 
     fun setCreatorDashboard(context: Context, value: Boolean) {
@@ -197,9 +222,6 @@ object SettingsManager {
             .edit().putFloat(KEY_CACHE_SIZE, value).apply()
     }
 
-    /**
-     * Filtra palabras ofensivas si la opción offensiveWordsFilter está activada.
-     */
     fun filterOffensiveWords(text: String): String {
         if (!offensiveWordsFilter) return text
         val badWords = listOf(

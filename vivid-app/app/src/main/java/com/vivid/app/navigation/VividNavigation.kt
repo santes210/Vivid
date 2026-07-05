@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -56,13 +57,41 @@ sealed class Screen(
 }
 
 @Composable
-fun VividNavigation(navController: NavHostController) {
+fun VividNavigation(
+    navController: NavHostController,
+    deepLinkChatId: String? = null,
+    deepLinkReelId: String? = null,
+    deepLinkProfileUserId: String? = null
+) {
     val auth = FirebaseAuth.getInstance()
     val startDestination = remember(auth.currentUser?.uid) {
         if (auth.currentUser != null) Screen.Feed.route else Screen.Auth.route
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // ── Manejar deep links desde notificaciones push ──
+    LaunchedEffect(deepLinkChatId) {
+        if (!deepLinkChatId.isNullOrBlank()) {
+            navController.navigate("chat/${Uri.encode(deepLinkChatId)}/ / ") {
+                popUpTo(Screen.Feed.route)
+            }
+        }
+    }
+    LaunchedEffect(deepLinkReelId) {
+        if (!deepLinkReelId.isNullOrBlank()) {
+            navController.navigate(Screen.Reels.route) {
+                popUpTo(Screen.Feed.route)
+            }
+        }
+    }
+    LaunchedEffect(deepLinkProfileUserId) {
+        if (!deepLinkProfileUserId.isNullOrBlank()) {
+            navController.navigate("profile/${Uri.encode(deepLinkProfileUserId)}") {
+                popUpTo(Screen.Feed.route)
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {

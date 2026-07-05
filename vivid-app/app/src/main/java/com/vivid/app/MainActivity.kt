@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
@@ -18,8 +19,17 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // Extras recibidos desde notificaciones push
+    private var pendingChatId: String? = null
+    private var pendingReelId: String? = null
+    private var pendingProfileUserId: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Leer extras de deep link desde notificación
+        readNotificationExtras(intent)
 
         // Solicitar permisos de notificación en Android 13+ de forma proactiva
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -46,6 +56,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Guardar extras en remember para evitar lecturas repetidas
+            val deepLinkChatId = remember { pendingChatId }
+            val deepLinkReelId = remember { pendingReelId }
+            val deepLinkProfileUserId = remember { pendingProfileUserId }
+
             VividTheme(
                 darkTheme = darkTheme,
                 dynamicColor = dynamicColor
@@ -54,15 +69,46 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    VividApp()
+                    VividApp(
+                        deepLinkChatId = deepLinkChatId,
+                        deepLinkReelId = deepLinkReelId,
+                        deepLinkProfileUserId = deepLinkProfileUserId
+                    )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        readNotificationExtras(intent)
+    }
+
+    private fun readNotificationExtras(intent: android.content.Intent) {
+        if (intent.getBooleanExtra("openChat", false)) {
+            pendingChatId = intent.getStringExtra("chatId")
+        }
+        if (intent.getBooleanExtra("openReel", false)) {
+            pendingReelId = intent.getStringExtra("reelId")
+        }
+        if (intent.getBooleanExtra("openProfile", false)) {
+            pendingProfileUserId = intent.getStringExtra("profileUserId")
         }
     }
 }
 
 @Composable
-fun VividApp() {
+fun VividApp(
+    deepLinkChatId: String? = null,
+    deepLinkReelId: String? = null,
+    deepLinkProfileUserId: String? = null
+) {
     val navController = rememberNavController()
-    VividNavigation(navController = navController)
+
+    VividNavigation(
+        navController = navController,
+        deepLinkChatId = deepLinkChatId,
+        deepLinkReelId = deepLinkReelId,
+        deepLinkProfileUserId = deepLinkProfileUserId
+    )
 }

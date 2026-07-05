@@ -58,6 +58,13 @@ service cloud.firestore {
           request.auth.uid == docId
         );
       }
+
+      // ── FCM Tokens ── El propio usuario gestiona sus tokens de push
+      match /fcmTokens/{token} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn() && request.auth.uid == userId;
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
     }
 
     match /posts/{postId} {
