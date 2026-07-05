@@ -222,13 +222,13 @@ fun ChatScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        "No hay mensajes",
+                                        "Aún no hay mensajes",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(Modifier.height(8.dp))
                                     Text(
-                                        "Envía el primer mensaje para empezar la conversación.",
+                                        "Envía el primer mensaje para empezar la conversación real.",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
@@ -317,8 +317,8 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .padding(horizontal = 4.dp),
-                                placeholder = { Text("Mensaje...") },
-                                maxLines = 20,
+                                placeholder = { Text("Escribe un mensaje vibrante...") },
+                                maxLines = 4,
                                 shape = RoundedCornerShape(24.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = Color.Transparent,
@@ -412,13 +412,13 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "Opciones", 
+                    "Opciones del Mensaje", 
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 
                 ListItem(
-                    headlineContent = { Text("Copiar a portapapeles", style = MaterialTheme.typography.bodyLarge) },
+                    headlineContent = { Text("Copiar texto", style = MaterialTheme.typography.bodyLarge) },
                     supportingContent = { Text(message.text.take(80), maxLines = 1) },
                     leadingContent = { Icon(Icons.Outlined.FileCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     modifier = Modifier

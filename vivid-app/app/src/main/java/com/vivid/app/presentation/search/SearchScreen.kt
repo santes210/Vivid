@@ -93,7 +93,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Encuentra usuarios") },
+            label = { Text("Buscar usuarios reales") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -115,7 +115,7 @@ fun SearchScreen(
             query.trim().length < 2 -> {
                 Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        "Escribe al menos 2 letras para buscar usuarios",
+                        "Escribe al menos 2 letras para buscar personas.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -123,7 +123,7 @@ fun SearchScreen(
             users.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        "No encontraron usuarios",
+                        "No encontré usuarios con ese nombre.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

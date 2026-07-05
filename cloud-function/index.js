@@ -307,6 +307,7 @@ exports.onReelLike = functions.firestore
           fromUserId: likerUid,
         },
         tag: `reel_like_${reelId}`,
+        type: "reel_like",
       });
     } catch (e) {
       console.error("onReelLike error:", e);
@@ -346,6 +347,7 @@ exports.onReelComment = functions.firestore
           fromUserId: authorUid,
         },
         tag: `reel_comment_${reelId}`,
+        type: "reel_comment",
       });
     } catch (e) {
       console.error("onReelComment error:", e);
@@ -376,6 +378,7 @@ exports.onFollow = functions.firestore
           fromUserId: followerUid,
         },
         tag: `follow_${followerUid}`,
+        type: "new_follower",
       });
       } catch (e) {
       console.error("onFollow error:", e);
@@ -420,6 +423,7 @@ exports.onMessageCreated = functions.firestore
           fromUserId: senderId,
         },
         tag: `chat_msg_${chatId}`,
+        type: "message",
       });
     } catch (e) {
       console.error("onMessageCreated error:", e);
@@ -430,41 +434,61 @@ exports.onMessageCreated = functions.firestore
 /**
  * Helper: envia FCM al usuario buscando sus tokens en /users/{uid}/fcmTokens
  */
-async function sendPushToUser(uid, { title, body, data, tag }) {
-  const tokensSnap = await db.collection("users").document(uid)
-    .collection("fcmTokens").get();
+async function sendPushToUser(uid, { title, body, data, tag, type }) {
+  try {
+    // 1. Verificar si el usuario tiene desactivadas las notificaciones para este tipo
+    const userDoc = await db.collection("users").document(uid).get();
+    const userData = userDoc.data();
+    
+    const notificationSettings = {
+      "reel_like": userData?.notifyLikesComments ?? true,
+      "reel_comment": userData?.notifyLikesComments ?? true,
+      "new_follower": userData?.notifyNewFollowers ?? true,
+      "message": userData?.notifyDirectMessages ?? true,
+    };
 
-  if (tokensSnap.empty) {
-    console.log(`No FCM tokens for user ${uid}`);
-    return;
-  }
-
-  const tokens = tokensSnap.docs.map(d => d.id);
-  const message = {
-    notification: { title, body },
-    data: data || {},
-    android: {
-      priority: "high",
-      notification: {
-        tag,         // colapsa multiples pushes en uno
-        click_action: "OPEN_REEL",
-      },
-    },
-    tokens,
-  };
-
-  const response = await messaging.sendMulticast(message);
-  console.log(`Sent ${response.successCount} push(es) to ${uid}`);
-
-  // Limpia tokens invalidos
-  if (response.failureCount > 0) {
-    const failedTokens = [];
-    response.responses.forEach((resp, idx) => {
-      if (!resp.success) failedTokens.push(tokens[idx]);
-    });
-    for (const token of failedTokens) {
-      await db.collection("users").document(uid)
-        .collection("fcmTokens").doc(token).delete();
+    if (type && notificationSettings[type] === false) {
+      console.log(`Notificaciones de tipo ${type} desactivadas para usuario ${uid}`);
+      return;
     }
+
+    const tokensSnap = await db.collection("users").document(uid)
+      .collection("fcmTokens").get();
+
+    if (tokensSnap.empty) {
+      console.log(`No FCM tokens for user ${uid}`);
+      return;
+    }
+
+    const tokens = tokensSnap.docs.map(d => d.id);
+    const message = {
+      notification: { title, body },
+      data: data || {},
+      android: {
+        priority: "high",
+        notification: {
+          tag,         // colapsa multiples pushes en uno
+          click_action: "OPEN_REEL",
+        },
+      },
+      tokens,
+    };
+
+    const response = await messaging.sendMulticast(message);
+    console.log(`Sent ${response.successCount} push(es) to ${uid}`);
+
+    // Limpia tokens invalidos
+    if (response.failureCount > 0) {
+      const failedTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) failedTokens.push(tokens[idx]);
+      });
+      for (const token of failedTokens) {
+        await db.collection("users").document(uid)
+          .collection("fcmTokens").doc(token).delete();
+      }
+    }
+  } catch (e) {
+    console.error(`Error en sendPushToUser para ${uid}:`, e);
   }
 }

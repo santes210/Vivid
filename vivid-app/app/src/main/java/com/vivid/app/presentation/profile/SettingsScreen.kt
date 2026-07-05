@@ -30,7 +30,7 @@ import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private const val APP_VERSION_NAME = "0.6.7-5 - Material You 3 Design"
+private const val APP_VERSION_NAME = "2.1.0 - Material You 3 Design"
 
 data class SettingsInfoDialog(
     val title: String,
@@ -166,7 +166,7 @@ fun SettingsScreen(
                 SettingsCardGroup(title = "Tu Cuenta") {
                     SettingsListItem(
                         title = "Privacidad de la cuenta",
-                        subtitle = if (isPrivateAccount) "Privada" else "Pública",
+                        subtitle = if (isPrivateAccount) "Cuenta Privada" else "Cuenta Pública",
                         icon = if (isPrivateAccount) Icons.Default.Lock else Icons.Default.Public,
                         trailingContent = {
                             Switch(
@@ -478,10 +478,17 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyLikesComments,
-                                onCheckedChange = { checked -> SettingsManager.setNotifyLikesComments(context, checked) }
+                                onCheckedChange = { checked -> 
+                                    SettingsManager.setNotifyLikesComments(context, checked)
+                                    updateUserSetting("notifyLikesComments", checked)
+                                }
                             )
                         },
-                        onClick = { SettingsManager.setNotifyLikesComments(context, !notifyLikesComments) }
+                        onClick = { 
+                            val nextVal = !notifyLikesComments
+                            SettingsManager.setNotifyLikesComments(context, nextVal)
+                            updateUserSetting("notifyLikesComments", nextVal)
+                        }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
@@ -491,10 +498,17 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyNewFollowers,
-                                onCheckedChange = { checked -> SettingsManager.setNotifyFollowers(context, checked) }
+                                onCheckedChange = { checked -> 
+                                    SettingsManager.setNotifyFollowers(context, checked)
+                                    updateUserSetting("notifyNewFollowers", checked)
+                                }
                             )
                         },
-                        onClick = { SettingsManager.setNotifyFollowers(context, !notifyNewFollowers) }
+                        onClick = { 
+                            val nextVal = !notifyNewFollowers
+                            SettingsManager.setNotifyFollowers(context, nextVal)
+                            updateUserSetting("notifyNewFollowers", nextVal)
+                        }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
@@ -504,10 +518,17 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyDirectMessages,
-                                onCheckedChange = { checked -> SettingsManager.setNotifyDm(context, checked) }
+                                onCheckedChange = { checked -> 
+                                    SettingsManager.setNotifyDm(context, checked)
+                                    updateUserSetting("notifyDirectMessages", checked)
+                                }
                             )
                         },
-                        onClick = { SettingsManager.setNotifyDm(context, !notifyDirectMessages) }
+                        onClick = { 
+                            val nextVal = !notifyDirectMessages
+                            SettingsManager.setNotifyDm(context, nextVal)
+                            updateUserSetting("notifyDirectMessages", nextVal)
+                        }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
@@ -517,10 +538,17 @@ fun SettingsScreen(
                         trailingContent = {
                             Switch(
                                 checked = notifyStoryReminders,
-                                onCheckedChange = { checked -> SettingsManager.setNotifyStoryReminders(context, checked) }
+                                onCheckedChange = { checked -> 
+                                    SettingsManager.setNotifyStoryReminders(context, checked)
+                                    updateUserSetting("notifyStoryReminders", checked)
+                                }
                             )
                         },
-                        onClick = { SettingsManager.setNotifyStoryReminders(context, !notifyStoryReminders) }
+                        onClick = { 
+                            val nextVal = !notifyStoryReminders
+                            SettingsManager.setNotifyStoryReminders(context, nextVal)
+                            updateUserSetting("notifyStoryReminders", nextVal)
+                        }
                     )
                 }
             }
