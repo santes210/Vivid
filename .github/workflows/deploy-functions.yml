@@ -17,10 +17,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
 
       - name: Install Cloud Function deps
         run: cd cloud-function && npm install
@@ -31,7 +31,6 @@ jobs:
       - name: Auth with service account
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > "${GOOGLE_APPLICATION_CREDENTIALS}"
-          echo "Credentials written to ${GOOGLE_APPLICATION_CREDENTIALS}"
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
 
@@ -41,14 +40,7 @@ jobs:
         run: |
           firebase deploy --only firestore:rules \
             --project verigram-c58a6 \
-            --non-interactive \
-            --debug 2>&1 | tee /tmp/debug-rules.log || true
-          # Si falló, mostramos el log completo para diagnóstico
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== DEBUG LOG (últimas 80 líneas) ==="
-            tail -80 /tmp/debug-rules.log
-            exit 1
-          fi
+            --non-interactive
 
       - name: Deploy Cloud Functions
         env:
