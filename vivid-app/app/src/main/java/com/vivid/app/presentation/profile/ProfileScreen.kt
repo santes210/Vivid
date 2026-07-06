@@ -293,7 +293,7 @@ fun ProfileScreen(
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
                     PrivateProfileLock(
                         username = profile.username,
-                        isRequestPending = profile.isFollowRequestPending
+                        hasPendingRequest = profile.isFollowRequestPending
                     )
                 }
             } else if (posts.isEmpty()) {
@@ -400,10 +400,10 @@ private fun ProfileHeader(
                     enabled = !isFollowActionLoading,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (relationshipState.isFollowing || relationshipState.isRequested)
+                        containerColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
                             MaterialTheme.colorScheme.secondaryContainer
                         else MaterialTheme.colorScheme.primary,
-                        contentColor = if (relationshipState.isFollowing || relationshipState.isRequested)
+                        contentColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
                             MaterialTheme.colorScheme.onSecondaryContainer
                         else MaterialTheme.colorScheme.onPrimary
                     )
@@ -414,7 +414,7 @@ private fun ProfileHeader(
                         val text = when {
                             relationshipState.isBlocked -> "Bloqueado"
                             relationshipState.isFollowing -> "Siguiendo"
-                            relationshipState.isRequested -> "Solicitado"
+                            relationshipState.hasPendingRequest -> "Solicitado"
                             else -> "Seguir"
                         }
                         Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
@@ -426,7 +426,7 @@ private fun ProfileHeader(
 }
 
 @Composable
-private fun PrivateProfileLock(username: String, isRequestPending: Boolean) {
+private fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
@@ -454,7 +454,7 @@ private fun PrivateProfileLock(username: String, isRequestPending: Boolean) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            if (isRequestPending) {
+            if (hasPendingRequest) {
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
