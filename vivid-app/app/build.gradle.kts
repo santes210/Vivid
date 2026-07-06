@@ -114,6 +114,10 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
 
+    // Shizuku (opcional) — whitelist de batería para notificaciones persistentes
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")

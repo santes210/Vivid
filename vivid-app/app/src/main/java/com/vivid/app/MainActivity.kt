@@ -12,8 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.navigation.VividNavigation
+import com.vivid.app.notifications.NotificationForegroundService
 import com.vivid.app.theme.VividTheme
-import com.vivid.app.util.LocalNotificationWatcher
 import com.vivid.app.util.PushNotificationHelper
 import com.vivid.app.util.SettingsManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -30,17 +30,17 @@ class MainActivity : ComponentActivity() {
 
         readNotificationExtras(intent)
 
-        // ── Auth listener: registra token FCM + inicia watcher de notificaciones locales ──
+        // ── Auth listener: token FCM + Foreground Service para notificaciones ──
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
-            val user = auth.currentUser
-            if (user != null) {
-                // Registrar token FCM para cuando actives Blaze en el futuro
+            if (auth.currentUser != null) {
+                // Token FCM (para cuando actives Blaze en el futuro)
                 PushNotificationHelper.registerTokenForCurrentUser()
 
-                // Iniciar watcher de notificaciones locales (sin Cloud Functions)
-                LocalNotificationWatcher.start(applicationContext)
+                // Iniciar Foreground Service que mantiene vivo el watcher de notificaciones
+                // + intenta whitelist de batería vía Shizuku si está disponible
+                NotificationForegroundService.start(applicationContext)
             } else {
-                LocalNotificationWatcher.stop()
+                NotificationForegroundService.stop(applicationContext)
             }
         }
 
@@ -83,11 +83,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         readNotificationExtras(intent)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        LocalNotificationWatcher.stop()
     }
 
     private fun readNotificationExtras(intent: android.content.Intent) {
