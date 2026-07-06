@@ -3,6 +3,7 @@ package com.vivid.app.presentation.profile
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,21 +14,17 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -39,7 +36,6 @@ import androidx.media3.ui.PlayerView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.vivid.app.domain.repository.ChatRepository
 import kotlinx.coroutines.launch
 
 data class ProfileUiState(
@@ -53,7 +49,10 @@ data class ProfileUiState(
     val reelsCount: Int = 0,
     val followersCount: Int = 0,
     val followingCount: Int = 0,
-    val isPrivate: Boolean = false
+    val isPrivate: Boolean = false,
+    val isFollowedByCurrentUser: Boolean = false,
+    val isCurrentUser: Boolean = false,
+    val isFollowRequestPending: Boolean = false
 )
 
 data class ProfilePost(
@@ -85,7 +84,7 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var profile by remember { mutableStateOf(ProfileUiState(uid = userId)) }
+    var profile by remember { mutableStateOf(ProfileUiState(uid = userId, isCurrentUser = isOwnProfile)) }
     var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
     var selectedPost by remember { mutableStateOf<ProfilePost?>(null) }
     var showProfileMenu by remember { mutableStateOf(false) }
@@ -94,30 +93,27 @@ fun ProfileScreen(
     val followActionError by viewModel.followActionError.collectAsState()
     val followActionMessage by viewModel.followActionMessage.collectAsState()
 
+    // ── Determinar si se puede ver contenido ──
+    val canViewContent = isOwnProfile || !profile.isPrivate || profile.isFollowedByCurrentUser
+
     LaunchedEffect(userId) {
-        viewModel.checkFollowStatus(userId)
+        if (!isOwnProfile) viewModel.checkFollowStatus(userId)
     }
-
     LaunchedEffect(followActionError) {
-        followActionError?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearFollowActionError()
-        }
+        followActionError?.let { snackbarHostState.showSnackbar(it); viewModel.clearFollowActionError() }
     }
-
     LaunchedEffect(followActionMessage) {
-        followActionMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearFollowActionMessage()
-        }
+        followActionMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearFollowActionMessage() }
     }
 
     DisposableEffect(userId) {
         var profileListener: ListenerRegistration? = null
+        var followListener: ListenerRegistration? = null
         var postsListener: ListenerRegistration? = null
         var reelsListener: ListenerRegistration? = null
 
         if (userId.isNotBlank()) {
+            // ── Perfil ──
             profileListener = db.collection("users").document(userId)
                 .addSnapshotListener { snapshot, _ ->
                     val data = snapshot?.data.orEmpty()
@@ -132,30 +128,46 @@ fun ProfileScreen(
                         reelsCount = (data["reelsCount"] as? Long)?.toInt() ?: 0,
                         followersCount = (data["followersCount"] as? Long)?.toInt() ?: 0,
                         followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0,
-                        isPrivate = data["isPrivate"] as? Boolean ?: false
+                        isPrivate = data["isPrivate"] as? Boolean ?: false,
+                        isFollowedByCurrentUser = profile.isFollowedByCurrentUser,
+                        isCurrentUser = isOwnProfile
                     )
                 }
 
+            // ── Estado de seguimiento (para ver si currentUser sigue a este perfil) ──
+            if (!isOwnProfile) {
+                followListener = db.collection("users").document(userId)
+                    .collection("followers").document(currentUserId)
+                    .addSnapshotListener { snap, _ ->
+                        val followed = snap?.exists() == true
+                        profile = profile.copy(isFollowedByCurrentUser = followed)
+                        // También chequear followRequests
+                        db.collection("users").document(userId)
+                            .collection("followRequests").document(currentUserId)
+                            .get().addOnSuccessListener { reqSnap ->
+                                profile = profile.copy(isFollowRequestPending = reqSnap.exists())
+                            }
+                    }
+            }
+
+            // ── Posts y Reels ──
             var photoPosts = emptyList<ProfilePost>()
             var reelPosts = emptyList<ProfilePost>()
-            fun publishProfileContent() {
-                posts = (photoPosts + reelPosts).sortedByDescending { it.timestamp }
-            }
+            fun publish() { posts = (photoPosts + reelPosts).sortedByDescending { it.timestamp } }
 
             postsListener = db.collection("posts")
                 .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, _ ->
                     photoPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
-                            id = doc.id,
-                            imageUrl = doc.getString("imageUrl").orEmpty(),
+                            id = doc.id, imageUrl = doc.getString("imageUrl").orEmpty(),
                             imageBase64 = doc.getString("imageBase64").orEmpty(),
                             caption = doc.getString("caption").orEmpty(),
                             timestamp = doc.getLong("timestamp") ?: 0L,
                             username = doc.getString("username").orEmpty()
                         )
                     }
-                    publishProfileContent()
+                    publish()
                 }
 
             reelsListener = db.collection("reels")
@@ -167,34 +179,40 @@ fun ProfileScreen(
                         ProfilePost(
                             id = "reel_${doc.id}",
                             imageUrl = doc.getString("thumbnailUrl").orEmpty(),
-                            videoUrl = videoUrl,
-                            thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
-                            isVideo = true,
-                            caption = doc.getString("caption").orEmpty(),
+                            videoUrl = videoUrl, thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+                            isVideo = true, caption = doc.getString("caption").orEmpty(),
                             timestamp = doc.getLong("timestamp") ?: 0L,
                             username = doc.getString("username").orEmpty()
                         )
                     }
-                    publishProfileContent()
+                    publish()
                 }
         }
 
         onDispose {
-            profileListener?.remove()
-            postsListener?.remove()
-            reelsListener?.remove()
+            profileListener?.remove(); followListener?.remove()
+            postsListener?.remove(); reelsListener?.remove()
         }
     }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        if (isOwnProfile) "Mi Perfil" else "@${profile.username}",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                    ) 
+            LargeTopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            if (isOwnProfile) profile.displayName else "@${profile.username}",
+                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        if (profile.isPrivate && !isOwnProfile) {
+                            Text(
+                                "Cuenta privada",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     if (!isOwnProfile) {
@@ -206,434 +224,317 @@ fun ProfileScreen(
                 actions = {
                     if (isOwnProfile) {
                         IconButton(onClick = onSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "Ajustes", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Settings, contentDescription = "Ajustes",
+                                tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = {
                             com.vivid.app.util.PushNotificationHelper.unregisterToken()
-                            auth.signOut()
-                            onLogout()
+                            auth.signOut(); onLogout()
                         }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión",
+                                tint = MaterialTheme.colorScheme.error)
                         }
                     } else {
                         Box {
                             IconButton(onClick = { showProfileMenu = true }) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
                             }
-                            DropdownMenu(
-                                expanded = showProfileMenu,
-                                onDismissRequest = { showProfileMenu = false },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
+                            DropdownMenu(expanded = showProfileMenu, onDismissRequest = { showProfileMenu = false }) {
                                 DropdownMenuItem(
-                                    text = { Text(if (relationshipState.isBlocked) "Desbloquear" else "Bloquear", style = MaterialTheme.typography.bodyLarge) },
+                                    text = { Text(if (relationshipState.isBlocked) "Desbloquear" else "Bloquear") },
                                     onClick = {
+                                        if (relationshipState.isBlocked) viewModel.unblockUser(userId)
+                                        else viewModel.blockUser(userId)
                                         showProfileMenu = false
-                                        if (relationshipState.isBlocked) {
-                                            viewModel.unblockUser(userId)
-                                        } else {
-                                            viewModel.blockUser(userId)
-                                        }
-                                    }
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Block, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Enviar mensaje") },
+                                    onClick = {
+                                        val chatId = com.vivid.app.domain.repository.ChatRepository.buildChatId(currentUserId, userId)
+                                        onNavigateToChat(chatId, userId, profile.username)
+                                        showProfileMenu = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Email, null) }
                                 )
                             }
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                ),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
-                shape = RoundedCornerShape(28.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = profile.displayName,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Text("@${profile.username}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    AssistChip(
-                        onClick = { },
-                        label = { Text(if (profile.isPrivate) "Cuenta privada" else "Cuenta pública", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-                    if (profile.bio.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = profile.bio,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                    }
-
-                    if (isOwnProfile && com.vivid.app.util.SettingsManager.creatorDashboardEnabled) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Alcance de tus Reels este mes: 1,420 (+24%)")
-                                    }
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "Panel para profesionales",
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Text(
-                                        "Ver métricas, alcance y analíticas avanzadas.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        ProfileStat((profile.postsCount + profile.reelsCount).toString(), "Posts/Reels")
-                        ProfileStat(profile.followersCount.toString(), "Seguidores")
-                        ProfileStat(profile.followingCount.toString(), "Siguiendo")
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    if (isOwnProfile) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Button(
-                                onClick = onEditProfile, 
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(20.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text("Editar perfil", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                            }
-                            OutlinedButton(
-                                onClick = onSettings, 
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(20.dp)
-                            ) {
-                                Text("Ajustes", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                            }
-                        }
-                    } else if (!relationshipState.isBlocked) {
-                        val followButtonText = when {
-                            relationshipState.isFollowing -> "Siguiendo"
-                            relationshipState.hasPendingRequest -> "Pendiente"
-                            profile.isPrivate -> "Solicitar"
-                            else -> "Seguir"
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Button(
-                                onClick = { viewModel.toggleFollow(userId) },
-                                modifier = Modifier.weight(1f),
-                                enabled = !isFollowActionLoading,
-                                shape = RoundedCornerShape(20.dp),
-                                colors = if (relationshipState.isFollowing || relationshipState.hasPendingRequest) {
-                                    ButtonDefaults.filledTonalButtonColors()
-                                } else {
-                                    ButtonDefaults.buttonColors()
-                                }
-                            ) {
-                                if (isFollowActionLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                } else {
-                                    Text(followButtonText, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                                }
-                            }
-
-                            if (!profile.isPrivate || relationshipState.isFollowing) {
-                                OutlinedButton(
-                                    onClick = {
-                                        val chatId = ChatRepository.buildChatId(currentUserId, userId)
-                                        onNavigateToChat(chatId, userId, profile.displayName)
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(20.dp)
-                                ) {
-                                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Mensaje", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                                }
-                            }
-                        }
-                    }
-                }
+            // ── Header del perfil ──
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                ProfileHeader(
+                    profile = profile, isOwnProfile = isOwnProfile,
+                    relationshipState = relationshipState,
+                    isFollowActionLoading = isFollowActionLoading,
+                    onToggleFollow = { viewModel.toggleFollow(userId) },
+                    onEditProfile = onEditProfile
+                )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), modifier = Modifier.padding(horizontal = 16.dp))
-            Spacer(modifier = Modifier.height(4.dp))
-
-            if (relationshipState.isBlocked) {
-                BlockedAccountOverlay()
-            } else if (profile.isPrivate && !isOwnProfile && !relationshipState.isFollowing) {
-                PrivateAccountOverlay(hasPendingRequest = relationshipState.hasPendingRequest)
+            // ── Si es privado y no es el dueño ni seguidor → candado ──
+            if (!canViewContent) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                    PrivateProfileLock(
+                        username = profile.username,
+                        isRequestPending = profile.isFollowRequestPending
+                    )
+                }
+            } else if (posts.isEmpty()) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                    EmptyPostsPlaceholder()
+                }
             } else {
-                ProfilePostsGrid(posts = posts, onPostClick = { selectedPost = it })
+                items(posts, key = { it.id }) { post ->
+                    ProfilePostThumbnail(post = post, onClick = { selectedPost = post })
+                }
             }
         }
     }
 
+    // ── Visor de post ──
     selectedPost?.let { post ->
         ProfilePostViewerDialog(post = post, onDismiss = { selectedPost = null })
     }
 }
 
 @Composable
-private fun PrivateAccountOverlay(hasPendingRequest: Boolean) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(16.dp))
-        Text("Esta cuenta es privada", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (hasPendingRequest) "Tu solicitud de seguimiento está pendiente de aprobación." else "Sigue a esta cuenta para ver sus fotos y videos.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun BlockedAccountOverlay() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
-        Spacer(Modifier.height(16.dp))
-        Text("Has bloqueado esta cuenta", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Desbloquéala desde el menú de opciones para volver a ver su contenido.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun ProfilePostsGrid(
-    posts: List<ProfilePost>,
-    onPostClick: (ProfilePost) -> Unit
+private fun ProfileHeader(
+    profile: ProfileUiState,
+    isOwnProfile: Boolean,
+    relationshipState: com.vivid.app.domain.repository.FollowRelationshipState,
+    isFollowActionLoading: Boolean,
+    onToggleFollow: () -> Unit,
+    onEditProfile: () -> Unit
 ) {
-    Text(
-        "Publicaciones y Reels",
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-    )
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // ── Avatar ──
+            ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
+            Spacer(Modifier.height(12.dp))
 
-    if (posts.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "Aún no hay publicaciones.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(posts, key = { it.id }) { post ->
-                ProfilePostThumbnail(post = post, onClick = { onPostClick(post) })
+            // ── Nombre y bio ──
+            Text(profile.displayName, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+            Text("@${profile.username}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (profile.bio.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(profile.bio, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            }
+
+            // ── Badge privado ──
+            if (profile.isPrivate) {
+                Spacer(Modifier.height(4.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Lock, null, modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Privada", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Stats ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ProfileStat(profile.postsCount.toString(), "Publicaciones")
+                ProfileStat(profile.reelsCount.toString(), "Reels")
+                ProfileStat(profile.followersCount.toString(), "Seguidores")
+                ProfileStat(profile.followingCount.toString(), "Siguiendo")
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Botón de acción ──
+            if (isOwnProfile) {
+                OutlinedButton(
+                    onClick = onEditProfile,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline)
+                    )
+                ) {
+                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Editar perfil")
+                }
+            } else {
+                Button(
+                    onClick = onToggleFollow,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isFollowActionLoading,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (relationshipState.isFollowing || relationshipState.isRequested)
+                            MaterialTheme.colorScheme.secondaryContainer
+                        else MaterialTheme.colorScheme.primary,
+                        contentColor = if (relationshipState.isFollowing || relationshipState.isRequested)
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    if (isFollowActionLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        val text = when {
+                            relationshipState.isBlocked -> "Bloqueado"
+                            relationshipState.isFollowing -> "Siguiendo"
+                            relationshipState.isRequested -> "Solicitado"
+                            else -> "Seguir"
+                        }
+                        Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    }
+                }
             }
         }
     }
 }
+
+@Composable
+private fun PrivateProfileLock(username: String, isRequestPending: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                Icons.Default.Lock, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Esta cuenta es privada",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Sigue a @$username para ver sus publicaciones y reels.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            if (isRequestPending) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        "Solicitud enviada",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyPostsPlaceholder() {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.GridView, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(48.dp))
+            Spacer(Modifier.height(12.dp))
+            Text("Aún no hay publicaciones.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+// ── Componentes reutilizables ──
 
 @Composable
 private fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64: String) {
     if (avatarBase64.isNotBlank()) {
         var bitmap by remember(avatarBase64) { mutableStateOf<Bitmap?>(null) }
         LaunchedEffect(avatarBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(avatarBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) { null }
+            bitmap = try { val bytes = Base64.decode(avatarBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null }
         }
         if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Foto de perfil",
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            fallbackAvatar(displayName)
+            Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = "Avatar",
+                modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+            return
         }
-    } else if (avatarUrl.isNotBlank()) {
-        AsyncImage(
-            model = avatarUrl,
-            contentDescription = "Foto de perfil",
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        fallbackAvatar(displayName)
     }
-}
-
-@Composable
-private fun fallbackAvatar(displayName: String) {
-    Box(
-        modifier = Modifier
-            .size(120.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
-            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onPrimaryContainer
-        )
+    if (avatarUrl.isNotBlank()) {
+        AsyncImage(model = avatarUrl, contentDescription = "Avatar",
+            modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+    } else {
+        Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+            Text(displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
     }
 }
 
 @Composable
 private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
     var bitmap by remember(post.imageBase64) { mutableStateOf<Bitmap?>(null) }
-
     LaunchedEffect(post.imageBase64) {
-        bitmap = if (post.imageBase64.isNotBlank()) {
-            try {
-                val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
-            }
-        } else null
+        bitmap = if (post.imageBase64.isNotBlank()) try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } else null
     }
-
     Box(
-        modifier = Modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
         when {
-            bitmap != null -> Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            post.imageUrl.isNotBlank() -> AsyncImage(
-                model = post.imageUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            else -> Text("Vivid", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            bitmap != null -> Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            post.imageUrl.isNotBlank() -> AsyncImage(model = post.imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else -> Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
         }
         if (post.isVideo) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                shape = CircleShape,
-                modifier = Modifier.align(Alignment.Center)
-            ) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "Reel",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(8.dp).size(28.dp)
-                )
+            Surface(color = Color.Black.copy(alpha = 0.5f), shape = CircleShape, modifier = Modifier.align(Alignment.Center)) {
+                Icon(Icons.Default.PlayArrow, "Reel", tint = Color.White, modifier = Modifier.padding(8.dp).size(24.dp))
             }
         }
     }
@@ -642,87 +543,35 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
 @Composable
 private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
                         Text(post.username.ifBlank { "Publicación" }, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                        Text(
-                            if (post.timestamp > 0) java.text.SimpleDateFormat("dd MMM yyyy · HH:mm", java.util.Locale.getDefault()).format(java.util.Date(post.timestamp)) else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (post.timestamp > 0)
+                            Text(java.text.SimpleDateFormat("dd MMM yyyy · HH:mm", java.util.Locale.getDefault()).format(java.util.Date(post.timestamp)),
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = onDismiss) { Text("Cerrar", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)) }
+                    TextButton(onClick = onDismiss) { Text("Cerrar", fontWeight = FontWeight.Bold) }
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     when {
                         post.isVideo && post.videoUrl.isNotBlank() -> {
-                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val ctx = androidx.compose.ui.platform.LocalContext.current
                             val player = remember(post.videoUrl) {
-                                ExoPlayer.Builder(context).build().apply {
-                                    setMediaItem(MediaItem.fromUri(post.videoUrl))
-                                    repeatMode = ExoPlayer.REPEAT_MODE_ALL
-                                    prepare()
-                                    playWhenReady = true
-                                }
+                                ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(post.videoUrl)); repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true }
                             }
                             DisposableEffect(player) { onDispose { player.release() } }
-                            AndroidView(
-                                factory = { ctx -> PlayerView(ctx).apply { this.player = player } },
-                                update = { it.player = player },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            AndroidView(factory = { ctx2 -> PlayerView(ctx2).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
                         }
                         post.imageBase64.isNotBlank() -> {
-                            val bitmap = remember(post.imageBase64) {
-                                try {
-                                    val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP)
-                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                } catch (_: Exception) {
-                                    null
-                                }
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
+                            val bmp = remember(post.imageBase64) { try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } }
+                            if (bmp != null) Image(bitmap = bmp.asImageBitmap(), null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                         }
-                        post.imageUrl.isNotBlank() -> {
-                            AsyncImage(
-                                model = post.imageUrl,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
+                        post.imageUrl.isNotBlank() -> AsyncImage(model = post.imageUrl, null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                     }
                 }
-                if (post.caption.isNotBlank()) {
-                    Text(
-                        post.caption,
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
+                if (post.caption.isNotBlank()) Text(post.caption, modifier = Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)
             }
         }
     }
@@ -732,7 +581,7 @@ private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
 fun ProfileStat(count: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(count, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(Modifier.height(2.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

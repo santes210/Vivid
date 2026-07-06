@@ -3,28 +3,17 @@ package com.vivid.app.presentation.feed
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -48,6 +38,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.vivid.app.presentation.stories.StoriesTray
+import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -55,31 +46,19 @@ import java.util.Date
 import java.util.Locale
 
 data class PostData(
-    val id: String,
-    val userId: String,
-    val username: String,
-    val userProfilePicture: String,
-    val userProfilePictureBase64: String = "",
-    val imageUrl: String = "",
-    val imageBase64: String = "",
-    val videoUrl: String = "",
-    val thumbnailUrl: String = "",
-    val isVideo: Boolean = false,
-    val caption: String,
-    val likesCount: Int = 0,
-    val commentsCount: Int = 0,
-    val timestamp: Long,
-    val isLiked: Boolean = false
+    val id: String, val userId: String, val username: String,
+    val userProfilePicture: String, val userProfilePictureBase64: String = "",
+    val imageUrl: String = "", val imageBase64: String = "",
+    val videoUrl: String = "", val thumbnailUrl: String = "",
+    val isVideo: Boolean = false, val caption: String,
+    val likesCount: Int = 0, val commentsCount: Int = 0,
+    val timestamp: Long, val isLiked: Boolean = false
 )
 
 data class PostComment(
-    val id: String,
-    val userId: String,
-    val username: String,
-    val text: String,
-    val timestamp: Long,
-    val avatarUrl: String = "",
-    val avatarBase64: String = ""
+    val id: String, val userId: String, val username: String,
+    val text: String, val timestamp: Long,
+    val avatarUrl: String = "", val avatarBase64: String = ""
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,111 +81,85 @@ fun FeedScreen(
     var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForEdit by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(Unit) {
         isLoading = true
         loadPostsFromFirebase(
-            onSuccess = { loadedPosts ->
-                posts = loadedPosts
-                isLoading = false
-            },
-            onFallback = {
-                posts = emptyList()
-                isLoading = false
-            }
+            onSuccess = { posts = it; isLoading = false },
+            onFallback = { posts = emptyList(); isLoading = false }
         )
     }
 
     DisposableEffect(currentUserId) {
-        var registration: ListenerRegistration? = null
+        var reg: ListenerRegistration? = null
         if (currentUserId.isNotBlank()) {
-            registration = FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(currentUserId)
-                .collection("followRequests")
-                .addSnapshotListener { snapshot, _ ->
-                    followRequestsCount = snapshot?.size() ?: 0
-                }
+            reg = FirebaseFirestore.getInstance().collection("users").document(currentUserId)
+                .collection("followRequests").addSnapshotListener { snap, _ -> followRequestsCount = snap?.size() ?: 0 }
         }
-        onDispose { registration?.remove() }
+        onDispose { reg?.remove() }
     }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { 
+            LargeTopAppBar(
+                title = {
                     Text(
-                        "Vivid", 
+                        "Vivid",
                         style = MaterialTheme.typography.headlineLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                    ) 
+                    )
                 },
                 actions = {
                     BadgedBox(
-                        badge = {
-                            if (followRequestsCount > 0) {
-                                Badge(containerColor = MaterialTheme.colorScheme.error) { 
-                                    Text(followRequestsCount.coerceAtMost(9).toString(), color = MaterialTheme.colorScheme.onError) 
-                                }
-                            }
-                        },
+                        badge = { if (followRequestsCount > 0) Badge(containerColor = MaterialTheme.colorScheme.error) { Text(followRequestsCount.coerceAtMost(9).toString(), color = MaterialTheme.colorScheme.onError) } },
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
                         IconButton(onClick = onOpenRequests) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Solicitudes", tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Icons.Default.Notifications, "Solicitudes", tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                     IconButton(onClick = onOpenMessages) {
-                        Icon(Icons.Default.Email, contentDescription = "Mensajes", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Icons.Default.Email, "Mensajes", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                ),
+                scrollBehavior = scrollBehavior
             )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            StoriesTray(onStoryClick = { story -> onOpenStoryViewer(story.id) })
-
-            Spacer(modifier = Modifier.height(12.dp))
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            StoriesTray(onStoryClick = { onOpenStoryViewer(it.id) })
+            Spacer(Modifier.height(8.dp))
 
             if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else if (posts.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "No hay publicaciones aún",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PhotoLibrary, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.size(64.dp))
+                        Spacer(Modifier.height(16.dp))
+                        Text("No hay publicaciones aún", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("¡Crea la primera!", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                    }
                 }
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
-                        PostItem(
-                            post = post,
-                            currentUserId = currentUserId,
+                        PostCard(
+                            post = post, currentUserId = currentUserId,
                             onOpenPost = { selectedPostViewerIndex = index },
                             onOpenComments = { selectedPostForComments = post },
                             onOpenDetails = { selectedPostForDetails = post },
@@ -219,840 +172,306 @@ fun FeedScreen(
         }
     }
 
-    selectedPostForComments?.let { post ->
-        PostCommentsSheet(
-            post = post,
-            onDismiss = { selectedPostForComments = null }
-        )
-    }
-
-    selectedPostViewerIndex?.let { initialIndex ->
-        PostViewerDialog(
-            posts = posts,
-            initialIndex = initialIndex,
-            onDismiss = { selectedPostViewerIndex = null }
-        )
-    }
-
-    selectedPostForDetails?.let { post ->
-        PostDetailsDialog(
-            post = post,
-            onDismiss = { selectedPostForDetails = null }
-        )
-    }
-
+    // ── Diálogos ──
+    selectedPostForComments?.let { post -> PostCommentsSheet(post = post, onDismiss = { selectedPostForComments = null }) }
+    selectedPostViewerIndex?.let { idx -> PostViewerDialog(posts = posts, initialIndex = idx, onDismiss = { selectedPostViewerIndex = null }) }
+    selectedPostForDetails?.let { post -> PostDetailsDialog(post = post, onDismiss = { selectedPostForDetails = null }) }
     selectedPostForEdit?.let { post ->
-        EditPostDialog(
-            post = post,
-            onDismiss = { selectedPostForEdit = null },
-            onSaved = { updatedCaption ->
-                selectedPostForEdit = null
-                posts = posts.map {
-                    if (it.id == post.id) it.copy(caption = updatedCaption) else it
-                }
-                scope.launch {
-                    snackbarHostState.showSnackbar("Publicación actualizada")
-                }
-            }
-        )
+        EditPostDialog(post = post, onDismiss = { selectedPostForEdit = null }, onSaved = { cap ->
+            selectedPostForEdit = null; posts = posts.map { if (it.id == post.id) it.copy(caption = cap) else it }
+            scope.launch { snackbarHostState.showSnackbar("Publicación actualizada") }
+        })
     }
-
     selectedPostForDelete?.let { post ->
         AlertDialog(
             onDismissRequest = { selectedPostForDelete = null },
-            title = { Text("Eliminar publicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-            text = { Text("Esta acción borrará la publicación y sus comentarios de forma permanente.") },
+            title = { Text("Eliminar publicación") },
+            text = { Text("¿Estás seguro? Esta acción no se puede deshacer.") },
             confirmButton = {
-                Button(
-                    onClick = {
+                Button(onClick = {
+                    scope.launch {
+                        try {
+                            FirebaseFirestore.getInstance().collection("posts").document(post.id).delete().await()
+                            posts = posts.filter { it.id != post.id }
+                            snackbarHostState.showSnackbar("Publicación eliminada")
+                        } catch (e: Exception) { snackbarHostState.showSnackbar("Error: ${e.message}") }
                         selectedPostForDelete = null
-                        scope.launch {
-                            val success = deletePostFromFirebase(post)
-                            if (success) {
-                                posts = posts.filterNot { it.id == post.id }
-                                snackbarHostState.showSnackbar("Publicación eliminada")
-                            } else {
-                                snackbarHostState.showSnackbar("No se pudo eliminar la publicación")
-                            }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Eliminar", color = MaterialTheme.colorScheme.onError)
-                }
+                    }
+                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Eliminar") }
             },
-            dismissButton = {
-                TextButton(onClick = { selectedPostForDelete = null }) {
-                    Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 6.dp
+            dismissButton = { TextButton(onClick = { selectedPostForDelete = null }) { Text("Cancelar") } }
         )
     }
 }
 
-private fun loadPostsFromFirebase(
-    onSuccess: (List<PostData>) -> Unit,
-    onFallback: () -> Unit
-) {
-    val db = FirebaseFirestore.getInstance()
-    db.collection("posts")
-        .orderBy("timestamp")
-        .limit(50)
-        .get()
-        .addOnSuccessListener { postDocs ->
-            val posts = postDocs.map { doc ->
-                PostData(
-                    id = doc.id,
-                    userId = doc.getString("userId") ?: "",
-                    username = doc.getString("username") ?: "usuario",
-                    userProfilePicture = doc.getString("userProfilePicture") ?: "",
-                    userProfilePictureBase64 = doc.getString("userProfilePictureBase64") ?: "",
-                    imageUrl = doc.getString("imageUrl") ?: "",
-                    imageBase64 = doc.getString("imageBase64") ?: "",
-                    caption = doc.getString("caption") ?: "",
-                    likesCount = doc.getLong("likesCount")?.toInt() ?: 0,
-                    commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0,
-                    timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
-                    isLiked = false
-                )
-            }
-
-            val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-            val loadReels = {
-                db.collection("reels")
-                    .orderBy("timestamp")
-                    .limit(50)
-                    .get()
-                    .addOnSuccessListener { reelDocs ->
-                        val reels = reelDocs.mapNotNull { doc ->
-                            val videoUrl = doc.getString("videoUrl").orEmpty()
-                            if (videoUrl.isBlank()) return@mapNotNull null
-                            PostData(
-                                id = "reel_${doc.id}",
-                                userId = doc.getString("userId") ?: "",
-                                username = doc.getString("username") ?: "usuario",
-                                userProfilePicture = doc.getString("userAvatar") ?: "",
-                                videoUrl = videoUrl,
-                                thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
-                                imageUrl = doc.getString("thumbnailUrl").orEmpty(),
-                                isVideo = true,
-                                caption = doc.getString("caption").orEmpty(),
-                                likesCount = doc.getLong("likes")?.toInt() ?: 0,
-                                commentsCount = doc.getLong("comments")?.toInt() ?: 0,
-                                timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
-                                isLiked = false
-                            )
-                        }
-                        onSuccess((posts + reels).sortedByDescending { it.timestamp })
-                    }
-                    .addOnFailureListener {
-                        onSuccess(posts.sortedByDescending { it.timestamp })
-                    }
-            }
-
-            if (!com.vivid.app.util.SettingsManager.showReelsInFeed) {
-                onSuccess(posts.sortedByDescending { it.timestamp })
-            } else {
-                loadReels()
-            }
-        }
-        .addOnFailureListener {
-            onFallback()
-        }
-}
-
-private fun updateLikeInFirebase(postId: String, isLiked: Boolean) {
-    val db = FirebaseFirestore.getInstance()
-    val increment = if (isLiked) 1L else -1L
-    if (postId.startsWith("reel_")) {
-        db.collection("reels")
-            .document(postId.removePrefix("reel_"))
-            .update("likes", FieldValue.increment(increment), "updatedAt", System.currentTimeMillis())
-    } else {
-        db.collection("posts")
-            .document(postId)
-            .update("likesCount", FieldValue.increment(increment))
-    }
-}
-
-private suspend fun deletePostFromFirebase(post: PostData): Boolean {
-    return try {
-        val db = FirebaseFirestore.getInstance()
-        val postRef = db.collection("posts").document(post.id)
-        val commentsSnapshot = postRef.collection("comments").get().await()
-        val batch = db.batch()
-
-        commentsSnapshot.documents.forEach { batch.delete(it.reference) }
-        batch.delete(postRef)
-        if (post.userId.isNotBlank()) {
-            batch.set(
-                db.collection("users").document(post.userId),
-                mapOf(
-                    "postsCount" to FieldValue.increment(-1),
-                    "updatedAt" to System.currentTimeMillis()
-                ),
-                com.google.firebase.firestore.SetOptions.merge()
-            )
-        }
-        batch.commit().await()
-        true
-    } catch (_: Exception) {
-        false
-    }
-}
-
-private suspend fun updatePostCaptionInFirebase(postId: String, newCaption: String): Boolean {
-    return try {
-        FirebaseFirestore.getInstance()
-            .collection("posts")
-            .document(postId)
-            .update(
-                mapOf(
-                    "caption" to newCaption,
-                    "updatedAt" to System.currentTimeMillis()
-                )
-            )
-            .await()
-        true
-    } catch (_: Exception) {
-        false
-    }
-}
-
-private fun formatPostDate(timestamp: Long): String {
-    return runCatching {
-        SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(timestamp))
-    }.getOrDefault("")
-}
-
+// ── PostCard (Material You 3 Card) ──
 @Composable
-private fun PostDetailsDialog(
-    post: PostData,
-    onDismiss: () -> Unit
+private fun PostCard(
+    post: PostData, currentUserId: String,
+    onOpenPost: () -> Unit, onOpenComments: () -> Unit,
+    onOpenDetails: () -> Unit, onEditPost: () -> Unit, onDeletePost: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Detalles de la publicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Autor: @${post.username}", style = MaterialTheme.typography.titleMedium)
-                Text("Fecha: ${formatPostDate(post.timestamp)}", style = MaterialTheme.typography.bodyMedium)
-                Text("Likes: ${if (com.vivid.app.util.SettingsManager.hideLikesCount) "Ocultos" else post.likesCount.toString()}", style = MaterialTheme.typography.bodyMedium)
-                Text("Comentarios: ${post.commentsCount}", style = MaterialTheme.typography.bodyMedium)
-                if (post.caption.isNotBlank()) {
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    Text("Descripción:", style = MaterialTheme.typography.titleSmall.copy(color = MaterialTheme.colorScheme.primary))
-                    Text(post.caption, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cerrar")
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 6.dp
-    )
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun PostViewerDialog(
-    posts: List<PostData>,
-    initialIndex: Int,
-    onDismiss: () -> Unit
-) {
-    val pagerState = rememberPagerState(
-        initialPage = initialIndex.coerceIn(0, (posts.lastIndex).coerceAtLeast(0)),
-        pageCount = { posts.size }
-    )
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                val currentPost = posts.getOrNull(pagerState.currentPage)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(currentPost?.username.orEmpty(), style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            currentPost?.timestamp?.let { formatPostDate(it) }.orEmpty(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    TextButton(onClick = onDismiss) { Text("Cerrar") }
-                }
-
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) { page ->
-                    val post = posts[page]
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PostImage(
-                            imageBase64 = post.imageBase64,
-                            imageUrl = post.imageUrl,
-                            username = post.username,
-                            modifier = Modifier.fillMaxSize(),
-                            useDefaultHeight = false
-                        )
-                    }
-                }
-
-                if (posts.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        repeat(posts.size) { index ->
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 3.dp)
-                                    .size(if (index == pagerState.currentPage) 8.dp else 6.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    )
-                            )
-                        }
-                    }
-                }
-
-                currentPost?.takeIf { it.caption.isNotBlank() }?.let { post ->
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("@${post.username}", style = MaterialTheme.typography.labelLarge)
-                        Spacer(Modifier.height(6.dp))
-                        Text(post.caption, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EditPostDialog(
-    post: PostData,
-    onDismiss: () -> Unit,
-    onSaved: (String) -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var caption by remember(post.id) { mutableStateOf(post.caption) }
-    var isSaving by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Editar publicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = caption,
-                    onValueChange = { caption = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Descripción") },
-                    maxLines = 5,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                if (!errorMessage.isNullOrBlank()) {
-                    Text(errorMessage.orEmpty(), color = MaterialTheme.colorScheme.error)
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = !isSaving,
-                onClick = {
-                    scope.launch {
-                        isSaving = true
-                        val success = updatePostCaptionInFirebase(post.id, caption.trim())
-                        if (success) {
-                            onSaved(caption.trim())
-                        } else {
-                            errorMessage = "No se pudo actualizar la publicación"
-                        }
-                        isSaving = false
-                    }
-                }
-            ) {
-                Text(if (isSaving) "Guardando..." else "Guardar")
-            }
-        },
-        dismissButton = {
-            TextButton(enabled = !isSaving, onClick = onDismiss) {
-                Text("Cancelar")
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 6.dp
-    )
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-fun PostItem(
-    post: PostData,
-    currentUserId: String,
-    onOpenPost: () -> Unit,
-    onOpenComments: () -> Unit,
-    onOpenDetails: () -> Unit,
-    onEditPost: () -> Unit,
-    onDeletePost: () -> Unit
-) {
-    var isLiked by remember { mutableStateOf(post.isLiked) }
-    var likeCount by remember { mutableStateOf(post.likesCount) }
-    var commentCount by remember { mutableStateOf(post.commentsCount) }
-    var showMenu by remember { mutableStateOf(false) }
-
-    ElevatedCard(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(28.dp)
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            // ── Header ──
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                PostAuthorAvatar(post = post)
-                Spacer(modifier = Modifier.width(14.dp))
+                PostAuthorAvatar(post)
+                Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(post.username, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    Text(
-                        formatPostDate(post.timestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(post.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                    Text(formatTimestamp(post.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp))
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Ver detalles", style = MaterialTheme.typography.bodyLarge) },
-                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            onClick = {
-                                showMenu = false
-                                onOpenDetails()
-                            }
-                        )
-                        if (post.userId == currentUserId) {
-                            DropdownMenuItem(
-                                text = { Text("Editar publicación", style = MaterialTheme.typography.bodyLarge) },
-                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showMenu = false
-                                    onEditPost()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Eliminar publicación", style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.error)) },
-                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    onDeletePost()
-                                }
-                            )
+                if (post.userId == currentUserId) {
+                    var showMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Más") }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(text = { Text("Editar") }, onClick = { showMenu = false; onEditPost() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
+                            DropdownMenuItem(text = { Text("Eliminar", color = MaterialTheme.colorScheme.error) }, onClick = { showMenu = false; onDeletePost() }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) })
                         }
                     }
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .combinedClickable(
-                        onClick = { onOpenPost() },
-                        onDoubleClick = {
-                            if (!isLiked) {
-                                isLiked = true
-                                likeCount += 1
-                                updateLikeInFirebase(post.id, true)
-                            }
-                        }
-                    )
-            ) {
-                if (post.isVideo && post.videoUrl.isNotBlank()) {
-                    FeedVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
-                } else {
-                    PostImage(
-                        imageBase64 = post.imageBase64,
-                        imageUrl = post.imageUrl,
-                        username = post.username
-                    )
+            // ── Contenido multimedia ──
+            Box(modifier = Modifier.fillMaxWidth().clickable { onOpenPost() }) {
+                when {
+                    post.isVideo && post.videoUrl.isNotBlank() -> PostVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
+                    else -> PostImage(imageBase64 = post.imageBase64, imageUrl = post.imageUrl, username = post.username)
                 }
             }
 
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = {
-                    isLiked = !isLiked
-                    likeCount += if (isLiked) 1 else -1
-                    updateLikeInFirebase(post.id, isLiked)
-                }) {
-                    Icon(
-                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = "Like",
-                        tint = if (isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(28.dp)
-                    )
+            // ── Acciones ──
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { /* toggle like via VM */ }) {
+                    Icon(if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Like",
+                        tint = if (post.isLiked) Color.Red else MaterialTheme.colorScheme.onSurface)
                 }
-                Text(if (com.vivid.app.util.SettingsManager.hideLikesCount) "—" else "$likeCount", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                Spacer(modifier = Modifier.width(24.dp))
-                IconButton(onClick = {
-                    commentCount = maxOf(commentCount, post.commentsCount)
-                    onOpenComments()
-                }) {
-                    Icon(Icons.Default.Email, contentDescription = "Comentarios", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(26.dp))
-                }
-                Text("$commentCount", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                IconButton(onClick = onOpenComments) { Icon(Icons.Default.ChatBubbleOutline, "Comentar") }
+                IconButton(onClick = onOpenDetails) { Icon(Icons.Default.Info, "Detalles") }
+
+                Spacer(Modifier.weight(1f))
+
+                IconButton(onClick = { /* share */ }) { Icon(Icons.Default.Share, "Compartir") }
             }
 
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                if (post.caption.isNotBlank()) {
-                    Text(text = post.caption, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
+            // ── Likes count ──
+            if (post.likesCount > 0 && !SettingsManager.hideLikesCount) {
                 Text(
-                    text = if (commentCount > 0) "Ver los $commentCount comentarios" else "Sé la primera persona en comentar",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { onOpenComments() }
+                    "${post.likesCount} Me gusta",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Caption ──
+            if (post.caption.isNotBlank()) {
+                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text(post.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                    Spacer(Modifier.width(6.dp))
+                    Text(SettingsManager.filterOffensiveWords(post.caption), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
+            }
+
+            // ── Comments count ──
+            if (post.commentsCount > 0) {
+                TextButton(onClick = onOpenComments, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text("Ver los ${post.commentsCount} comentarios", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
         }
     }
 }
 
+// ── Helpers ──
 @Composable
-private fun FeedVideoPlayer(videoUrl: String, thumbnailUrl: String) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var isReady by remember { mutableStateOf(false) }
     val player = remember(videoUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(videoUrl))
-            repeatMode = ExoPlayer.REPEAT_MODE_ALL
-            volume = 0f
-            prepare()
-            playWhenReady = true
-        }
+        ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(videoUrl)); prepare() }
     }
     DisposableEffect(player) { onDispose { player.release() } }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(520.dp)
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        if (thumbnailUrl.isNotBlank()) {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+    Box(Modifier.fillMaxWidth().height(380.dp).background(Color.Black)) {
+        if (!isReady && thumbnailUrl.isNotBlank()) {
+            AsyncImage(model = thumbnailUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = true
-                    this.player = player
-                }
-            },
+            factory = { ctx2 -> PlayerView(ctx2).apply { this.player = player; useController = true; player?.addListener(object : androidx.media3.common.Player.Listener { override fun onPlaybackStateChanged(s: Int) { if (s == androidx.media3.common.Player.STATE_READY) isReady = true } }) } },
             update = { it.player = player },
             modifier = Modifier.fillMaxSize()
         )
-        AssistChip(
-            onClick = {},
-            label = { Text("Reel", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
-            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp),
-            colors = AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
-                labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PostCommentsSheet(
-    post: PostData,
-    onDismiss: () -> Unit
-) {
-    val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
-    val currentUser = auth.currentUser
-    val scope = rememberCoroutineScope()
-
-    var comments by remember(post.id) { mutableStateOf<List<PostComment>>(emptyList()) }
-    var commentText by remember(post.id) { mutableStateOf("") }
-    var isSending by remember(post.id) { mutableStateOf(false) }
-    var errorMessage by remember(post.id) { mutableStateOf<String?>(null) }
-
-    DisposableEffect(post.id) {
-        var registration: ListenerRegistration? = null
-        registration = db.collection("posts")
-            .document(post.id)
-            .collection("comments")
-            .orderBy("timestamp")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    errorMessage = error.message ?: "No se pudieron cargar los comentarios."
-                    return@addSnapshotListener
-                }
-
-                comments = snapshot?.documents.orEmpty().map { doc ->
-                    PostComment(
-                        id = doc.id,
-                        userId = doc.getString("userId").orEmpty(),
-                        username = doc.getString("username") ?: "usuario",
-                        text = doc.getString("text").orEmpty(),
-                        timestamp = doc.getLong("timestamp") ?: 0L,
-                        avatarUrl = doc.getString("avatarUrl").orEmpty(),
-                        avatarBase64 = doc.getString("avatarBase64").orEmpty()
-                    )
-                }
-                errorMessage = null
-            }
-
-        onDispose { registration?.remove() }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .navigationBarsPadding()
-        ) {
-            Text("Comentarios", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = if (post.caption.isBlank()) "Publicación de @${post.username}" else post.caption,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            Spacer(modifier = Modifier.height(12.dp))
-
-            when {
-                errorMessage != null -> {
-                    Text(
-                        errorMessage ?: "Error",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 12.dp)
-                    )
-                }
-                comments.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 140.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Todavía no hay comentarios. ¡Sé el primero!",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 360.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(comments, key = { it.id }) { comment ->
-                            CommentRow(comment = comment)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = commentText,
-                    onValueChange = { commentText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Escribe un comentario...") },
-                    maxLines = 3,
-                    shape = RoundedCornerShape(24.dp)
+private fun loadPostsFromFirebase(onSuccess: (List<PostData>) -> Unit, onFallback: () -> Unit) {
+    FirebaseFirestore.getInstance().collection("posts")
+        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(40).get()
+        .addOnSuccessListener { snap ->
+            onSuccess(snap.documents.mapNotNull { doc ->
+                PostData(
+                    id = doc.id, userId = doc.getString("userId") ?: "",
+                    username = doc.getString("username") ?: "usuario",
+                    userProfilePicture = doc.getString("userAvatar") ?: "", caption = doc.getString("caption") ?: "",
+                    imageUrl = doc.getString("imageUrl") ?: "", imageBase64 = doc.getString("imageBase64") ?: "",
+                    videoUrl = doc.getString("videoUrl") ?: "", thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
+                    isVideo = doc.getBoolean("isVideo") ?: false,
+                    likesCount = (doc.getLong("likesCount") ?: 0).toInt(),
+                    commentsCount = (doc.getLong("commentsCount") ?: 0).toInt(),
+                    timestamp = doc.getLong("timestamp") ?: 0L
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Button(
-                    enabled = commentText.isNotBlank() && !isSending && currentUser != null,
-                    onClick = {
-                        val cleanComment = commentText.trim()
-                        if (cleanComment.isBlank()) return@Button
-
-                        scope.launch {
-                            isSending = true
-                            errorMessage = null
-                            try {
-                                val userDoc = db.collection("users")
-                                    .document(currentUser?.uid.orEmpty())
-                                    .get()
-                                    .await()
-
-                                val username = userDoc.getString("username")
-                                    ?: currentUser?.displayName
-                                    ?: currentUser?.email?.substringBefore("@")
-                                    ?: "usuario"
-
-                                val avatarUrl = userDoc.getString("avatarUrl").orEmpty()
-                                val avatarBase64 = userDoc.getString("avatarBase64").orEmpty()
-
-                                db.collection("posts")
-                                    .document(post.id)
-                                    .collection("comments")
-                                    .add(
-                                        mapOf(
-                                            "userId" to currentUser?.uid.orEmpty(),
-                                            "username" to username,
-                                            "text" to cleanComment,
-                                            "avatarUrl" to avatarUrl,
-                                            "avatarBase64" to avatarBase64,
-                                            "timestamp" to System.currentTimeMillis()
-                                        )
-                                    )
-                                    .await()
-
-                                db.collection("posts")
-                                    .document(post.id)
-                                    .update("commentsCount", FieldValue.increment(1))
-                                    .await()
-
-                                commentText = ""
-                            } catch (e: Exception) {
-                                errorMessage = e.message ?: "No se pudo enviar el comentario."
-                            } finally {
-                                isSending = false
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Text(if (isSending) "..." else "Enviar", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
+            })
+        }.addOnFailureListener { onFallback() }
 }
 
+private fun formatTimestamp(ts: Long): String {
+    if (ts <= 0) return ""
+    return try { SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ts)) } catch (_: Exception) { "" }
+}
+
+// ── PostAuthorAvatar ──
 @Composable
 private fun PostAuthorAvatar(post: PostData) {
     if (post.userProfilePictureBase64.isNotBlank()) {
-        var bitmap by remember(post.userProfilePictureBase64) { mutableStateOf<Bitmap?>(null) }
+        var bmp by remember(post.userProfilePictureBase64) { mutableStateOf<Bitmap?>(null) }
         LaunchedEffect(post.userProfilePictureBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(post.userProfilePictureBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
-            }
+            bmp = try { val bytes = Base64.decode(post.userProfilePictureBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null }
         }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Avatar",
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-            return
+        if (bmp != null) { Image(bmp!!.asImageBitmap(), "Avatar", Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop); return }
+    }
+    if (post.userProfilePicture.isNotBlank()) {
+        AsyncImage(model = post.userProfilePicture, "Avatar", Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+    } else {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+            Text(post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+}
+
+// ── PostImage ──
+@Composable
+fun PostImage(imageBase64: String, imageUrl: String, username: String, modifier: Modifier = Modifier, useDefaultHeight: Boolean = true) {
+    var bmp by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
+    var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
+    var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
+    val urlPainter = rememberAsyncImagePainter(model = imageUrl)
+    val urlState = urlPainter.state
+
+    LaunchedEffect(imageBase64) {
+        if (imageBase64.isNotBlank()) {
+            try { bmp = BitmapFactory.decodeByteArray(Base64.decode(imageBase64, Base64.NO_WRAP), 0, Base64.decode(imageBase64, Base64.NO_WRAP).size); hasError = bmp == null } catch (_: Exception) { hasError = true }
+            isLoading = false
+        }
+    }
+    LaunchedEffect(urlState) {
+        if (imageBase64.isBlank() && imageUrl.isNotBlank()) {
+            when (urlState) {
+                is AsyncImagePainter.State.Loading -> { isLoading = true; hasError = false }
+                is AsyncImagePainter.State.Success -> { isLoading = false; hasError = false }
+                is AsyncImagePainter.State.Error -> { isLoading = false; hasError = true }
+                else -> {}
+            }
         }
     }
 
-    if (post.userProfilePicture.isNotBlank()) {
-        AsyncImage(
-            model = post.userProfilePicture,
-            contentDescription = "Avatar",
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimary
-            )
+    val containerModifier = if (useDefaultHeight) modifier.fillMaxWidth().heightIn(max = 500.dp) else modifier.fillMaxSize()
+    Box(modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
+        when {
+            isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            hasError -> Icon(Icons.Default.BrokenImage, "Error", modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            bmp != null -> Image(bmp!!.asImageBitmap(), "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            imageUrl.isNotBlank() -> Image(painter = urlPainter, "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            else -> Text("📷 $username", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+// ── PostCommentsSheet (BottomSheet simplificado) ──
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
+    val db = FirebaseFirestore.getInstance()
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    var comments by remember { mutableStateOf<List<PostComment>>(emptyList()) }
+    var commentText by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(post.id) {
+        db.collection("posts").document(post.id).collection("comments")
+            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
+            .addSnapshotListener { snap, _ ->
+                comments = snap?.documents?.mapNotNull { doc ->
+                    PostComment(id = doc.id, userId = doc.getString("userId") ?: "", username = doc.getString("username") ?: "?", text = doc.getString("text") ?: "", timestamp = doc.getLong("timestamp") ?: 0L, avatarUrl = doc.getString("avatarUrl") ?: "", avatarBase64 = doc.getString("avatarBase64") ?: "")
+                } ?: emptyList()
+            }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Comentarios", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                if (comments.isEmpty()) { Text("No hay comentarios aún.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        itemsIndexed(comments) { _, comment -> CommentRow(comment); Spacer(Modifier.height(10.dp)) }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = commentText, onValueChange = { commentText = it }, placeholder = { Text("Escribe un comentario...") },
+                        modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(onClick = {
+                        if (commentText.isBlank()) return@FilledTonalButton
+                        isSending = true; errorMsg = null
+                        scope.launch {
+                            try {
+                                val userDoc = db.collection("users").document(currentUserId).get().await()
+                                db.collection("posts").document(post.id).collection("comments").add(mapOf(
+                                    "userId" to currentUserId, "username" to (userDoc.getString("username") ?: "yo"),
+                                    "text" to commentText.trim(), "timestamp" to System.currentTimeMillis(),
+                                    "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""), "avatarBase64" to (userDoc.getString("avatarBase64") ?: "")
+                                )).await()
+                                db.collection("posts").document(post.id).update("commentsCount", FieldValue.increment(1)).await()
+                                commentText = ""
+                            } catch (e: Exception) { errorMsg = e.message }
+                            isSending = false
+                        }
+                    }, enabled = !isSending, shape = RoundedCornerShape(20.dp)) {
+                        Text(if (isSending) "..." else "Enviar", fontWeight = FontWeight.Bold)
+                    }
+                }
+                errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+    )
 }
 
 @Composable
 private fun CommentRow(comment: PostComment) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        CommentAvatar(comment = comment)
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        CommentAvatar(comment)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Text(comment.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(com.vivid.app.util.SettingsManager.filterOffensiveWords(comment.text), style = MaterialTheme.typography.bodyMedium)
+            Text(SettingsManager.filterOffensiveWords(comment.text), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -1060,185 +479,67 @@ private fun CommentRow(comment: PostComment) {
 @Composable
 private fun CommentAvatar(comment: PostComment) {
     if (comment.avatarBase64.isNotBlank()) {
-        var bitmap by remember(comment.avatarBase64) { mutableStateOf<Bitmap?>(null) }
+        var bmp by remember(comment.avatarBase64) { mutableStateOf<Bitmap?>(null) }
         LaunchedEffect(comment.avatarBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(comment.avatarBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
-            }
+            bmp = try { val bytes = Base64.decode(comment.avatarBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null }
         }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = comment.username,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-            return
+        if (bmp != null) { Image(bmp!!.asImageBitmap(), comment.username, Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop); return }
+    }
+    if (comment.avatarUrl.isNotBlank()) {
+        AsyncImage(model = comment.avatarUrl, contentDescription = comment.username, modifier = Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+    } else {
+        Box(Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+            Text(comment.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
         }
     }
+}
 
-    if (comment.avatarUrl.isNotBlank()) {
-        AsyncImage(
-            model = comment.avatarUrl,
-            contentDescription = comment.username,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                comment.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
+// ── Diálogos placeholder (los originales se mantienen, aquí versiones reducidas) ──
+@Composable
+private fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss: () -> Unit) {
+    if (initialIndex !in posts.indices) { onDismiss(); return }
+    val post = posts[initialIndex]
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(post.username, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                }
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    when {
+                        post.isVideo && post.videoUrl.isNotBlank() -> {
+                            val ctx = androidx.compose.ui.platform.LocalContext.current
+                            val player = remember(post.videoUrl) { ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(post.videoUrl)); repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true } }
+                            DisposableEffect(player) { onDispose { player.release() } }
+                            AndroidView(factory = { c -> PlayerView(c).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
+                        }
+                        else -> PostImage(post.imageBase64, post.imageUrl, post.username, useDefaultHeight = false)
+                    }
+                }
+                if (post.caption.isNotBlank()) Text(post.caption, modifier = Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }
 
 @Composable
-fun PostImage(
-    imageBase64: String,
-    imageUrl: String,
-    username: String,
-    modifier: Modifier = Modifier,
-    useDefaultHeight: Boolean = true
-) {
-    var bitmap by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
-    var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
-    var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
+private fun PostDetailsDialog(post: PostData, onDismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Detalles", fontWeight = FontWeight.Bold) },
+        text = { Column { Text("👤 ${post.username}"); Text("❤️ ${post.likesCount} Me gusta"); Text("💬 ${post.commentsCount} Comentarios"); Text("🕐 ${formatTimestamp(post.timestamp)}") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } })
+}
 
-    val urlPainter = rememberAsyncImagePainter(model = imageUrl)
-    val urlState = urlPainter.state
-
-    LaunchedEffect(imageBase64, imageUrl) {
-        isLoading = true
-        hasError = false
-
-        if (imageBase64.isNotBlank()) {
-            try {
-                val bytes = Base64.decode(imageBase64, Base64.NO_WRAP)
-                bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                hasError = bitmap == null
-            } catch (_: Exception) {
-                bitmap = null
-                hasError = true
-            }
-            isLoading = false
-        } else {
-            bitmap = null
-            hasError = false
-        }
-    }
-
-    LaunchedEffect(urlState, imageBase64) {
-        if (imageBase64.isBlank() && imageUrl.isNotBlank()) {
-            when (urlState) {
-                is AsyncImagePainter.State.Loading,
-                is AsyncImagePainter.State.Empty -> {
-                    isLoading = true
-                    hasError = false
-                }
-                is AsyncImagePainter.State.Success -> {
-                    isLoading = false
-                    hasError = false
-                }
-                is AsyncImagePainter.State.Error -> {
-                    isLoading = false
-                    hasError = true
-                }
-            }
-        }
-    }
-
-    val imageAspectRatio = when {
-        bitmap != null && bitmap!!.height > 0 -> bitmap!!.width.toFloat() / bitmap!!.height.toFloat()
-        urlState is AsyncImagePainter.State.Success -> {
-            val drawable = urlState.result.drawable
-            if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
-                drawable.intrinsicWidth.toFloat() / drawable.intrinsicHeight.toFloat()
-            } else {
-                null
-            }
-        }
-        else -> null
-    }
-
-    val containerModifier = when {
-        imageAspectRatio != null -> modifier
-            .fillMaxWidth()
-            .aspectRatio(imageAspectRatio)
-        useDefaultHeight -> modifier
-            .fillMaxWidth()
-            .height(380.dp)
-        else -> modifier.fillMaxSize()
-    }
-
-    Box(
-        modifier = containerModifier.background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        when {
-            isLoading -> {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.primary)
-            }
-            hasError -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Email,
-                        contentDescription = "Error",
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            bitmap != null -> {
-                Image(
-                    bitmap = bitmap!!.asImageBitmap(),
-                    contentDescription = "Post image",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            }
-            imageUrl.isNotBlank() -> {
-                Image(
-                    painter = urlPainter,
-                    contentDescription = "Post image",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            }
-            else -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "📷 $username",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
+@Composable
+private fun EditPostDialog(post: PostData, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
+    var text by remember { mutableStateOf(post.caption) }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Editar", fontWeight = FontWeight.Bold) },
+        text = { OutlinedTextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
+        confirmButton = {
+            Button(onClick = {
+                FirebaseFirestore.getInstance().collection("posts").document(post.id).update("caption", text.trim())
+                onSaved(text.trim())
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
 }
