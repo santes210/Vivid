@@ -22,6 +22,11 @@ hilt {
 // StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
 val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
 
+// GOOGLE_WEB_CLIENT_ID para Google Sign-In (OAuth client ID)
+// Se usa env var en CI/local para no depender de google-services.json
+// (que no tiene oauth_client configurado, evitando R.string.default_web_client_id inexistente)
+val GOOGLE_WEB_CLIENT_ID_VALUE = System.getenv("GOOGLE_WEB_CLIENT_ID") ?: ""
+
 android {
     namespace = "com.vivid.app"
     compileSdk = 35
@@ -38,11 +43,15 @@ android {
 
         // Inyecta CF_BASE_URL en BuildConfig (accesible desde Kotlin/Java)
         buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+
+        // GOOGLE_WEB_CLIENT_ID para Google Sign-In
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$GOOGLE_WEB_CLIENT_ID_VALUE\"")
     }
 
     buildTypes {
         debug {
             buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$GOOGLE_WEB_CLIENT_ID_VALUE\"")
         }
         release {
             isMinifyEnabled = false
@@ -51,6 +60,7 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$GOOGLE_WEB_CLIENT_ID_VALUE\"")
         }
     }
 

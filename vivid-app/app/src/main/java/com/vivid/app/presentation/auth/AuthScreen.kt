@@ -26,8 +26,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
-import com.vivid.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.vivid.app.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -272,10 +272,17 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+        val canUseGoogleSignIn = googleWebClientId.isNotBlank()
+
         OutlinedButton(
             onClick = {
+                if (!canUseGoogleSignIn) {
+                    viewModel.reportExternalError("Google Sign-In no está configurado en este build (falta GOOGLE_WEB_CLIENT_ID).")
+                    return@OutlinedButton
+                }
                 val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestIdToken(context.getString(R.string.default_web_client_id))
+                    .requestIdToken(googleWebClientId)
                     .requestEmail()
                     .build()
                 val client = GoogleSignIn.getClient(context, gso)
@@ -289,6 +296,16 @@ fun AuthScreen(
             Icon(Icons.Default.AccountCircle, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Continuar con Google")
+        }
+
+        if (!canUseGoogleSignIn) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Google Sign-In deshabilitado (configura GOOGLE_WEB_CLIENT_ID para habilitarlo)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         TextButton(onClick = { isLoginMode = !isLoginMode }) {
