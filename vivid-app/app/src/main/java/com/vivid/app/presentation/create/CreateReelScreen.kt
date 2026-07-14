@@ -48,18 +48,37 @@ fun CreateReelScreen(
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var caption by remember { mutableStateOf("") }
     var withWatermark by remember { mutableStateOf(true) }
+    var trimStartMs by remember { mutableLongStateOf(0L) }
+    var trimEndMs by remember { mutableLongStateOf(-1L) }
 
     // Recoger el video grabado o trimeado
     val backStackEntry = navController.currentBackStackEntry
     val recordedFlow = backStackEntry?.savedStateHandle?.getStateFlow("recordedVideo", "")
     val recordedPathState = recordedFlow?.collectAsState(initial = "")
     val recordedPath = recordedPathState?.value ?: ""
+    val trimStartFlow = backStackEntry?.savedStateHandle?.getStateFlow("trimStartMs", 0L)
+    val trimEndFlow = backStackEntry?.savedStateHandle?.getStateFlow("trimEndMs", -1L)
+    val trimStartState = trimStartFlow?.collectAsState(initial = 0L)
+    val trimEndState = trimEndFlow?.collectAsState(initial = -1L)
 
     LaunchedEffect(recordedPath) {
         if (recordedPath.isNotBlank()) {
             selectedUri = Uri.parse(recordedPath)
+            trimStartMs = 0L
+            trimEndMs = -1L
             viewModel.reset()
             backStackEntry?.savedStateHandle?.remove<String>("recordedVideo")
+        }
+    }
+
+    LaunchedEffect(trimStartState?.value, trimEndState?.value) {
+        val newStart = trimStartState?.value ?: 0L
+        val newEnd = trimEndState?.value ?: -1L
+        if (newEnd > newStart && newEnd > 0L) {
+            trimStartMs = newStart
+            trimEndMs = newEnd
+            backStackEntry?.savedStateHandle?.remove<Long>("trimStartMs")
+            backStackEntry?.savedStateHandle?.remove<Long>("trimEndMs")
         }
     }
 
@@ -68,6 +87,8 @@ fun CreateReelScreen(
     ) { uri: Uri? ->
         uri?.let {
             selectedUri = it
+            trimStartMs = 0L
+            trimEndMs = -1L
             viewModel.reset()
         }
     }
@@ -183,6 +204,8 @@ fun CreateReelScreen(
                     OutlinedButton(
                         onClick = {
                             selectedUri = null
+                            trimStartMs = 0L
+                            trimEndMs = -1L
                             viewModel.reset()
                         },
                         modifier = Modifier.weight(1f)
@@ -206,6 +229,20 @@ fun CreateReelScreen(
                         Text("Trim")
                     }
                 }
+            }
+
+            if (selectedUri != null && trimEndMs > trimStartMs && trimEndMs > 0L) {
+                Spacer(Modifier.height(12.dp))
+                AssistChip(
+                    onClick = {
+                        backStackEntry?.savedStateHandle?.set(
+                            "trimInputUri", selectedUri.toString()
+                        )
+                        navController.navigate("video_trimmer")
+                    },
+                    label = { Text("Trim: ${formatTrimLabel(trimStartMs)} → ${formatTrimLabel(trimEndMs)}") },
+                    leadingIcon = { Icon(Icons.Default.ContentCut, contentDescription = null) }
+                )
             }
 
             Spacer(Modifier.height(16.dp))
@@ -275,6 +312,8 @@ fun CreateReelScreen(
                             context = context,
                             videoUri = it,
                             caption = caption,
+                            trimStartMs = trimStartMs,
+                            trimEndMs = trimEndMs,
                             withWatermark = withWatermark
                         )
                     }
@@ -348,6 +387,13 @@ private fun VideoPreview(uri: Uri) {
         },
         modifier = Modifier.fillMaxSize()
     )
+}
+
+private fun formatTrimLabel(ms: Long): String {
+    val totalSec = ms / 1000
+    val minutes = totalSec / 60
+    val seconds = totalSec % 60
+    return "%02d:%02d".format(minutes, seconds)
 }
 
 @Composable

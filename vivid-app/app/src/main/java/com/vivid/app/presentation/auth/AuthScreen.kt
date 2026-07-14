@@ -1,21 +1,32 @@
 package com.vivid.app.presentation.auth
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +82,23 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun loginWithGoogle(idToken: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            try {
+                val credential = GoogleAuthProvider.getCredential(idToken, null)
+                auth.signInWithCredential(credential).await()
+                ensureUserProfile()
+                _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.toReadableAuthMessage()
+                )
+            }
+        }
+    }
+
     private suspend fun ensureUserProfile(usernameOverride: String? = null) {
         val user = auth.currentUser ?: return
         val username = usernameOverride
@@ -95,11 +123,18 @@ class AuthViewModel @Inject constructor(
                 "followersCount" to (existing["followersCount"] ?: 0),
                 "followingCount" to (existing["followingCount"] ?: 0),
                 "postsCount" to (existing["postsCount"] ?: 0),
+                "activityStatusEnabled" to (existing["activityStatusEnabled"] ?: true),
+                "isOnline" to (existing["isOnline"] ?: false),
+                "lastActiveAt" to (existing["lastActiveAt"] ?: System.currentTimeMillis()),
                 "createdAt" to (existing["createdAt"] ?: System.currentTimeMillis()),
                 "updatedAt" to System.currentTimeMillis()
             ),
             com.google.firebase.firestore.SetOptions.merge()
         ).await()
+    }
+
+    fun reportExternalError(message: String) {
+        _uiState.value = _uiState.value.copy(isLoading = false, error = message)
     }
 
     fun clearError() {
@@ -126,12 +161,31 @@ fun AuthScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val currentUser = FirebaseAuth.getInstance().currentUser
+    val context = LocalContext.current
     var isLoginMode by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
 
     val uiState by viewModel.uiState.collectAsState()
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        runCatching {
+            task.getResult(ApiException::class.java)
+        }.onSuccess { account ->
+            val idToken = account.idToken
+            if (!idToken.isNullOrBlank()) {
+                viewModel.loginWithGoogle(idToken)
+            } else {
+                viewModel.reportExternalError("Google no devolvió un token válido.")
+            }
+        }.onFailure {
+            viewModel.reportExternalError(it.message ?: "No se pudo iniciar sesión con Google.")
+        }
+    }
 
     LaunchedEffect(currentUser?.uid) {
         if (currentUser != null) {
@@ -214,6 +268,27 @@ fun AuthScreen(
             } else {
                 Text(if (isLoginMode) "Iniciar sesión" else "Registrarse")
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(context.getString(R.string.default_web_client_id))
+                    .requestEmail()
+                    .build()
+                val client = GoogleSignIn.getClient(context, gso)
+                client.signOut().addOnCompleteListener {
+                    googleLauncher.launch(client.signInIntent)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !uiState.isLoading
+        ) {
+            Icon(Icons.Default.AccountCircle, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Continuar con Google")
         }
 
         TextButton(onClick = { isLoginMode = !isLoginMode }) {

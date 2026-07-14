@@ -19,7 +19,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.domain.repository.ChatRepository
+import kotlinx.coroutines.tasks.await
 import com.vivid.app.presentation.auth.AuthScreen
 import com.vivid.app.presentation.create.*
 import com.vivid.app.presentation.feed.FeedScreen
@@ -73,7 +75,24 @@ fun VividNavigation(
     // ── Manejar deep links desde notificaciones push ──
     LaunchedEffect(deepLinkChatId) {
         if (!deepLinkChatId.isNullOrBlank()) {
-            navController.navigate("chat/${Uri.encode(deepLinkChatId)}/ / ") {
+            val currentUserId = auth.currentUser?.uid.orEmpty()
+            val chatDoc = runCatching {
+                FirebaseFirestore.getInstance().collection("chats")
+                    .document(deepLinkChatId)
+                    .get()
+                    .await()
+            }.getOrNull()
+            val participants = chatDoc?.get("participants") as? List<*>
+            val otherUserId = participants
+                ?.mapNotNull { it as? String }
+                ?.firstOrNull { it != currentUserId }
+                .orEmpty()
+            val participantNames = chatDoc?.get("participantNames") as? Map<*, *>
+            val otherUserName = participantNames?.get(otherUserId) as? String ?: "Usuario"
+
+            navController.navigate(
+                "chat/${Uri.encode(deepLinkChatId)}/${Uri.encode(otherUserId)}/${Uri.encode(otherUserName)}"
+            ) {
                 popUpTo(Screen.Feed.route)
             }
         }
@@ -198,7 +217,13 @@ fun VividNavigation(
                     VideoTrimmerScreen(
                         navController = navController,
                         inputUri = Uri.parse(trimInput),
-                        onTrimConfirmed = { _, _ ->
+                        onTrimConfirmed = { startMs, endMs ->
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set("trimStartMs", startMs)
+                            navController.previousBackStackEntry
+                                ?.savedStateHandle
+                                ?.set("trimEndMs", endMs)
                             navController.popBackStack()
                         }
                     )
@@ -216,7 +241,8 @@ fun VividNavigation(
             }
             composable(Screen.Reels.route) {
                 ReelsScreen(
-                    onCreateReel = { navController.navigate(Screen.CreateReel.route) }
+                    onCreateReel = { navController.navigate(Screen.CreateReel.route) },
+                    initialReelId = deepLinkReelId
                 )
             }
             composable(Screen.Profile.route) {

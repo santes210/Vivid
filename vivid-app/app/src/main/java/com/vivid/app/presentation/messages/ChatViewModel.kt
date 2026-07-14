@@ -41,6 +41,7 @@ class ChatViewModel @Inject constructor(
             val avatarBase64 = savedStateHandle.get<String>("avatarBase64") ?: ""
             val avatarUrl = savedStateHandle.get<String>("avatarUrl") ?: ""
             chatRepository.ensureChatExists(chatId, receiverId, receiverName, avatarUrl, avatarBase64)
+            chatRepository.markChatAsRead(chatId)
             _canMessage.value = computeCanMessage(receiverId)
         }
         loadMessages(chatId)

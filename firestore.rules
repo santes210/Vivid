@@ -87,6 +87,11 @@ service cloud.firestore {
       );
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
       }
+
+      match /likes/{userId} {
+        allow read: if signedIn();
+        allow create, delete: if signedIn() && request.auth.uid == userId;
+      }
     }
 
     // ── Stories ─────────────────────────────────────
@@ -95,7 +100,7 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if signedIn() && (
         resource.data.userId == request.auth.uid ||
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes'])
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes', 'comments'])
       );
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
@@ -106,7 +111,7 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if signedIn() && (
         resource.data.userId == request.auth.uid ||
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes'])
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes', 'comments'])
       );
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 

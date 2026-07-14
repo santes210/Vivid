@@ -1,5 +1,6 @@
 package com.vivid.app.presentation.feed
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,8 +41,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.vivid.app.presentation.stories.StoriesTray
 import com.vivid.app.util.SettingsManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -70,6 +77,7 @@ fun FeedScreen(
     onOpenStoryViewer: (storyId: String) -> Unit = {}
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -83,12 +91,12 @@ fun FeedScreen(
     var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(currentUserId) {
         isLoading = true
-        loadPostsFromFirebase(
-            onSuccess = { posts = it; isLoading = false },
-            onFallback = { posts = emptyList(); isLoading = false }
-        )
+        posts = runCatching {
+            loadPostsFromFirebase(currentUserId)
+        }.getOrElse { emptyList() }
+        isLoading = false
     }
 
     DisposableEffect(currentUserId) {
@@ -159,12 +167,47 @@ fun FeedScreen(
                 ) {
                     itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
                         PostCard(
-                            post = post, currentUserId = currentUserId,
+                            post = post,
+                            currentUserId = currentUserId,
                             onOpenPost = { selectedPostViewerIndex = index },
                             onOpenComments = { selectedPostForComments = post },
                             onOpenDetails = { selectedPostForDetails = post },
                             onEditPost = { selectedPostForEdit = post },
-                            onDeletePost = { selectedPostForDelete = post }
+                            onDeletePost = { selectedPostForDelete = post },
+                            onToggleLike = {
+                                val target = post
+                                val newLiked = !target.isLiked
+                                posts = posts.map {
+                                    if (it.id == target.id) {
+                                        it.copy(
+                                            isLiked = newLiked,
+                                            likesCount = (it.likesCount + if (newLiked) 1 else -1).coerceAtLeast(0)
+                                        )
+                                    } else it
+                                }
+                                scope.launch {
+                                    runCatching {
+                                        togglePostLike(target.id, currentUserId, newLiked)
+                                    }.onFailure {
+                                        posts = posts.map {
+                                            if (it.id == target.id) target else it
+                                        }
+                                        snackbarHostState.showSnackbar(it.message ?: "No se pudo actualizar el like")
+                                    }
+                                }
+                            },
+                            onShare = {
+                                shareText(
+                                    context = context,
+                                    title = "Compartir publicación",
+                                    text = buildString {
+                                        append("Mira esta publicación de @${post.username} en Vivid")
+                                        if (post.caption.isNotBlank()) append("\n\n${post.caption}")
+                                        if (post.imageUrl.isNotBlank()) append("\n\n${post.imageUrl}")
+                                        if (post.videoUrl.isNotBlank()) append("\n\n${post.videoUrl}")
+                                    }
+                                )
+                            }
                         )
                     }
                 }
@@ -207,9 +250,15 @@ fun FeedScreen(
 // ── PostCard (Material You 3 Card) ──
 @Composable
 private fun PostCard(
-    post: PostData, currentUserId: String,
-    onOpenPost: () -> Unit, onOpenComments: () -> Unit,
-    onOpenDetails: () -> Unit, onEditPost: () -> Unit, onDeletePost: () -> Unit
+    post: PostData,
+    currentUserId: String,
+    onOpenPost: () -> Unit,
+    onOpenComments: () -> Unit,
+    onOpenDetails: () -> Unit,
+    onEditPost: () -> Unit,
+    onDeletePost: () -> Unit,
+    onToggleLike: () -> Unit,
+    onShare: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -251,16 +300,19 @@ private fun PostCard(
 
             // ── Acciones ──
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { /* toggle like via VM */ }) {
-                    Icon(if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Like",
-                        tint = if (post.isLiked) Color.Red else MaterialTheme.colorScheme.onSurface)
+                IconButton(onClick = onToggleLike) {
+                    Icon(
+                        if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        "Like",
+                        tint = if (post.isLiked) Color.Red else MaterialTheme.colorScheme.onSurface
+                    )
                 }
                 IconButton(onClick = onOpenComments) { Icon(Icons.Default.ChatBubbleOutline, "Comentar") }
                 IconButton(onClick = onOpenDetails) { Icon(Icons.Default.Info, "Detalles") }
 
                 Spacer(Modifier.weight(1f))
 
-                IconButton(onClick = { /* share */ }) { Icon(Icons.Default.Share, "Compartir") }
+                IconButton(onClick = onShare) { Icon(Icons.Default.Share, "Compartir") }
             }
 
             // ── Likes count ──
@@ -315,24 +367,71 @@ private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
     }
 }
 
-private fun loadPostsFromFirebase(onSuccess: (List<PostData>) -> Unit, onFallback: () -> Unit) {
-    FirebaseFirestore.getInstance().collection("posts")
-        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(40).get()
-        .addOnSuccessListener { snap ->
-            onSuccess(snap.documents.mapNotNull { doc ->
+private suspend fun loadPostsFromFirebase(currentUserId: String): List<PostData> = withContext(Dispatchers.IO) {
+    val firestore = FirebaseFirestore.getInstance()
+    val snapshot = firestore.collection("posts")
+        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+        .limit(40)
+        .get()
+        .await()
+
+    coroutineScope {
+        snapshot.documents.map { doc ->
+            async {
+                val isLiked = if (currentUserId.isBlank()) {
+                    false
+                } else {
+                    firestore.collection("posts")
+                        .document(doc.id)
+                        .collection("likes")
+                        .document(currentUserId)
+                        .get()
+                        .await()
+                        .exists()
+                }
                 PostData(
-                    id = doc.id, userId = doc.getString("userId") ?: "",
+                    id = doc.id,
+                    userId = doc.getString("userId") ?: "",
                     username = doc.getString("username") ?: "usuario",
-                    userProfilePicture = doc.getString("userAvatar") ?: "", caption = doc.getString("caption") ?: "",
-                    imageUrl = doc.getString("imageUrl") ?: "", imageBase64 = doc.getString("imageBase64") ?: "",
-                    videoUrl = doc.getString("videoUrl") ?: "", thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
+                    userProfilePicture = doc.getString("userAvatar")
+                        ?: doc.getString("userProfilePicture")
+                        ?: "",
+                    caption = doc.getString("caption") ?: "",
+                    imageUrl = doc.getString("imageUrl") ?: "",
+                    imageBase64 = doc.getString("imageBase64") ?: "",
+                    videoUrl = doc.getString("videoUrl") ?: "",
+                    thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
                     isVideo = doc.getBoolean("isVideo") ?: false,
                     likesCount = (doc.getLong("likesCount") ?: 0).toInt(),
                     commentsCount = (doc.getLong("commentsCount") ?: 0).toInt(),
-                    timestamp = doc.getLong("timestamp") ?: 0L
+                    timestamp = doc.getLong("timestamp") ?: 0L,
+                    isLiked = isLiked
                 )
-            })
-        }.addOnFailureListener { onFallback() }
+            }
+        }.awaitAll()
+    }
+}
+
+private suspend fun togglePostLike(postId: String, currentUserId: String, shouldLike: Boolean) {
+    if (currentUserId.isBlank()) error("No hay sesión activa")
+    val firestore = FirebaseFirestore.getInstance()
+    val likeRef = firestore.collection("posts").document(postId).collection("likes").document(currentUserId)
+    val postRef = firestore.collection("posts").document(postId)
+    if (shouldLike) {
+        likeRef.set(mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis())).await()
+        postRef.update("likesCount", FieldValue.increment(1)).await()
+    } else {
+        likeRef.delete().await()
+        postRef.update("likesCount", FieldValue.increment(-1)).await()
+    }
+}
+
+private fun shareText(context: android.content.Context, title: String, text: String) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(shareIntent, title))
 }
 
 private fun formatTimestamp(ts: Long): String {
