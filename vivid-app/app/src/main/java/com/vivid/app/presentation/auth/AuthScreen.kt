@@ -278,7 +278,7 @@ fun AuthScreen(
         OutlinedButton(
             onClick = {
                 if (!canUseGoogleSignIn) {
-                    viewModel.reportExternalError("Google Sign-In no está configurado en este build (falta GOOGLE_WEB_CLIENT_ID).")
+                    viewModel.reportExternalError("Google Sign-In no está configurado. Ve a Google Cloud Console y crea un Web OAuth Client ID.")
                     return@OutlinedButton
                 }
                 val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -301,7 +301,7 @@ fun AuthScreen(
         if (!canUseGoogleSignIn) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Google Sign-In deshabilitado (configura GOOGLE_WEB_CLIENT_ID para habilitarlo)",
+                text = "Google Sign-In deshabilitado (configura GOOGLE_WEB_CLIENT_ID)",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
