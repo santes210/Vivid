@@ -62,11 +62,15 @@ class ReelsViewModel @Inject constructor(
                     if (videoUrl.isBlank()) return@mapNotNull null
                     Reel(
                         id = doc.id,
+                        userId = doc.getString("userId").orEmpty(),
                         videoUrl = videoUrl,
+                        thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
                         username = doc.getString("username") ?: "usuario",
                         caption = doc.getString("caption").orEmpty(),
                         likes = doc.getLong("likes")?.toInt() ?: 0,
-                        userAvatar = doc.getString("userAvatar").orEmpty()
+                        commentsCount = doc.getLong("comments")?.toInt() ?: 0,
+                        userAvatar = doc.getString("userAvatar").orEmpty(),
+                        storageKey = storageKey
                     )
                 }
             } catch (_: Exception) {
@@ -110,6 +114,7 @@ class ReelsViewModel @Inject constructor(
                 "provider" to "backblaze",
                 "caption" to caption,
                 "likes" to 0,
+                "comments" to 0,
                 "timestamp" to timestamp
             )
 

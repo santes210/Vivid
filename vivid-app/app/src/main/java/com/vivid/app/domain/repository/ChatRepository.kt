@@ -76,6 +76,10 @@ class ChatRepository @Inject constructor(
                     currentUserId to currentBase64,
                     otherUserId to avatarBase64
                 ),
+                "unreadCounts" to mapOf(
+                    currentUserId to 0,
+                    otherUserId to 0
+                ),
                 "createdAt" to now,
                 "updatedAt" to now
             ),
@@ -132,7 +136,12 @@ class ChatRepository @Inject constructor(
                 "participants" to listOf(currentUserId, receiverId),
                 "lastMessage" to text,
                 "lastSenderId" to currentUserId,
+                "lastMessageSenderId" to currentUserId,
                 "lastTimestamp" to now,
+                "unreadCounts" to mapOf(
+                    currentUserId to 0,
+                    receiverId to 1
+                ),
                 "updatedAt" to now
             ),
             SetOptions.merge()
@@ -158,15 +167,30 @@ class ChatRepository @Inject constructor(
             .documents
             .firstOrNull()
 
+        val latestSenderId = latestRemaining?.getString("senderId").orEmpty()
         firestore.collection("chats").document(chatId).set(
             mapOf(
                 "lastMessage" to latestRemaining?.getString("text").orEmpty(),
-                "lastSenderId" to latestRemaining?.getString("senderId").orEmpty(),
+                "lastSenderId" to latestSenderId,
+                "lastMessageSenderId" to latestSenderId,
                 "lastTimestamp" to (latestRemaining?.getLong("timestamp") ?: System.currentTimeMillis()),
                 "updatedAt" to System.currentTimeMillis()
             ),
             SetOptions.merge()
         ).await()
+    }
+
+    suspend fun markChatAsRead(chatId: String) {
+        if (currentUserId.isBlank() || chatId.isBlank()) return
+        firestore.collection("chats").document(chatId)
+            .set(
+                mapOf(
+                    "unreadCounts" to mapOf(currentUserId to 0),
+                    "updatedAt" to System.currentTimeMillis()
+                ),
+                SetOptions.merge()
+            )
+            .await()
     }
 
     fun listenToMessages(chatId: String, onMessageEvent: (MessageChange) -> Unit) {

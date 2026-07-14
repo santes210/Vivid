@@ -157,16 +157,34 @@ class CreateStoryViewModel @Inject constructor(
         caption: String,
         storageKey: String
     ) {
-        val expiresAt = System.currentTimeMillis() + 24 * 60 * 60 * 1000L
+        val now = System.currentTimeMillis()
+        val expiresAt = now + 24 * 60 * 60 * 1000L
+        val userDoc = firestore.collection("users").document(uid).get().await()
+        val username = userDoc.getString("username")
+            ?: auth.currentUser?.displayName
+            ?: auth.currentUser?.email?.substringBefore('@')
+            ?: "usuario"
+        val avatarUrl = userDoc.getString("avatarUrl").orEmpty()
+        val avatarBase64 = userDoc.getString("avatarBase64").orEmpty()
+        val isPrivate = userDoc.getBoolean("isPrivate") ?: false
+        val isVideo = videoUrl.isNotBlank()
+        val mediaUrl = if (isVideo) thumbnailUrl else thumbnailUrl
 
         val data = mapOf(
             "userId" to uid,
+            "username" to username,
+            "avatarUrl" to avatarUrl,
+            "avatarBase64" to avatarBase64,
+            "userAvatar" to avatarUrl,
             "videoUrl" to videoUrl,
             "thumbnailUrl" to thumbnailUrl,
+            "mediaUrl" to mediaUrl,
+            "mediaBase64" to "",
             "storageKey" to storageKey,
-            "caption" to caption,
-            "type" to if (videoUrl.isBlank()) "photo" else "video",
-            "createdAt" to System.currentTimeMillis(),
+            "caption" to caption.trim(),
+            "type" to if (isVideo) "video" else "photo",
+            "isPrivate" to isPrivate,
+            "createdAt" to now,
             "expiresAt" to expiresAt,
             "viewersCount" to 0
         )

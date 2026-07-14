@@ -34,6 +34,8 @@ import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,6 +49,7 @@ data class ChatPreview(
     val timestamp: Long,
     val avatarUrl: String = "",
     val avatarBase64: String = "",
+    val unreadCount: Int = 0,
     val isOnline: Boolean = false
 )
 
@@ -60,11 +63,13 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
     var chats by remember { mutableStateOf<List<ChatPreview>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var presenceByUserId by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
 
     // Search & Category states
     var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Todos, 1 = No leídos, 2 = Destacados
-    val tabs = listOf("Todos", "No leídos", "Destacados")
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Todos, 1 = No leídos, 2 = Activos
+    val tabs = listOf("Todos", "No leídos", "Activos")
 
     DisposableEffect(currentUserId) {
         var registration: ListenerRegistration? = null
@@ -92,23 +97,38 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                         val participantNames = doc.get("participantNames") as? Map<*, *>
                         val participantAvatars = doc.get("participantAvatars") as? Map<*, *>
                         val participantAvatarBase64s = doc.get("participantAvatarBase64s") as? Map<*, *>
-                        
-                        // Determinar si es online simulando o usando actividad si existiera
-                        val isOnline = otherUserId.hashCode() % 3 == 0
+                        val unreadCounts = doc.get("unreadCounts") as? Map<*, *>
+                        val unreadCount = (unreadCounts?.get(currentUserId) as? Long)?.toInt()
+                            ?: (unreadCounts?.get(currentUserId) as? Int)
+                            ?: 0
+                        val lastSenderId = doc.getString("lastMessageSenderId")
+                            ?: doc.getString("lastSenderId")
+                            ?: ""
 
                         ChatPreview(
                             chatId = doc.id,
                             otherUserId = otherUserId,
                             otherUserName = participantNames?.get(otherUserId) as? String ?: "Usuario",
                             lastMessage = doc.getString("lastMessage").orEmpty(),
-                            lastMessageSenderId = doc.getString("lastMessageSenderId").orEmpty(),
+                            lastMessageSenderId = lastSenderId,
                             timestamp = doc.getLong("lastTimestamp") ?: 0L,
                             avatarUrl = participantAvatars?.get(otherUserId) as? String ?: "",
                             avatarBase64 = participantAvatarBase64s?.get(otherUserId) as? String ?: "",
-                            isOnline = isOnline
+                            unreadCount = unreadCount,
+                            isOnline = presenceByUserId[otherUserId] == true
                         )
                     }
                     chats = previews.sortedByDescending { it.timestamp }
+                    scope.launch {
+                        val presenceMap = loadPresenceMap(
+                            firestore = db,
+                            userIds = previews.map { it.otherUserId }.distinct()
+                        )
+                        presenceByUserId = presenceMap
+                        chats = previews
+                            .map { chat -> chat.copy(isOnline = presenceMap[chat.otherUserId] == true) }
+                            .sortedByDescending { it.timestamp }
+                    }
                     errorMessage = null
                     isLoading = false
                 }
@@ -122,9 +142,9 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 it.lastMessage.contains(searchQuery, ignoreCase = true)
     }.filter {
         when (selectedTab) {
-            1 -> it.lastMessageSenderId.isNotBlank() && it.lastMessageSenderId != currentUserId // "No leídos" (simulados)
-            2 -> it.isOnline // "Destacados" (simulado con usuarios online)
-            else -> true // Todos
+            1 -> it.unreadCount > 0
+            2 -> it.isOnline
+            else -> true
         }
     }
 
@@ -312,8 +332,8 @@ private fun EmptyMessagesState() {
 @Composable
 fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Unit) {
     val isLastMsgMine = chat.lastMessageSenderId == currentUserId
-    val unread = !isLastMsgMine && chat.lastMessageSenderId.isNotBlank() // Simulación de no leído
-    
+    val unread = chat.unreadCount > 0
+
     val cardBg = if (unread) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
     } else {
@@ -452,6 +472,21 @@ private fun AvatarForChat(chat: ChatPreview) {
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
         }
+    }
+}
+
+private suspend fun loadPresenceMap(
+    firestore: FirebaseFirestore,
+    userIds: List<String>
+): Map<String, Boolean> {
+    if (userIds.isEmpty()) return emptyMap()
+    return userIds.distinct().associateWith { userId ->
+        runCatching {
+            val userDoc = firestore.collection("users").document(userId).get().await()
+            val statusEnabled = userDoc.getBoolean("activityStatusEnabled") ?: true
+            val isOnline = userDoc.getBoolean("isOnline") ?: false
+            statusEnabled && isOnline
+        }.getOrDefault(false)
     }
 }
 

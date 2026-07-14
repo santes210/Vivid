@@ -64,7 +64,8 @@ fun ChatScreen(
 
     var messageText by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
-    
+    var showAttachMenu by remember { mutableStateOf(false) }
+
     // States for custom Reaction bar & long-press bottom sheet
     var activeReactionMessageId by remember { mutableStateOf<String?>(null) }
     var selectedMessageForOptions by remember { mutableStateOf<Message?>(null) }
@@ -302,13 +303,34 @@ fun ChatScreen(
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { /* Opciones adicionales simuladas */ }) {
-                                Icon(
-                                    Icons.Default.Add, 
-                                    contentDescription = "Adjuntar", 
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                            Box {
+                                IconButton(onClick = { showAttachMenu = true }) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Acciones rápidas",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showAttachMenu,
+                                    onDismissRequest = { showAttachMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Ver perfil") },
+                                        onClick = {
+                                            showAttachMenu = false
+                                            if (receiverId.isNotBlank()) onOpenProfile(receiverId)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copiar chat ID") },
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(chatId))
+                                            showAttachMenu = false
+                                        }
+                                    )
+                                }
                             }
                             
                             OutlinedTextField(

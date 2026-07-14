@@ -16,6 +16,7 @@ import com.vivid.app.notifications.NotificationForegroundService
 import com.vivid.app.theme.VividTheme
 import com.vivid.app.util.PushNotificationHelper
 import com.vivid.app.util.SettingsManager
+import com.vivid.app.util.UserPresenceHelper
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -78,6 +79,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (SettingsManager.activityStatusEnabled) {
+            UserPresenceHelper.setOnline()
+        }
+    }
+
+    override fun onStop() {
+        if (SettingsManager.activityStatusEnabled) {
+            UserPresenceHelper.setOffline()
+        }
+        super.onStop()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.data.storage.VideoCompressor
 import com.vivid.app.util.VideoThumbnailer
+import com.vivid.app.util.VideoTrimmer
 import com.vivid.app.util.VideoWatermarker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,13 +65,31 @@ class CreateReelViewModel @Inject constructor(
                 val user = auth.currentUser
                     ?: throw IllegalStateException("No hay sesión iniciada")
 
-                // 1. Comprimir (a 720x1280, 1.5 Mbps)
+                // 1. Trim real (si el usuario recortó el video)
+                val sourceForCompression = if (trimEndMs > trimStartMs && trimEndMs > 0L) {
+                    val trimmedFile = File(context.cacheDir, "reel_trim_${System.currentTimeMillis()}.mp4")
+                    VideoTrimmer.trim(
+                        context = context,
+                        inputUri = videoUri,
+                        outputFile = trimmedFile,
+                        startMs = trimStartMs,
+                        endMs = trimEndMs
+                    )
+                } else {
+                    val originalFile = File(context.cacheDir, "reel_original_${System.currentTimeMillis()}.mp4")
+                    context.contentResolver.openInputStream(videoUri)?.use { input ->
+                        originalFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    originalFile.absolutePath
+                }
+
+                // 2. Comprimir (a 720x1280, 1.5 Mbps)
                 _state.value = CreateReelUiState.Compressing(0)
-                val compressedPath = VideoCompressor.compress(context, videoUri) { pct ->
+                val compressedPath = VideoCompressor.compress(context, Uri.fromFile(File(sourceForCompression))) { pct ->
                     _state.value = CreateReelUiState.Compressing(pct)
                 }
 
-                // 2. Watermark (si el usuario lo eligió)
+                // 3. Watermark (si el usuario lo eligió)
                 var finalVideoPath = compressedPath
                 if (withWatermark) {
                     _state.value = CreateReelUiState.Watermarking(0)
