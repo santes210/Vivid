@@ -18,14 +18,33 @@ hilt {
 // =========================================================
 //  CREDENCIALES EMBEBIDAS (modo inseguro, decidiste aceptarlo)
 // =========================================================
-// Estas constantes se inyectan en BuildConfig para que
-// StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
+// Estas constantes se inyectan en BuildConfig.
+
+// CF_BASE_URL (ya existía)
 val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
 
-// GOOGLE_WEB_CLIENT_ID para Google Sign-In (OAuth client ID)
-// Se usa env var en CI/local para no depender de google-services.json
-// (que no tiene oauth_client configurado, evitando R.string.default_web_client_id inexistente)
-val GOOGLE_WEB_CLIENT_ID_VALUE = System.getenv("GOOGLE_WEB_CLIENT_ID") ?: ""
+// GOOGLE_WEB_CLIENT_ID para Google Sign-In
+// Prioridad:
+// 1. Variable de entorno (útil en GitHub Actions / CI)
+// 2. local.properties (recomendado cuando solo tienes teléfono)
+// 3. vacío (el botón de Google muestra mensaje de error amigable)
+val envGoogleWebClientId = System.getenv("GOOGLE_WEB_CLIENT_ID") ?: ""
+
+// Intentamos leer de local.properties (funciona perfecto desde el teléfono)
+val localProperties = java.util.Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+val localGoogleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")
+
+val GOOGLE_WEB_CLIENT_ID_VALUE = if (envGoogleWebClientId.isNotBlank()) {
+    envGoogleWebClientId
+} else if (localGoogleWebClientId.isNotBlank()) {
+    localGoogleWebClientId
+} else {
+    ""
+}
 
 android {
     namespace = "com.vivid.app"
