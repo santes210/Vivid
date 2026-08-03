@@ -177,7 +177,8 @@ suspend fun uploadStoryWithCompression(
 suspend fun deleteExpiredStoriesForCurrentUser(
     firestore: FirebaseFirestore,
     currentUserId: String,
-    now: Long = System.currentTimeMillis()
+    now: Long = System.currentTimeMillis(),
+    storage: com.vivid.app.data.storage.StorageProvider? = null
 ): Int = withContext(Dispatchers.IO) {
     if (currentUserId.isBlank()) return@withContext 0
 
@@ -186,6 +187,20 @@ suspend fun deleteExpiredStoriesForCurrentUser(
         .whereLessThanOrEqualTo("expiresAt", now)
         .get()
         .await()
+
+    // Borrar también los archivos huérfanos del bucket (video + miniatura).
+    if (storage != null) {
+        expiredStories.documents.forEach { doc ->
+            val key = doc.getString("storageKey").orEmpty()
+            if (key.isNotBlank()) {
+                runCatching { storage.deleteFile(key) }
+                // Las stories de video también suben una miniatura "<clave>.jpg"
+                if (key.endsWith(".mp4", ignoreCase = true)) {
+                    runCatching { storage.deleteFile(key.replace(Regex("(?i)\\.mp4$"), ".jpg")) }
+                }
+            }
+        }
+    }
 
     val batch = firestore.batch()
     expiredStories.documents.forEach { batch.delete(it.reference) }

@@ -95,6 +95,7 @@ fun VividNavigation(
             ) {
                 popUpTo(Screen.Feed.route)
             }
+            com.vivid.app.util.DeepLinkBus.clearChat()
         }
     }
     LaunchedEffect(deepLinkReelId) {
@@ -102,6 +103,7 @@ fun VividNavigation(
             navController.navigate(Screen.Reels.route) {
                 popUpTo(Screen.Feed.route)
             }
+            com.vivid.app.util.DeepLinkBus.clearReel()
         }
     }
     LaunchedEffect(deepLinkProfileUserId) {
@@ -109,6 +111,7 @@ fun VividNavigation(
             navController.navigate("profile/${Uri.encode(deepLinkProfileUserId)}") {
                 popUpTo(Screen.Feed.route)
             }
+            com.vivid.app.util.DeepLinkBus.clearProfile()
         }
     }
 

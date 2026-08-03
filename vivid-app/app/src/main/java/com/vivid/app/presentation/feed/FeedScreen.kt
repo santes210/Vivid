@@ -36,6 +36,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -234,7 +235,18 @@ fun FeedScreen(
                 Button(onClick = {
                     scope.launch {
                         try {
-                            FirebaseFirestore.getInstance().collection("posts").document(post.id).delete().await()
+                            val db = FirebaseFirestore.getInstance()
+                            db.collection("posts").document(post.id).delete().await()
+                            // Mantener el contador del perfil al día
+                            FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                                db.collection("users").document(uid).set(
+                                    mapOf(
+                                        "postsCount" to FieldValue.increment(-1),
+                                        "updatedAt" to System.currentTimeMillis()
+                                    ),
+                                    SetOptions.merge()
+                                ).await()
+                            }
                             posts = posts.filter { it.id != post.id }
                             snackbarHostState.showSnackbar("Publicación eliminada")
                         } catch (e: Exception) { snackbarHostState.showSnackbar("Error: ${e.message}") }

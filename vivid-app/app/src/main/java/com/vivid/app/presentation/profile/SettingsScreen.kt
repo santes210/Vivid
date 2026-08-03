@@ -677,7 +677,8 @@ fun SettingsScreen(
                                 val count = runCatching {
                                     deleteExpiredStoriesForCurrentUser(
                                         firestore = firestore,
-                                        currentUserId = user?.uid.orEmpty()
+                                        currentUserId = user?.uid.orEmpty(),
+                                        storage = com.vivid.app.di.StorageModule.provideStorageProvider()
                                     )
                                 }.getOrElse {
                                     snackbarHostState.showSnackbar(it.message ?: "No se pudieron limpiar las stories.")

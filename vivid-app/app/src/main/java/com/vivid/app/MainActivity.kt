@@ -7,13 +7,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.navigation.VividNavigation
 import com.vivid.app.notifications.NotificationForegroundService
 import com.vivid.app.theme.VividTheme
+import com.vivid.app.util.DeepLinkBus
 import com.vivid.app.util.PushNotificationHelper
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.UserPresenceHelper
@@ -21,10 +23,6 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    private var pendingChatId: String? = null
-    private var pendingReelId: String? = null
-    private var pendingProfileUserId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,20 +60,12 @@ class MainActivity : ComponentActivity() {
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
 
-            val deepLinkChatId = remember { pendingChatId }
-            val deepLinkReelId = remember { pendingReelId }
-            val deepLinkProfileUserId = remember { pendingProfileUserId }
-
             VividTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    VividApp(
-                        deepLinkChatId = deepLinkChatId,
-                        deepLinkReelId = deepLinkReelId,
-                        deepLinkProfileUserId = deepLinkProfileUserId
-                    )
+                    VividApp()
                 }
             }
         }
@@ -101,25 +91,33 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readNotificationExtras(intent: android.content.Intent) {
+        // Publica los deep links en el bus reactivo. Así también llegan
+        // cuando la app ya estaba abierta (onNewIntent), no solo en frío.
         if (intent.getBooleanExtra("openChat", false)) {
-            pendingChatId = intent.getStringExtra("chatId")
+            intent.getStringExtra("chatId")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { DeepLinkBus.emitChat(it) }
         }
         if (intent.getBooleanExtra("openReel", false)) {
-            pendingReelId = intent.getStringExtra("reelId")
+            intent.getStringExtra("reelId")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { DeepLinkBus.emitReel(it) }
         }
         if (intent.getBooleanExtra("openProfile", false)) {
-            pendingProfileUserId = intent.getStringExtra("profileUserId")
+            intent.getStringExtra("profileUserId")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { DeepLinkBus.emitProfile(it) }
         }
     }
 }
 
 @Composable
-fun VividApp(
-    deepLinkChatId: String? = null,
-    deepLinkReelId: String? = null,
-    deepLinkProfileUserId: String? = null
-) {
+fun VividApp() {
     val navController = rememberNavController()
+    // Deep links reactivos: cualquier evento nuevo re-dispara la navegación.
+    val deepLinkChatId by DeepLinkBus.chatId.collectAsState()
+    val deepLinkReelId by DeepLinkBus.reelId.collectAsState()
+    val deepLinkProfileUserId by DeepLinkBus.profileUserId.collectAsState()
     VividNavigation(
         navController = navController,
         deepLinkChatId = deepLinkChatId,

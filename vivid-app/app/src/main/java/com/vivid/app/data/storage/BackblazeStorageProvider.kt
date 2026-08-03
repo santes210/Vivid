@@ -100,10 +100,73 @@ class BackblazeStorageProvider(
     }
 
     override suspend fun deleteFile(remoteKey: String): Boolean = withContext(Dispatchers.IO) {
-        // b2_delete_file_version requiere fileId (no solo el nombre).
-        // Cuando migres a Cloud Function, este método tendrá implementación real.
-        Log.w(TAG, "deleteFile no implementado en modo direct (migra a Cloud Function)")
-        false
+        // b2_delete_file_version requiere el fileId (no solo el nombre).
+        // Primero se localiza con b2_list_file_names usando el prefijo exacto.
+        return@withContext try {
+            val session = cachedSession ?: authorize().also { cachedSession = it }
+            val fileId = findFileId(session, remoteKey)
+            if (fileId == null) {
+                Log.w(TAG, "deleteFile: no existe $remoteKey en el bucket")
+                return@withContext false
+            }
+
+            val payload = JSONObject().apply {
+                put("fileName", remoteKey)
+                put("fileId", fileId)
+            }.toString().toRequestBody(JSON_MEDIA)
+
+            val req = Request.Builder()
+                .url("${session.apiUrl}/b2api/v2/b2_delete_file_version")
+                .header("Authorization", session.authToken)
+                .post(payload)
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    Log.e(TAG, "b2_delete_file_version falló (${resp.code}): $body")
+                    return@withContext false
+                }
+                Log.d(TAG, "Archivo eliminado de B2: $remoteKey")
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "deleteFile falló para $remoteKey", e)
+            false
+        }
+    }
+
+    /**
+     * Devuelve el fileId de la versión visible de [remoteKey], o null si no existe.
+     */
+    private fun findFileId(session: Session, remoteKey: String): String? {
+        val payload = JSONObject().apply {
+            put("bucketId", bucketId)
+            put("prefix", remoteKey)
+            put("maxFileCount", 10)
+        }.toString().toRequestBody(JSON_MEDIA)
+
+        val req = Request.Builder()
+            .url("${session.apiUrl}/b2api/v2/b2_list_file_names")
+            .header("Authorization", session.authToken)
+            .post(payload)
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("b2_list_file_names falló (${resp.code}): $body")
+            val files = json.parseToJsonElement(body).jsonObject["files"]
+            val array = files as? kotlinx.serialization.json.JsonArray ?: return null
+            for (element in array) {
+                val obj = element.jsonObject
+                val name = obj["fileName"]?.jsonPrimitive?.content
+                val action = obj["action"]?.jsonPrimitive?.content
+                if (name == remoteKey && action == "upload") {
+                    return obj["fileId"]?.jsonPrimitive?.content
+                }
+            }
+            return null
+        }
     }
 
     // ----------------------------------------------------------------------

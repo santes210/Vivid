@@ -285,6 +285,7 @@ fun CreatePostScreen(
                                 ?: user.displayName
                                 ?: user.email?.substringBefore('@')
                                 ?: "usuario"
+                            val userAvatar = userSnapshot.getString("avatarUrl").orEmpty()
                             val compressed = ImageCompressor.compressToBase64(
                                 selectedImageUri!!, context
                             ) ?: throw IllegalStateException("No se pudo comprimir")
@@ -294,11 +295,24 @@ fun CreatePostScreen(
                             val postData = hashMapOf(
                                 "userId" to user.uid,
                                 "username" to username,
+                                "userProfilePicture" to userAvatar,
                                 "imageBase64" to compressed,
                                 "caption" to caption,
+                                "likesCount" to 0L,
+                                "commentsCount" to 0L,
                                 "timestamp" to System.currentTimeMillis()
                             )
                             db.collection("posts").document(postId).set(postData).await()
+
+                            // Mantener el contador del perfil al día
+                            db.collection("users").document(user.uid).set(
+                                mapOf(
+                                    "postsCount" to com.google.firebase.firestore.FieldValue.increment(1),
+                                    "updatedAt" to System.currentTimeMillis()
+                                ),
+                                com.google.firebase.firestore.SetOptions.merge()
+                            ).await()
+
                             uploadProgress = "¡Publicado!"
                             isUploading = false
                             onPostCreated()

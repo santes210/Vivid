@@ -183,7 +183,16 @@ fun AuthScreen(
                 viewModel.reportExternalError("Google no devolvió un token válido.")
             }
         }.onFailure {
-            viewModel.reportExternalError(it.message ?: "No se pudo iniciar sesión con Google.")
+            val apiError = (it as? ApiException)?.statusCode
+            // 12501 = sign-in cancelado por el usuario: no mostrar como error.
+            if (apiError != 12501) {
+                val message = when (apiError) {
+                    // DEVELOPER_ERROR: app o web client no registrados en Firebase Console.
+                    10 -> "Google rechazó el inicio (DEVELOPER_ERROR). Falta registrar el SHA-1/SHA-256 en Firebase Console o renovar google-services.json."
+                    else -> it.message ?: "No se pudo iniciar sesión con Google."
+                }
+                viewModel.reportExternalError(message)
+            }
         }
     }
 
@@ -274,13 +283,24 @@ fun AuthScreen(
 
         OutlinedButton(
             onClick = {
-                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestIdToken(context.getString(R.string.default_web_client_id))
-                    .requestEmail()
-                    .build()
-                val client = GoogleSignIn.getClient(context, gso)
-                client.signOut().addOnCompleteListener {
-                    googleLauncher.launch(client.signInIntent)
+                val webClientId = context.getString(R.string.default_web_client_id)
+                if (webClientId.isBlank() || webClientId == "null") {
+                    // google-services.json no trae un cliente web OAuth (oauth_client vacío).
+                    // Sin ese ID, Google cierra el selector con DEVELOPER_ERROR (10).
+                    viewModel.reportExternalError(
+                        "Inicio con Google no configurado: falta el cliente web OAuth. " +
+                            "En Firebase Console activa Google Sign-In, agrega el SHA-1/SHA-256 " +
+                            "del keystore al proyecto y reemplaza google-services.json."
+                    )
+                } else {
+                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(webClientId)
+                        .requestEmail()
+                        .build()
+                    val client = GoogleSignIn.getClient(context, gso)
+                    client.signOut().addOnCompleteListener {
+                        googleLauncher.launch(client.signInIntent)
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth(),

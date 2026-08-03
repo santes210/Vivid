@@ -168,7 +168,9 @@ class CreateStoryViewModel @Inject constructor(
         val avatarBase64 = userDoc.getString("avatarBase64").orEmpty()
         val isPrivate = userDoc.getBoolean("isPrivate") ?: false
         val isVideo = videoUrl.isNotBlank()
-        val mediaUrl = if (isVideo) thumbnailUrl else thumbnailUrl
+        // Para video: mediaUrl debe ser el propio video (la miniatura va en thumbnailUrl).
+        // Para foto: la foto es a la vez media y miniatura.
+        val mediaUrl = if (isVideo) videoUrl else thumbnailUrl
 
         val data = mapOf(
             "userId" to uid,
