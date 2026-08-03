@@ -3,18 +3,46 @@ package com.vivid.app.presentation.auth
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,6 +51,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
@@ -45,7 +77,7 @@ class AuthViewModel @Inject constructor(
 
     fun login(email: String, password: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, notice = null)
             try {
                 auth.signInWithEmailAndPassword(email.trim(), password).await()
                 ensureUserProfile()
@@ -61,7 +93,7 @@ class AuthViewModel @Inject constructor(
 
     fun register(email: String, password: String, username: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, notice = null)
             try {
                 val cleanEmail = email.trim()
                 val cleanUsername = username.trim().ifBlank { cleanEmail.substringBefore("@") }
@@ -84,12 +116,35 @@ class AuthViewModel @Inject constructor(
 
     fun loginWithGoogle(idToken: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, notice = null)
             try {
                 val credential = GoogleAuthProvider.getCredential(idToken, null)
                 auth.signInWithCredential(credential).await()
                 ensureUserProfile()
                 _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.toReadableAuthMessage()
+                )
+            }
+        }
+    }
+
+    fun resetPassword(email: String) {
+        viewModelScope.launch {
+            val cleanEmail = email.trim()
+            if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+                reportExternalError("Escribe tu correo arriba para enviarte el enlace de restablecimiento.")
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, notice = null)
+            try {
+                auth.sendPasswordResetEmail(cleanEmail).await()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    notice = "Te enviamos un enlace a $cleanEmail para restablecer tu contraseña."
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -137,23 +192,37 @@ class AuthViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoading = false, error = message)
     }
 
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+    fun clearMessages() {
+        _uiState.value = _uiState.value.copy(error = null, notice = null)
     }
 }
 
 data class AuthUiState(
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val notice: String? = null
 )
 
 private fun Exception.toReadableAuthMessage(): String {
     return when (this) {
-        is FirebaseNetworkException -> "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
+        is FirebaseNetworkException ->
+            "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
+        is FirebaseAuthInvalidUserException ->
+            "No encontramos una cuenta con ese correo. Crea una cuenta nueva abajo."
+        is FirebaseAuthInvalidCredentialsException ->
+            "Correo o contraseña incorrectos. Verifica tus datos."
+        is FirebaseAuthWeakPasswordException ->
+            "La contraseña es muy débil: usa al menos 6 caracteres con mayúsculas y números."
+        is FirebaseAuthUserCollisionException ->
+            "Ese correo ya tiene una cuenta. Inicia sesión en su lugar."
         else -> message ?: "Ocurrió un error de autenticación."
     }
 }
+
+// ======================================================================
+//  LOGIN / REGISTRO — Material You 3
+// ======================================================================
 
 @Composable
 fun AuthScreen(
@@ -162,10 +231,15 @@ fun AuthScreen(
 ) {
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
-    var isLoginMode by remember { mutableStateOf(true) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val scheme = MaterialTheme.colorScheme
+
+    var isLoginMode by rememberSaveable { mutableStateOf(true) }
+    var username by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsState()
     val googleLauncher = rememberLauncherForActivityResult(
@@ -197,137 +271,377 @@ fun AuthScreen(
     }
 
     LaunchedEffect(currentUser?.uid) {
-        if (currentUser != null) {
-            onLoginSuccess()
-        }
+        if (currentUser != null) onLoginSuccess()
     }
-
     LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) {
-            onLoginSuccess()
-        }
+        if (uiState.isSuccess) onLoginSuccess()
     }
 
-    Column(
+    val canSubmit = !uiState.isLoading &&
+            email.contains("@") &&
+            password.length >= 6
+
+    fun submit() {
+        keyboardController?.hide()
+        if (isLoginMode) viewModel.login(email, password)
+        else viewModel.register(email, password, username)
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(scheme.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
-        Text(
-            text = "Vivid",
-            style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = if (isLoginMode) "Inicia sesión" else "Crea tu cuenta",
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (!isLoginMode) {
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Nombre de usuario") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                if (isLoginMode) {
-                    viewModel.login(email, password)
-                } else {
-                    viewModel.register(email, password, username)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank()
-        ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Text(if (isLoginMode) "Iniciar sesión" else "Registrarse")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedButton(
-            onClick = {
-                val webClientId = context.getString(R.string.default_web_client_id)
-                if (webClientId.isBlank() || webClientId == "null") {
-                    // google-services.json no trae un cliente web OAuth (oauth_client vacío).
-                    // Sin ese ID, Google cierra el selector con DEVELOPER_ERROR (10).
-                    viewModel.reportExternalError(
-                        "Inicio con Google no configurado: falta el cliente web OAuth. " +
-                            "En Firebase Console activa Google Sign-In, agrega el SHA-1/SHA-256 " +
-                            "del keystore al proyecto y reemplaza google-services.json."
+        // ── Auras decorativas (tonos del tema dinámico, sin cambiar colores) ──
+        Box(
+            modifier = Modifier
+                .size(340.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 110.dp, y = (-80).dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(scheme.tertiary.copy(alpha = 0.22f), Color.Transparent)
                     )
-                } else {
-                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken(webClientId)
-                        .requestEmail()
-                        .build()
-                    val client = GoogleSignIn.getClient(context, gso)
-                    client.signOut().addOnCompleteListener {
-                        googleLauncher.launch(client.signInIntent)
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(420.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = (-140).dp, y = 110.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(scheme.primary.copy(alpha = 0.18f), Color.Transparent)
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(56.dp))
+
+            // ── Marca ──
+            Text(
+                text = "Vivid",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-1.5).sp,
+                    brush = Brush.linearGradient(
+                        listOf(scheme.primary, scheme.tertiary)
+                    )
+                )
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (isLoginMode) "Bienvenido de vuelta a tu mundo en colores"
+                else "Crea tu cuenta y empieza a compartir",
+                style = MaterialTheme.typography.bodyLarge,
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(28.dp))
+
+            // ── Tarjeta principal ──
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Selector Entrar / Crear cuenta
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = isLoginMode,
+                            onClick = { isLoginMode = true; viewModel.clearMessages() },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text("Entrar") }
+                        SegmentedButton(
+                            selected = !isLoginMode,
+                            onClick = { isLoginMode = false; viewModel.clearMessages() },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text("Crear cuenta") }
+                    }
+
+                    // Campo username (solo registro)
+                    AnimatedVisibility(
+                        visible = !isLoginMode,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it.trimStart() },
+                            label = { Text("Nombre de usuario") },
+                            leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                            ),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it.trim() },
+                        label = { Text("Correo electrónico") },
+                        leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                        ),
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Column {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Contraseña") },
+                            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        if (passwordVisible) Icons.Filled.VisibilityOff
+                                        else Icons.Filled.Visibility,
+                                        contentDescription = if (passwordVisible) "Ocultar contraseña"
+                                        else "Mostrar contraseña"
+                                    )
+                                }
+                            },
+                            visualTransformation = if (passwordVisible) VisualTransformation.None
+                            else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { if (canSubmit) submit() }
+                            ),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Medidor de fortaleza (solo en registro)
+                        AnimatedVisibility(visible = !isLoginMode && password.isNotEmpty()) {
+                            PasswordStrengthHint(password = password)
+                        }
+                    }
+
+                    // Mensajes de error / aviso
+                    uiState.error?.let { error ->
+                        MessageCard(
+                            message = error,
+                            isError = true,
+                            onDismiss = viewModel::clearMessages
+                        )
+                    }
+                    uiState.notice?.let { notice ->
+                        MessageCard(
+                            message = notice,
+                            isError = false,
+                            onDismiss = viewModel::clearMessages
+                        )
+                    }
+
+                    // Botón principal
+                    Button(
+                        onClick = { submit() },
+                        enabled = canSubmit,
+                        shape = MaterialTheme.shapes.extraLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = scheme.onPrimary
+                            )
+                        } else {
+                            Text(
+                                if (isLoginMode) "Iniciar sesión" else "Crear cuenta",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+
+                    // ¿Olvidaste tu contraseña? (solo en login)
+                    if (isLoginMode) {
+                        TextButton(
+                            onClick = { viewModel.resetPassword(email) },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text("¿Olvidaste tu contraseña?")
+                        }
+                    }
+
+                    // Separador
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        HorizontalDivider(modifier = Modifier.weight(1f))
+                        Text("o", style = MaterialTheme.typography.labelMedium,
+                            color = scheme.onSurfaceVariant)
+                        HorizontalDivider(modifier = Modifier.weight(1f))
+                    }
+
+                    // Google
+                    FilledTonalButton(
+                        onClick = {
+                            val webClientId = context.getString(R.string.default_web_client_id)
+                            if (webClientId.isBlank() || webClientId == "null") {
+                                // google-services.json no trae cliente web OAuth (oauth_client vacío).
+                                viewModel.reportExternalError(
+                                    "Inicio con Google no configurado: falta el cliente web OAuth. " +
+                                        "En Firebase Console activa Google Sign-In, agrega el SHA-1/SHA-256 " +
+                                        "del keystore al proyecto y reemplaza google-services.json."
+                                )
+                            } else {
+                                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                    .requestIdToken(webClientId)
+                                    .requestEmail()
+                                    .build()
+                                val client = GoogleSignIn.getClient(context, gso)
+                                client.signOut().addOnCompleteListener {
+                                    googleLauncher.launch(client.signInIntent)
+                                }
+                            }
+                        },
+                        enabled = !uiState.isLoading,
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = scheme.surfaceVariant.copy(alpha = 0.7f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                    ) {
+                        Text(
+                            "G",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = scheme.primary
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Continuar con Google",
+                            style = MaterialTheme.typography.titleMedium
+                        )
                     }
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isLoading
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = "Al continuar aceptas los Términos y la Política de privacidad de Vivid.",
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+        }
+    }
+}
+
+/** Tarjeta inline para errores (rojo) y avisos positivos (tonal). */
+@Composable
+private fun MessageCard(
+    message: String,
+    isError: Boolean,
+    onDismiss: () -> Unit
+) {
+    val container = if (isError) MaterialTheme.colorScheme.errorContainer
+    else MaterialTheme.colorScheme.secondaryContainer
+    val content = if (isError) MaterialTheme.colorScheme.onErrorContainer
+    else MaterialTheme.colorScheme.onSecondaryContainer
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = container),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, top = 6.dp, bottom = 6.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.AccountCircle, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Continuar con Google")
-        }
-
-        TextButton(onClick = { isLoginMode = !isLoginMode }) {
-            Text(
-                if (isLoginMode) "¿No tienes cuenta? Regístrate"
-                else "¿Ya tienes cuenta? Inicia sesión"
+            Icon(
+                imageVector = if (isError) Icons.Filled.ErrorOutline else Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(20.dp)
             )
-        }
-
-        uiState.error?.let { error ->
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.width(10.dp))
             Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = content,
+                modifier = Modifier.weight(1f)
             )
-            Button(onClick = { viewModel.clearError() }) {
-                Text("Reintentar")
+            TextButton(onClick = onDismiss) {
+                Text("OK")
             }
         }
+    }
+}
+
+/** Medidor simple de fortaleza de contraseña para el registro. */
+@Composable
+private fun PasswordStrengthHint(password: String) {
+    val scheme = MaterialTheme.colorScheme
+    var score = 0
+    if (password.length >= 6) score++
+    if (password.length >= 10) score++
+    if (password.any { it.isDigit() }) score++
+    if (password.any { it.isUpperCase() }) score++
+    if (password.any { !it.isLetterOrDigit() }) score++
+
+    val (label, color, fraction) = when {
+        score <= 1 -> Triple("Débil", scheme.error, 0.25f)
+        score <= 3 -> Triple("Media", scheme.tertiary, 0.6f)
+        else -> Triple("Fuerte", scheme.primary, 1f)
+    }
+
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(MaterialTheme.shapes.extraSmall),
+            color = color,
+            trackColor = scheme.surfaceVariant
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Seguridad de la contraseña: $label",
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant
+        )
     }
 }
