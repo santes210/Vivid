@@ -32,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +57,7 @@ import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
-import com.vivid.app.R
+import com.vivid.app.di.BuildConfigSecrets
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -230,7 +229,6 @@ fun AuthScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val currentUser = FirebaseAuth.getInstance().currentUser
-    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val scheme = MaterialTheme.colorScheme
@@ -515,13 +513,14 @@ fun AuthScreen(
                     // Google
                     FilledTonalButton(
                         onClick = {
-                            val webClientId = context.getString(R.string.default_web_client_id)
-                            if (webClientId.isBlank() || webClientId == "null") {
-                                // google-services.json no trae cliente web OAuth (oauth_client vacío).
+                            // El ID vive en BuildConfigSecrets: google-services.json trae
+                            // oauth_client vacío y R.string.default_web_client_id no se genera.
+                            val webClientId = BuildConfigSecrets.GOOGLE_WEB_CLIENT_ID
+                            if (webClientId.isBlank()) {
                                 viewModel.reportExternalError(
-                                    "Inicio con Google no configurado: falta el cliente web OAuth. " +
-                                        "En Firebase Console activa Google Sign-In, agrega el SHA-1/SHA-256 " +
-                                        "del keystore al proyecto y reemplaza google-services.json."
+                                    "Inicio con Google no configurado: falta el Web Client ID. " +
+                                        "Pégalo en BuildConfigSecrets.GOOGLE_WEB_CLIENT_ID " +
+                                        "(Firebase Console > Authentication > Google > ID de cliente web)."
                                 )
                             } else {
                                 val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)

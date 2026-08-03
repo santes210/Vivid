@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -573,10 +575,10 @@ private fun ReelCommentsDialog(
                 if (comments.isEmpty()) {
                     Text("No hay comentarios todavía.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    androidx.compose.foundation.lazy.LazyColumn(
+                    LazyColumn(
                         modifier = Modifier.heightIn(max = 300.dp)
                     ) {
-                        androidx.compose.foundation.lazy.items(comments, key = { it.id }) { comment ->
+                        items(comments, key = { it.id }) { comment ->
                             ReelCommentRow(comment)
                             Spacer(Modifier.height(10.dp))
                         }

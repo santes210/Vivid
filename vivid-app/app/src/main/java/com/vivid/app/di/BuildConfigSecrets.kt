@@ -32,6 +32,21 @@ object BuildConfigSecrets {
     // Tras firebase deploy --only functions pega aqui la URL
     const val CF_BASE_URL = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
 
+    // GOOGLE SIGN-IN - Web Client ID (OAuth 2.0, tipo "Aplicación web")
+    //
+    // ⚠️ google-services.json tiene "oauth_client": [], por eso el recurso
+    // R.string.default_web_client_id NO se genera y el ID va aquí a mano.
+    //
+    // Consíguelo en:
+    //   Firebase Console > Authentication > Sign-in method > Google >
+    //     "Configuración del SDK web" > ID de cliente web
+    //   (o en Google Cloud Console > APIs y servicios > Credenciales >
+    //    "Web client (auto created by Google Service)")
+    //
+    // Mientras esté vacío, el botón "Continuar con Google" muestra un
+    // aviso de que falta configuración en vez de morir con DEVELOPER_ERROR.
+    const val GOOGLE_WEB_CLIENT_ID = ""
+
     // HELPERS - expone los valores como tipos correctos para Gradle
     const val B2_KEY_ID_GRADLE           = B2_KEY_ID
     const val B2_APPLICATION_KEY_GRADLE  = B2_APPLICATION_KEY
