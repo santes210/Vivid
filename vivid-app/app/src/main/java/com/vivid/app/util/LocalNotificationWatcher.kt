@@ -87,9 +87,12 @@ object LocalNotificationWatcher {
                         val msg = change.document.data
                         val msgId = change.document.id
                         val senderId = msg["senderId"] as? String ?: ""
+                        val type = msg["type"] as? String ?: "text"
                         val text = msg["text"] as? String ?: ""
+                        // Los mensajes de imagen no traen texto: se notifica con un placeholder
+                        val displayText = if (type == "image" && text.isBlank()) "📷 Imagen" else text
 
-                        if (senderId != uid && !notifiedMessageIds.contains(msgId) && text.isNotBlank()) {
+                        if (senderId != uid && !notifiedMessageIds.contains(msgId) && displayText.isNotBlank()) {
                             notifiedMessageIds.add(msgId)
                             saveNotifiedId(context, "msg", msgId)
 
@@ -102,7 +105,7 @@ object LocalNotificationWatcher {
                                         context = context,
                                         channelId = "messages_channel",
                                         title = senderName,
-                                        body = text.take(150),
+                                        body = displayText.take(150),
                                         intent = Intent(context, MainActivity::class.java).apply {
                                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                                             putExtra("openChat", true)

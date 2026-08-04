@@ -1,4 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Vivid</string>
+
+    <!--
+      default_web_client_id: lo genera automáticamente el plugin google-services
+      (processDebugGoogleServices) SOLO si google-services.json tiene un
+      oauth_client con client_type 3 (Web client ID).
+
+      Hoy el google-services.json del repo no tiene ese client, así que este
+      string se define vacío para que el código compile. Para activar
+      Google Sign-In:
+        1. Firebase Console → Project settings → Your apps → (app Android)
+        2. Agrega tu SHA-1 y copia el "Web client (auto created by Google Service)" ID
+        3. Pega ese ID en google-services.json → oauth_client (client_type 3)
+           y BORRA este string de aquí (si no, habrá recurso duplicado).
+
+      Mientras esté vacío, el botón de Google muestra un aviso claro en vez
+      de crashear, y el login con email/contraseña funciona normal.
+    -->
+    <string name="default_web_client_id" translatable="false"></string>
 </resources>

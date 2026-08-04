@@ -2,13 +2,16 @@ package com.vivid.app.domain.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.vivid.app.data.local.dao.ChatDao
 import com.vivid.app.data.local.dao.MessageDao
 import com.vivid.app.data.local.entity.ChatEntity
 import com.vivid.app.data.local.entity.MessageEntity
+import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.presentation.messages.Message
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +28,8 @@ class ChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val storage: StorageProvider
 ) {
 
     private val currentUserId get() = auth.currentUser?.uid.orEmpty()
@@ -61,6 +65,9 @@ class ChatRepository @Inject constructor(
             )
         )
 
+        // NOTA: no se incluye unreadCounts aquí a propósito. Con merge(), reescribirlo
+        // al abrir el chat borraría los no-leídos del OTRO participante. Los contadores
+        // solo se tocan con FieldValue.increment (al enviar) y markChatAsRead (al abrir).
         firestore.collection("chats").document(chatId).set(
             mapOf(
                 "participants" to listOf(currentUserId, otherUserId),
@@ -75,10 +82,6 @@ class ChatRepository @Inject constructor(
                 "participantAvatarBase64s" to mapOf(
                     currentUserId to currentBase64,
                     otherUserId to avatarBase64
-                ),
-                "unreadCounts" to mapOf(
-                    currentUserId to 0,
-                    otherUserId to 0
                 ),
                 "createdAt" to now,
                 "updatedAt" to now
@@ -95,7 +98,10 @@ class ChatRepository @Inject constructor(
                     text = entity.text,
                     senderId = entity.senderId,
                     timestamp = entity.timestamp,
-                    isRead = entity.isRead
+                    isRead = entity.isRead,
+                    type = entity.type,
+                    imageUrl = entity.imageUrl,
+                    imageKey = entity.imageKey
                 )
             }.sortedBy { it.timestamp }
         }
@@ -131,16 +137,70 @@ class ChatRepository @Inject constructor(
                 )
             ).await()
 
+        updateChatPreview(chatId, receiverId, lastMessage = text, lastMessageType = "text", now)
+    }
+
+    /**
+     * Envía un mensaje de imagen. El binario YA está en B2; aquí solo se guarda
+     * la URL firmada + la key remota en Firestore (documento ligero, sin Base64).
+     */
+    suspend fun sendImageMessage(chatId: String, receiverId: String, imageUrl: String, imageKey: String) {
+        if (currentUserId.isBlank() || receiverId.isBlank() || imageUrl.isBlank()) return
+
+        val now = System.currentTimeMillis()
+        val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
+        val message = MessageEntity(
+            id = messageId,
+            chatId = chatId,
+            senderId = currentUserId,
+            text = "",
+            timestamp = now,
+            type = "image",
+            imageUrl = imageUrl,
+            imageKey = imageKey
+        )
+
+        messageDao.insertMessage(message)
+
+        firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .set(
+                mapOf(
+                    "text" to "",
+                    "senderId" to currentUserId,
+                    "receiverId" to receiverId,
+                    "timestamp" to now,
+                    "type" to "image",
+                    "isRead" to false,
+                    "imageUrl" to imageUrl,
+                    "imageKey" to imageKey
+                )
+            ).await()
+
+        updateChatPreview(chatId, receiverId, lastMessage = "📷 Imagen", lastMessageType = "image", now)
+    }
+
+    private suspend fun updateChatPreview(
+        chatId: String,
+        receiverId: String,
+        lastMessage: String,
+        lastMessageType: String,
+        now: Long
+    ) {
         firestore.collection("chats").document(chatId).set(
             mapOf(
                 "participants" to listOf(currentUserId, receiverId),
-                "lastMessage" to text,
+                "lastMessage" to lastMessage,
+                "lastMessageType" to lastMessageType,
                 "lastSenderId" to currentUserId,
                 "lastMessageSenderId" to currentUserId,
                 "lastTimestamp" to now,
+                // increment() para que los no-leídos se acumulen de verdad
                 "unreadCounts" to mapOf(
                     currentUserId to 0,
-                    receiverId to 1
+                    receiverId to FieldValue.increment(1)
                 ),
                 "updatedAt" to now
             ),
@@ -148,15 +208,22 @@ class ChatRepository @Inject constructor(
         ).await()
     }
 
-    suspend fun deleteMessage(chatId: String, messageId: String) {
-        messageDao.deleteMessage(messageId)
+    suspend fun deleteMessage(chatId: String, message: Message) {
+        // 1. Borrar el binario de B2 (best effort, no bloquea el borrado local)
+        if (message.type == "image" && message.imageKey.isNotBlank()) {
+            runCatching { storage.deleteFile(message.imageKey) }
+        }
+
+        // 2. Borrar local + Firestore
+        messageDao.deleteMessage(message.id)
         firestore.collection("chats")
             .document(chatId)
             .collection("messages")
-            .document(messageId)
+            .document(message.id)
             .delete()
             .await()
 
+        // 3. Recalcular la preview del chat con el último mensaje restante
         val latestRemaining = firestore.collection("chats")
             .document(chatId)
             .collection("messages")
@@ -168,9 +235,14 @@ class ChatRepository @Inject constructor(
             .firstOrNull()
 
         val latestSenderId = latestRemaining?.getString("senderId").orEmpty()
+        val latestType = latestRemaining?.getString("type") ?: "text"
+        val latestText = latestRemaining?.getString("text").orEmpty()
+        val lastMessageDisplay = if (latestType == "image") "📷 Imagen" else latestText
+
         firestore.collection("chats").document(chatId).set(
             mapOf(
-                "lastMessage" to latestRemaining?.getString("text").orEmpty(),
+                "lastMessage" to lastMessageDisplay,
+                "lastMessageType" to latestType,
                 "lastSenderId" to latestSenderId,
                 "lastMessageSenderId" to latestSenderId,
                 "lastTimestamp" to (latestRemaining?.getLong("timestamp") ?: System.currentTimeMillis()),
@@ -193,8 +265,13 @@ class ChatRepository @Inject constructor(
             .await()
     }
 
-    fun listenToMessages(chatId: String, onMessageEvent: (MessageChange) -> Unit) {
-        firestore.collection("chats")
+    /**
+     * Escucha los mensajes de un chat en tiempo real.
+     * Ahora devuelve el [ListenerRegistration] para que el ViewModel pueda
+     * removerlo al salir (antes el listener quedaba vivo para siempre: leak).
+     */
+    fun listenToMessages(chatId: String, onMessageEvent: (MessageChange) -> Unit): ListenerRegistration {
+        return firestore.collection("chats")
             .document(chatId)
             .collection("messages")
             .orderBy("timestamp", Query.Direction.ASCENDING)
@@ -207,7 +284,10 @@ class ChatRepository @Inject constructor(
                         senderId = change.document.getString("senderId").orEmpty(),
                         timestamp = timestamp,
                         isRead = change.document.getBoolean("isRead") ?: false,
-                        reaction = change.document.getString("reaction").orEmpty()
+                        reaction = change.document.getString("reaction").orEmpty(),
+                        type = change.document.getString("type") ?: "text",
+                        imageUrl = change.document.getString("imageUrl").orEmpty(),
+                        imageKey = change.document.getString("imageKey").orEmpty()
                     )
 
                     when (change.type) {
@@ -221,7 +301,10 @@ class ChatRepository @Inject constructor(
                                         senderId = msg.senderId,
                                         text = msg.text,
                                         timestamp = msg.timestamp,
-                                        isRead = msg.isRead
+                                        isRead = msg.isRead,
+                                        type = msg.type,
+                                        imageUrl = msg.imageUrl,
+                                        imageKey = msg.imageKey
                                     )
                                 )
                             }

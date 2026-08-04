@@ -1,9 +1,11 @@
 package com.vivid.app.util
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 /**
  * Utilidad para comprimir imágenes antes de convertirlas a Base64.
@@ -71,6 +73,84 @@ object ImageCompressor {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    /**
+     * Comprime una imagen desde Uri y la escribe como JPEG en [destFile].
+     *
+     * Es la variante para subir a B2 (chat, posts): el binario va a un bucket
+     * y solo la URL se guarda en Firestore, así que no hay límite de 1MB por
+     * documento. Aun así comprimimos para que la subida sea rápida en
+     * conexiones lentas: máximo 1280px y ~550 KB.
+     *
+     * @return true si el archivo se escribió correctamente
+     */
+    fun compressToFile(uri: Uri, context: Context, destFile: File): Boolean {
+        return try {
+            val imageBytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes()
+            } ?: return false
+
+            if (imageBytes.isEmpty()) return false
+
+            val bounds = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return false
+
+            val maxDim = 1280
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = calculateInSampleSize(
+                    originalWidth = bounds.outWidth,
+                    originalHeight = bounds.outHeight,
+                    reqWidth = maxDim,
+                    reqHeight = maxDim
+                )
+                inJustDecodeBounds = false
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+
+            var bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, decodeOptions)
+                ?: return false
+
+            bitmap = scaleBitmapIfNeeded(bitmap, maxDim, maxDim)
+
+            val targetSize = 550_000L // ~550 KB, subida rápida
+            var quality = 85
+            var attempts = 0
+
+            while (attempts < 6) {
+                while (quality >= 45) {
+                    destFile.outputStream().use { out ->
+                        if (bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out) &&
+                            destFile.length() <= targetSize
+                        ) {
+                            return true
+                        }
+                    }
+                    quality -= 10
+                }
+
+                val reducedWidth = (bitmap.width * 0.75f).toInt().coerceAtLeast(160)
+                val reducedHeight = (bitmap.height * 0.75f).toInt().coerceAtLeast(160)
+                if (reducedWidth == bitmap.width && reducedHeight == bitmap.height) break
+
+                bitmap = Bitmap.createScaledBitmap(bitmap, reducedWidth, reducedHeight, true)
+                quality = 85
+                attempts++
+            }
+
+            // Último intento con la calidad mínima
+            destFile.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 45, out)
+            }
+            destFile.exists() && destFile.length() > 0L
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 

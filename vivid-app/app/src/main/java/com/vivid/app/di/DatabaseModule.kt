@@ -25,7 +25,9 @@ object DatabaseModule {
             context,
             VividDatabase::class.java,
             "vivid_database"
-        ).build()
+        )
+            .addMigrations(VividDatabase.MIGRATION_1_2)
+            .build()
     }
 
     @Provides

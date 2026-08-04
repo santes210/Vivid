@@ -1,5 +1,8 @@
 package com.vivid.app.presentation.messages
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.Check
@@ -34,6 +39,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +47,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.net.Uri
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -69,7 +78,19 @@ fun ChatScreen(
     // States for custom Reaction bar & long-press bottom sheet
     var activeReactionMessageId by remember { mutableStateOf<String?>(null) }
     var selectedMessageForOptions by remember { mutableStateOf<Message?>(null) }
-    
+
+    // Imágenes: envío con progreso + visor a pantalla completa
+    val imageUploads: List<ImageUpload> = viewModel.imageUploads.collectAsState(initial = emptyList()).value
+    var viewerImageUrl by remember { mutableStateOf<String?>(null) }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.sendImage(chatId, receiverId, uri)
+        }
+    }
+
     val listState = rememberLazyListState()
 
     LaunchedEffect(chatId, receiverId, otherUserName) {
@@ -206,7 +227,7 @@ fun ChatScreen(
                         }
                     }
 
-                    messages.isEmpty() -> {
+                    messages.isEmpty() && imageUploads.none { it.phase != ImageUpload.Phase.DONE } -> {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -240,6 +261,17 @@ fun ChatScreen(
                     }
 
                     else -> {
+                        // Mensajes (abajo) + envíos de imagen en progreso (arriba de ellos)
+                        val listItems = remember(messages, imageUploads) {
+                            buildList {
+                                messages.reversed().forEach { add(MessageListItem.ChatMessage(it)) }
+                                imageUploads
+                                    .filter { it.phase != ImageUpload.Phase.DONE }
+                                    .reversed()
+                                    .forEach { add(MessageListItem.Upload(it)) }
+                            }
+                        }
+
                         LazyColumn(
                             state = listState,
                             modifier = Modifier
@@ -249,37 +281,58 @@ fun ChatScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                             reverseLayout = true
                         ) {
-                            itemsIndexed(messages.reversed(), key = { _, msg -> msg.id }) { index, message ->
-                                val isMine = message.senderId == currentUserId
-                                
-                                // Determinar si los mensajes adyacentes son del mismo remitente para agrupar
-                                val prevMsg = if (index < messages.size - 1) messages.reversed()[index + 1] else null
-                                val nextMsg = if (index > 0) messages.reversed()[index - 1] else null
-                                
-                                val isSameAsPrev = prevMsg?.senderId == message.senderId
-                                val isSameAsNext = nextMsg?.senderId == message.senderId
-
-                                // Mostrar cabecera de fecha si el día cambia
-                                val showDateHeader = prevMsg == null || !isSameDay(message.timestamp, prevMsg.timestamp)
-
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    if (showDateHeader) {
-                                        DateHeaderPill(timestamp = message.timestamp)
+                            itemsIndexed(listItems, key = { _, item -> item.key }) { index, item ->
+                                when (item) {
+                                    is MessageListItem.Upload -> {
+                                        UploadBubble(
+                                            upload = item.upload,
+                                            onRetry = {
+                                                viewModel.retryImageUpload(chatId, receiverId, item.upload.localId)
+                                            },
+                                            onDismiss = {
+                                                viewModel.dismissImageUpload(item.upload.localId)
+                                            }
+                                        )
                                     }
 
-                                    MessageBubble(
-                                        message = message,
-                                        isMine = isMine,
-                                        isGroupStart = !isSameAsPrev,
-                                        isGroupEnd = !isSameAsNext,
-                                        onLongPress = { 
-                                            activeReactionMessageId = message.id
-                                            selectedMessageForOptions = message 
-                                        },
-                                        onDoubleTap = {
-                                            viewModel.reactToMessage(chatId, message.id, "❤️")
+                                    is MessageListItem.ChatMessage -> {
+                                        val message = item.message
+                                        val isMine = message.senderId == currentUserId
+
+                                        // Determinar si los mensajes adyacentes son del mismo remitente para agrupar
+                                        val prevMsg = if (index < messages.size - 1) messages.reversed()[index + 1] else null
+                                        val nextMsg = if (index > 0) messages.reversed()[index - 1] else null
+
+                                        val isSameAsPrev = prevMsg?.senderId == message.senderId
+                                        val isSameAsNext = nextMsg?.senderId == message.senderId
+
+                                        // Mostrar cabecera de fecha si el día cambia
+                                        val showDateHeader = prevMsg == null || !isSameDay(message.timestamp, prevMsg.timestamp)
+
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            if (showDateHeader) {
+                                                DateHeaderPill(timestamp = message.timestamp)
+                                            }
+
+                                            MessageBubble(
+                                                message = message,
+                                                isMine = isMine,
+                                                isGroupStart = !isSameAsPrev,
+                                                isGroupEnd = !isSameAsNext,
+                                                onLongPress = {
+                                                    activeReactionMessageId = message.id
+                                                    selectedMessageForOptions = message
+                                                },
+                                                onDoubleTap = {
+                                                    viewModel.reactToMessage(chatId, message.id, "❤️")
+                                                },
+                                                onImageClick = { url -> viewerImageUrl = url },
+                                                onResignImage = { msg ->
+                                                    viewModel.refreshImageUrl(msg.id, msg.imageKey)
+                                                }
+                                            )
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }
@@ -316,6 +369,24 @@ fun ChatScreen(
                                     expanded = showAttachMenu,
                                     onDismissRequest = { showAttachMenu = false }
                                 ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Enviar foto") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.Image,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        },
+                                        onClick = {
+                                            showAttachMenu = false
+                                            imagePicker.launch(
+                                                PickVisualMediaRequest(
+                                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                                )
+                                            )
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = { Text("Ver perfil") },
                                         onClick = {
@@ -439,30 +510,46 @@ fun ChatScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 
-                ListItem(
-                    headlineContent = { Text("Copiar texto", style = MaterialTheme.typography.bodyLarge) },
-                    supportingContent = { Text(message.text.take(80), maxLines = 1) },
-                    leadingContent = { Icon(Icons.Outlined.FileCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            clipboardManager.setText(AnnotatedString(message.text))
-                            selectedMessageForOptions = null
-                            activeReactionMessageId = null
-                        },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
+                if (message.type == "image") {
+                    ListItem(
+                        headlineContent = { Text("Ver imagen", style = MaterialTheme.typography.bodyLarge) },
+                        supportingContent = { Text("Imagen adjunta", maxLines = 1) },
+                        leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                viewerImageUrl = message.imageUrl
+                                selectedMessageForOptions = null
+                                activeReactionMessageId = null
+                            },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                } else {
+                    ListItem(
+                        headlineContent = { Text("Copiar texto", style = MaterialTheme.typography.bodyLarge) },
+                        supportingContent = { Text(message.text.take(80), maxLines = 1) },
+                        leadingContent = { Icon(Icons.Outlined.FileCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                clipboardManager.setText(AnnotatedString(message.text))
+                                selectedMessageForOptions = null
+                                activeReactionMessageId = null
+                            },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
                 
                 if (message.senderId == currentUserId) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     ListItem(
                         headlineContent = { Text("Eliminar mensaje", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)) },
-                        supportingContent = { Text("Se borrará esta burbuja permanentemente.") },
+                        supportingContent = { Text(if (message.type == "image") "Se borrará la imagen también del servidor." else "Se borrará esta burbuja permanentemente.") },
                         leadingContent = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                         modifier = Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .clickable {
-                                viewModel.deleteMessage(chatId, message.id)
+                                viewModel.deleteMessage(chatId, message)
                                 selectedMessageForOptions = null
                                 activeReactionMessageId = null
                             },
@@ -470,6 +557,43 @@ fun ChatScreen(
                     )
                 }
                 Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    // ── Visor de imagen a pantalla completa ────────────────────────────────
+    viewerImageUrl?.let { url ->
+        Dialog(
+            onDismissRequest = { viewerImageUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.95f))
+                    .clickable { viewerImageUrl = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = "Imagen del chat",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { viewerImageUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Cerrar",
+                        tint = Color.White
+                    )
+                }
             }
         }
     }
@@ -498,6 +622,19 @@ private fun DateHeaderPill(timestamp: Long) {
     }
 }
 
+/** Ítems combinados de la lista de mensajes (mensajes + subidas en curso). */
+private sealed interface MessageListItem {
+    val key: String
+
+    data class ChatMessage(val message: Message) : MessageListItem {
+        override val key get() = message.id
+    }
+
+    data class Upload(val upload: ImageUpload) : MessageListItem {
+        override val key get() = "upload_${upload.localId}"
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
@@ -506,7 +643,9 @@ fun MessageBubble(
     isGroupStart: Boolean,
     isGroupEnd: Boolean,
     onLongPress: () -> Unit = {},
-    onDoubleTap: () -> Unit = {}
+    onDoubleTap: () -> Unit = {},
+    onImageClick: (String) -> Unit = {},
+    onResignImage: (Message) -> Unit = {}
 ) {
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     
@@ -570,38 +709,27 @@ fun MessageBubble(
                     Box(
                         modifier = Modifier
                             .background(bubbleBackground)
-                            .padding(horizontal = 14.dp, vertical = 9.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = com.vivid.app.util.SettingsManager.filterOffensiveWords(message.text),
-                                color = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 20.sp)
+                            .padding(
+                                horizontal = if (message.type == "image") 4.dp else 14.dp,
+                                vertical = if (message.type == "image") 4.dp else 9.dp
                             )
-                            Spacer(Modifier.height(3.dp))
-                            Row(
-                                modifier = Modifier.align(Alignment.End),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
+                    ) {
+                        if (message.type == "image") {
+                            ImageMessageContent(
+                                message = message,
+                                isMine = isMine,
+                                onImageClick = onImageClick,
+                                onResignImage = onResignImage
+                            )
+                        } else {
+                            Column {
                                 Text(
-                                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isMine) {
-                                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                    },
-                                    fontSize = 10.sp
+                                    text = com.vivid.app.util.SettingsManager.filterOffensiveWords(message.text),
+                                    color = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 20.sp)
                                 )
-                                if (isMine) {
-                                    Icon(
-                                        Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
+                                Spacer(Modifier.height(3.dp))
+                                MessageMetaRow(message = message, isMine = isMine)
                             }
                         }
                     }
@@ -634,6 +762,156 @@ fun MessageBubble(
             // Añadir un espacio adicional en la burbuja de abajo para no colisionar con la reacción flotante
             if (message.reaction.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+/** Contenido de una burbuja de imagen: thumbnail + hora + check de enviado. */
+@Composable
+private fun ImageMessageContent(
+    message: Message,
+    isMine: Boolean,
+    onImageClick: (String) -> Unit,
+    onResignImage: (Message) -> Unit
+) {
+    var resignAttempted by remember(message.id) { mutableStateOf(false) }
+
+    Column {
+        AsyncImage(
+            model = message.imageUrl,
+            contentDescription = "Imagen del chat",
+            modifier = Modifier
+                .defaultMinSize(minWidth = 160.dp, minHeight = 160.dp)
+                .sizeIn(maxWidth = 240.dp, maxHeight = 320.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onImageClick(message.imageUrl) },
+            contentScale = ContentScale.Crop,
+            onError = {
+                // URL firmada caducada (B2, TTL 7 días): se re-firma con la key
+                if (message.imageKey.isNotBlank() && !resignAttempted) {
+                    resignAttempted = true
+                    onResignImage(message)
+                }
+            }
+        )
+        Spacer(Modifier.height(3.dp))
+        MessageMetaRow(message = message, isMine = isMine)
+    }
+}
+
+/** Hora + check de enviado (compartido por burbujas de texto e imagen). */
+@Composable
+private fun MessageMetaRow(message: Message, isMine: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End
+    ) {
+        Text(
+            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isMine) {
+                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f)
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            },
+            fontSize = 10.sp
+        )
+        if (isMine) {
+            Icon(
+                Icons.Outlined.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
+                modifier = Modifier.size(12.dp)
+            )
+        }
+    }
+}
+
+/** Burbuja temporal que muestra el progreso de una imagen que se está enviando. */
+@Composable
+private fun UploadBubble(
+    upload: ImageUpload,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 260.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Image,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = when (upload.phase) {
+                            ImageUpload.Phase.COMPRESSING -> "Comprimiendo imagen…"
+                            ImageUpload.Phase.UPLOADING -> "Subiendo imagen… ${upload.progress}%"
+                            ImageUpload.Phase.DONE -> "Imagen enviada"
+                            ImageUpload.Phase.FAILED -> "No se pudo enviar la imagen"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                when (upload.phase) {
+                    ImageUpload.Phase.COMPRESSING -> {
+                        Spacer(Modifier.height(10.dp))
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                            strokeWidth = 4.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    ImageUpload.Phase.UPLOADING -> {
+                        Spacer(Modifier.height(10.dp))
+                        LinearProgressIndicator(
+                            progress = { upload.progress / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                    ImageUpload.Phase.FAILED -> {
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.align(Alignment.End),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = onDismiss) {
+                                Text("Descartar")
+                            }
+                            TextButton(onClick = onRetry) {
+                                Text(
+                                    "Reintentar",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    ImageUpload.Phase.DONE -> Unit
+                }
             }
         }
     }

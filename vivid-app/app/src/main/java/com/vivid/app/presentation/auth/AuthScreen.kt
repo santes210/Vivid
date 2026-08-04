@@ -3,18 +3,64 @@ package com.vivid.app.presentation.auth
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -155,6 +201,18 @@ private fun Exception.toReadableAuthMessage(): String {
     }
 }
 
+/**
+ * Pantalla de autenticación — Material You 3 de verdad.
+ *
+ * Diseño pensado para ser ligero en teléfonos antiguos:
+ *   - Sin blur, sin sombras pesadas, sin animaciones infinitas ni gradientes costosos.
+ *   - Superficies tonales del color scheme (dynamic color en Android 12+,
+ *     paleta Vivid en <12) en lugar de imágenes de fondo.
+ *   - verticalScroll + imePadding: el teclado nunca tapa los campos.
+ *   - Transición login/registro con fade + slide corto (barata de componer).
+ *   - Estados de carga en el propio botón (sin overlays ni dialogs).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
     onLoginSuccess: () -> Unit,
@@ -162,10 +220,14 @@ fun AuthScreen(
 ) {
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var isLoginMode by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val emailFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
 
     val uiState by viewModel.uiState.collectAsState()
     val googleLauncher = rememberLauncherForActivityResult(
@@ -199,115 +261,343 @@ fun AuthScreen(
         }
     }
 
-    Column(
+    val submit: () -> Unit = {
+        keyboardController?.hide()
+        if (isLoginMode) {
+            viewModel.login(email, password)
+        } else {
+            viewModel.register(email, password, username)
+        }
+    }
+
+    val brandPrimary = MaterialTheme.colorScheme.primary
+    val brandTertiary = MaterialTheme.colorScheme.tertiary
+    val brandBrush = remember(brandPrimary, brandTertiary) {
+        Brush.linearGradient(
+            colors = listOf(
+                brandPrimary,
+                brandTertiary
+            )
+        )
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Text(
-            text = "Vivid",
-            style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = if (isLoginMode) "Inicia sesión" else "Crea tu cuenta",
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (!isLoginMode) {
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Nombre de usuario") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                if (isLoginMode) {
-                    viewModel.login(email, password)
-                } else {
-                    viewModel.register(email, password, username)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Text(if (isLoginMode) "Iniciar sesión" else "Registrarse")
+            // ── Marca (hero) ────────────────────────────────────────────────
+            Surface(
+                modifier = Modifier.size(96.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedButton(
-            onClick = {
-                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestIdToken(context.getString(R.string.default_web_client_id))
-                    .requestEmail()
-                    .build()
-                val client = GoogleSignIn.getClient(context, gso)
-                client.signOut().addOnCompleteListener {
-                    googleLauncher.launch(client.signInIntent)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isLoading
-        ) {
-            Icon(Icons.Default.AccountCircle, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Continuar con Google")
-        }
-
-        TextButton(onClick = { isLoginMode = !isLoginMode }) {
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
-                if (isLoginMode) "¿No tienes cuenta? Regístrate"
-                else "¿Ya tienes cuenta? Inicia sesión"
+                text = "Vivid",
+                style = MaterialTheme.typography.displaySmall.copy(brush = brandBrush),
+                textAlign = TextAlign.Center
             )
-        }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Crea, comparte y conéctate",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
 
-        uiState.error?.let { error ->
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ── Formulario (login / registro) ──────────────────────────────
+            AnimatedContent(
+                targetState = isLoginMode,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 10 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 10 })
+                },
+                label = "authMode"
+            ) { loginMode ->
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = if (loginMode) "Inicia sesión" else "Crea tu cuenta",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (loginMode) "Bienvenido de nuevo a Vivid" else "Únete a la comunidad",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (!loginMode) {
+                        TextField(
+                            value = username,
+                            onValueChange = {
+                                username = it
+                                viewModel.clearError()
+                            },
+                            label = { Text("Nombre de usuario") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Person, contentDescription = null)
+                            },
+                            singleLine = true,
+                            enabled = !uiState.isLoading,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    TextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            viewModel.clearError()
+                        },
+                        label = { Text("Email") },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Email, contentDescription = null)
+                        },
+                        singleLine = true,
+                        enabled = !uiState.isLoading,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(emailFocus)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            viewModel.clearError()
+                        },
+                        label = { Text("Contraseña") },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Lock, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    if (passwordVisible) Icons.Filled.VisibilityOff
+                                    else Icons.Filled.Visibility,
+                                    contentDescription = if (passwordVisible) "Ocultar contraseña"
+                                    else "Mostrar contraseña"
+                                )
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        singleLine = true,
+                        enabled = !uiState.isLoading,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Button(onClick = { viewModel.clearError() }) {
-                Text("Reintentar")
+
+            // ── Error ──────────────────────────────────────────────────────
+            AnimatedVisibility(visible = uiState.error != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = uiState.error.orEmpty(),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.clearError() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Cerrar",
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ── Botón principal ────────────────────────────────────────────
+            Button(
+                onClick = { submit() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank()
+            ) {
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(
+                        text = if (isLoginMode) "Iniciar sesión" else "Registrarse",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Separador ──────────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Text(
+                    text = "o",
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Google (flujo intacto) ─────────────────────────────────────
+            OutlinedButton(
+                onClick = {
+                    // default_web_client_id viene de google-services.json (oauth_client).
+                    // Si el proyecto aún no tiene Web client ID en Firebase, el string
+                    // existe vacío (strings.xml) y el botón muestra un aviso en vez de
+                    // fallar. Al agregar el client ID en Firebase + google-services.json,
+                    // se rellena automáticamente y Google Sign-In queda activo.
+                    val serverClientId = context.getString(R.string.default_web_client_id)
+                    val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    if (serverClientId.isNotBlank()) {
+                        gsoBuilder.requestIdToken(serverClientId)
+                    }
+                    val gso = gsoBuilder
+                        .requestEmail()
+                        .build()
+                    if (serverClientId.isBlank()) {
+                        viewModel.reportExternalError(
+                            "Google Sign-In no está configurado: agrega tu Web client ID en Firebase y actualiza google-services.json."
+                        )
+                    } else {
+                        val client = GoogleSignIn.getClient(context, gso)
+                        client.signOut().addOnCompleteListener {
+                            googleLauncher.launch(client.signInIntent)
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                enabled = !uiState.isLoading
+            ) {
+                GoogleLogo()
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Continuar con Google",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextButton(onClick = { isLoginMode = !isLoginMode }) {
+                Text(
+                    text = if (isLoginMode) "¿No tienes cuenta? Regístrate"
+                    else "¿Ya tienes cuenta? Inicia sesión"
+                )
             }
         }
+    }
+}
+
+/**
+ * Logo "G" de Google dibujado con Canvas: 4 arcos (azul, rojo, amarillo, verde)
+ * + la "G" blanca encima. Cero recursos, cero red, ligero en cualquier teléfono.
+ */
+@Composable
+private fun GoogleLogo(modifier: Modifier = Modifier.size(20.dp)) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = size.minDimension * 0.22f
+            val radius = size.minDimension / 2f - strokeWidth / 2f
+            val topLeft = Offset(center.x - radius, center.y - radius)
+            val arcSize = Size(radius * 2f, radius * 2f)
+            val style = Stroke(width = strokeWidth)
+            // Orden de cuadrantes (sentido horario desde arriba):
+            // azul → rojo → amarillo → verde. Pequeños huecos de 2° en las diagonales.
+            drawArc(Color(0xFF4285F4), startAngle = 92f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
+            drawArc(Color(0xFFEA4335), startAngle = 2f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
+            drawArc(Color(0xFFFBBC05), startAngle = 272f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
+            drawArc(Color(0xFF34A853), startAngle = 182f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
+        }
+        Text(
+            text = "G",
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Black
+        )
     }
 }
