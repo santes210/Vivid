@@ -13,7 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.defaultMinSize
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -265,7 +264,7 @@ fun ChatScreen(
                         // Mensajes (abajo) + envíos de imagen en progreso (arriba de ellos)
                         val listItems = remember(messages, imageUploads) {
                             buildList {
-                                messages.reversed().forEach { add(MessageListItem.Message(it)) }
+                                messages.reversed().forEach { add(MessageListItem.ChatMessage(it)) }
                                 imageUploads
                                     .filter { it.phase != ImageUpload.Phase.DONE }
                                     .reversed()
@@ -296,7 +295,7 @@ fun ChatScreen(
                                         )
                                     }
 
-                                    is MessageListItem.Message -> {
+                                    is MessageListItem.ChatMessage -> {
                                         val message = item.message
                                         val isMine = message.senderId == currentUserId
 
@@ -627,7 +626,7 @@ private fun DateHeaderPill(timestamp: Long) {
 private sealed interface MessageListItem {
     val key: String
 
-    data class Message(val message: Message) : MessageListItem {
+    data class ChatMessage(val message: Message) : MessageListItem {
         override val key get() = message.id
     }
 

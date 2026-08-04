@@ -28,10 +28,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledButton
-import androidx.compose.material3.FilledTextField
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +39,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -311,8 +311,7 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Vivid",
-                brush = brandBrush,
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.displaySmall.copy(brush = brandBrush),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -354,7 +353,7 @@ fun AuthScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     if (!loginMode) {
-                        FilledTextField(
+                        TextField(
                             value = username,
                             onValueChange = {
                                 username = it
@@ -373,7 +372,7 @@ fun AuthScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    FilledTextField(
+                    TextField(
                         value = email,
                         onValueChange = {
                             email = it
@@ -396,7 +395,7 @@ fun AuthScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    FilledTextField(
+                    TextField(
                         value = password,
                         onValueChange = {
                             password = it
@@ -474,7 +473,7 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // ── Botón principal ────────────────────────────────────────────
-            FilledButton(
+            Button(
                 onClick = { submit() },
                 modifier = Modifier
                     .fillMaxWidth()
