@@ -270,11 +270,13 @@ fun AuthScreen(
         }
     }
 
-    val brandBrush = remember(MaterialTheme.colorScheme) {
+    val brandPrimary = MaterialTheme.colorScheme.primary
+    val brandTertiary = MaterialTheme.colorScheme.tertiary
+    val brandBrush = remember(brandPrimary, brandTertiary) {
         Brush.linearGradient(
             colors = listOf(
-                MaterialTheme.colorScheme.primary,
-                MaterialTheme.colorScheme.tertiary
+                brandPrimary,
+                brandTertiary
             )
         )
     }
@@ -522,13 +524,28 @@ fun AuthScreen(
             // ── Google (flujo intacto) ─────────────────────────────────────
             OutlinedButton(
                 onClick = {
-                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken(context.getString(R.string.default_web_client_id))
+                    // default_web_client_id viene de google-services.json (oauth_client).
+                    // Si el proyecto aún no tiene Web client ID en Firebase, el string
+                    // existe vacío (strings.xml) y el botón muestra un aviso en vez de
+                    // fallar. Al agregar el client ID en Firebase + google-services.json,
+                    // se rellena automáticamente y Google Sign-In queda activo.
+                    val serverClientId = context.getString(R.string.default_web_client_id)
+                    val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    if (serverClientId.isNotBlank()) {
+                        gsoBuilder.requestIdToken(serverClientId)
+                    }
+                    val gso = gsoBuilder
                         .requestEmail()
                         .build()
-                    val client = GoogleSignIn.getClient(context, gso)
-                    client.signOut().addOnCompleteListener {
-                        googleLauncher.launch(client.signInIntent)
+                    if (serverClientId.isBlank()) {
+                        viewModel.reportExternalError(
+                            "Google Sign-In no está configurado: agrega tu Web client ID en Firebase y actualiza google-services.json."
+                        )
+                    } else {
+                        val client = GoogleSignIn.getClient(context, gso)
+                        client.signOut().addOnCompleteListener {
+                            googleLauncher.launch(client.signInIntent)
+                        }
                     }
                 },
                 modifier = Modifier
