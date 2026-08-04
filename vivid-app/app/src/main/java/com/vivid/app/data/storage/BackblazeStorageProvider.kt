@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
@@ -100,10 +101,68 @@ class BackblazeStorageProvider(
     }
 
     override suspend fun deleteFile(remoteKey: String): Boolean = withContext(Dispatchers.IO) {
-        // b2_delete_file_version requiere fileId (no solo el nombre).
-        // Cuando migres a Cloud Function, este método tendrá implementación real.
-        Log.w(TAG, "deleteFile no implementado en modo direct (migra a Cloud Function)")
-        false
+        try {
+            val session = cachedSession ?: authorize().also { cachedSession = it }
+            val encodedKey = b2EncodeFileName(remoteKey)
+            val fileId = findFileId(session, encodedKey)
+            if (fileId == null) {
+                Log.w(TAG, "deleteFile: no existe $remoteKey en el bucket")
+                return@withContext false
+            }
+            deleteVersion(session, encodedKey, fileId)
+            Log.d(TAG, "deleteFile OK: $remoteKey")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "deleteFile falló para $remoteKey: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Localiza el fileId de un archivo por su nombre (b2_list_file_names).
+     * B2 guarda el nombre URL-encoded (igual que lo subimos con X-Bz-File-Name),
+     * así que el prefijo debe ir en la misma forma codificada.
+     */
+    private fun findFileId(session: Session, encodedKey: String): String? {
+        val payload = JSONObject().apply {
+            put("bucketId", bucketId)
+            put("fileNamePrefix", encodedKey)
+            put("maxFileCount", 1)
+        }.toString().toRequestBody(JSON_MEDIA)
+
+        val req = Request.Builder()
+            .url("${session.apiUrl}/b2api/v2/b2_list_file_names")
+            .header("Authorization", session.authToken)
+            .post(payload)
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("b2_list_file_names falló (${resp.code}): $body")
+            val obj = json.parseToJsonElement(body).jsonObject
+            val files = obj["files"]!!.jsonArray
+            if (files.isEmpty()) return null
+            return files.first().jsonObject["fileId"]?.jsonPrimitive?.content
+        }
+    }
+
+    /** Borra la versión de un archivo (b2_delete_file_version). */
+    private fun deleteVersion(session: Session, fileName: String, fileId: String) {
+        val payload = JSONObject().apply {
+            put("fileName", fileName)
+            put("fileId", fileId)
+        }.toString().toRequestBody(JSON_MEDIA)
+
+        val req = Request.Builder()
+            .url("${session.apiUrl}/b2api/v2/b2_delete_file_version")
+            .header("Authorization", session.authToken)
+            .post(payload)
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("b2_delete_file_version falló (${resp.code}): $body")
+        }
     }
 
     // ----------------------------------------------------------------------

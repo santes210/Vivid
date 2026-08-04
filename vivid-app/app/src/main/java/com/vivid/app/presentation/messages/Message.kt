@@ -6,5 +6,8 @@ data class Message(
     val senderId: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val isRead: Boolean = false,
-    val reaction: String = ""
+    val reaction: String = "",
+    val type: String = "text", // text | image | video
+    val imageUrl: String = "",
+    val imageKey: String = ""
 )

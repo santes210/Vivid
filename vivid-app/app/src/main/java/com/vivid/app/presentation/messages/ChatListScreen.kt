@@ -66,6 +66,10 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
     val scope = rememberCoroutineScope()
     var presenceByUserId by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
 
+    // Caché de presencia: evita re-consultar Firestore en cada cambio del snapshot
+    var cachedPresence by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var lastPresenceFetch by remember { mutableLongStateOf(0L) }
+
     // Search & Category states
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Todos, 1 = No leídos, 2 = Activos
@@ -104,12 +108,18 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                         val lastSenderId = doc.getString("lastMessageSenderId")
                             ?: doc.getString("lastSenderId")
                             ?: ""
+                        val lastMessageRaw = doc.getString("lastMessage").orEmpty()
+                        val lastMessageType = doc.getString("lastMessageType")
 
                         ChatPreview(
                             chatId = doc.id,
                             otherUserId = otherUserId,
                             otherUserName = participantNames?.get(otherUserId) as? String ?: "Usuario",
-                            lastMessage = doc.getString("lastMessage").orEmpty(),
+                            lastMessage = when {
+                                lastMessageRaw.isNotBlank() -> lastMessageRaw
+                                lastMessageType == "image" -> "📷 Imagen"
+                                else -> ""
+                            },
                             lastMessageSenderId = lastSenderId,
                             timestamp = doc.getLong("lastTimestamp") ?: 0L,
                             avatarUrl = participantAvatars?.get(otherUserId) as? String ?: "",
@@ -118,15 +128,31 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                             isOnline = presenceByUserId[otherUserId] == true
                         )
                     }
-                    chats = previews.sortedByDescending { it.timestamp }
-                    scope.launch {
-                        val presenceMap = loadPresenceMap(
-                            firestore = db,
-                            userIds = previews.map { it.otherUserId }.distinct()
-                        )
-                        presenceByUserId = presenceMap
+
+                    // Presencia: 1 query por lote de 10 (whereIn) en vez de 1 query por usuario.
+                    // Con caché de 60s para no re-consultar en cada evento del snapshot.
+                    val now = System.currentTimeMillis()
+                    val neededIds = previews.map { it.otherUserId }.distinct().toSet()
+                    val missingIds = neededIds - cachedPresence.keys
+                    val cacheStale = now - lastPresenceFetch > 60_000
+
+                    if (missingIds.isNotEmpty() || cacheStale) {
+                        scope.launch {
+                            val presenceMap = loadPresenceMap(
+                                firestore = db,
+                                userIds = neededIds.toList()
+                            )
+                            cachedPresence = presenceMap
+                            lastPresenceFetch = System.currentTimeMillis()
+                            presenceByUserId = presenceMap
+                            chats = previews
+                                .map { chat -> chat.copy(isOnline = presenceMap[chat.otherUserId] == true) }
+                                .sortedByDescending { it.timestamp }
+                        }
+                    } else {
+                        presenceByUserId = cachedPresence
                         chats = previews
-                            .map { chat -> chat.copy(isOnline = presenceMap[chat.otherUserId] == true) }
+                            .map { chat -> chat.copy(isOnline = cachedPresence[chat.otherUserId] == true) }
                             .sortedByDescending { it.timestamp }
                     }
                     errorMessage = null
@@ -475,19 +501,31 @@ private fun AvatarForChat(chat: ChatPreview) {
     }
 }
 
+/**
+ * Presencia en 1 sola consulta por lote (whereIn admite máx 10 valores).
+ * Antes era 1 lectura por usuario por cada cambio del snapshot (N+1).
+ */
 private suspend fun loadPresenceMap(
     firestore: FirebaseFirestore,
     userIds: List<String>
 ): Map<String, Boolean> {
     if (userIds.isEmpty()) return emptyMap()
-    return userIds.distinct().associateWith { userId ->
+    val result = mutableMapOf<String, Boolean>()
+    userIds.distinct().chunked(10).forEach { chunk ->
         runCatching {
-            val userDoc = firestore.collection("users").document(userId).get().await()
-            val statusEnabled = userDoc.getBoolean("activityStatusEnabled") ?: true
-            val isOnline = userDoc.getBoolean("isOnline") ?: false
-            statusEnabled && isOnline
-        }.getOrDefault(false)
+            val snap = firestore.collection("users")
+                .whereIn("uid", chunk)
+                .get()
+                .await()
+            snap.documents.forEach { doc ->
+                val uid = doc.getString("uid") ?: doc.id
+                val statusEnabled = doc.getBoolean("activityStatusEnabled") ?: true
+                val isOnline = doc.getBoolean("isOnline") ?: false
+                result[uid] = statusEnabled && isOnline
+            }
+        }
     }
+    return result
 }
 
 private fun formatChatTime(timestamp: Long): String {

@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -26,6 +27,9 @@ import androidx.core.view.WindowCompat
  *   - VividTypography (escala completa M3)
  *   - VividShapes (esquinas expresivas)
  *   - systemBars contrast automático (iconos claros/oscuros según tema)
+ *
+ * Perf: el colorScheme se cachea con `remember(darkTheme, dynamicColor)` para no
+ * regenerar la paleta dinámica en cada recomposición (importante en gama baja).
  */
 @Composable
 fun VividTheme(
@@ -34,11 +38,12 @@ fun VividTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> darkColorScheme(
+    val colorScheme = remember(darkTheme, dynamicColor) {
+        when {
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            }
+            darkTheme -> darkColorScheme(
             primary = VividBrandColorsDark.Primary,
             onPrimary = VividBrandColorsDark.OnPrimary,
             primaryContainer = VividBrandColorsDark.PrimaryContainer,
@@ -92,6 +97,7 @@ fun VividTheme(
             outlineVariant = VividBrandColors.OutlineVariant,
             surfaceTint = VividBrandColors.SurfaceTint
         )
+        }
     }
 
     val view = LocalView.current
