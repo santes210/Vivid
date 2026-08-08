@@ -1,5 +1,9 @@
 package com.vivid.app.presentation.explore
 
+import com.vivid.app.presentation.search.SearchUser
+import com.vivid.app.presentation.search.UserSearchItem
+import com.vivid.app.presentation.search.AvatarForSearch
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -17,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.presentation.feed.PostData
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -82,6 +87,45 @@ fun ExploreScreen(
 
     LaunchedEffect(selectedTag) { loadPosts(selectedTag) }
 
+    val searchQuery by remember { mutableStateOf("") }
+    val searchUsers = remember { mutableStateOf<List<SearchUser>>(emptyList()) }
+    val searchLoading = remember { mutableStateOf(false) }
+
+    LaunchedEffect(searchQuery) {
+        val q = searchQuery.trim().lowercase()
+        if (q.length < 2) {
+            searchUsers.value = emptyList()
+            searchLoading.value = false
+            return@LaunchedEffect
+        }
+        delay(250)
+        searchLoading.value = true
+        try {
+            val snapshot = FirebaseFirestore.getInstance()
+                .collection("users")
+                .orderBy("usernameLower")
+                .startAt(q)
+                .endAt(q + "\uf8ff")
+                .limit(20)
+                .get()
+                .await()
+            val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+            searchUsers.value = snapshot.documents.mapNotNull { doc ->
+                val uid = doc.getString("uid") ?: doc.id
+                if (uid == currentUserId) return@mapNotNull null
+                SearchUser(
+                    uid = uid,
+                    username = doc.getString("username") ?: "usuario",
+                    displayName = doc.getString("displayName") ?: doc.getString("username") ?: "Usuario",
+                    avatarUrl = doc.getString("avatarUrl").orEmpty(),
+                    avatarBase64 = doc.getString("avatarBase64").orEmpty(),
+                    isFollowing = false
+                )
+            }
+        } catch (_: Exception) { searchUsers.value = emptyList() }
+        searchLoading.value = false
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -91,8 +135,36 @@ fun ExploreScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Hashtags chips Material You 3
-            LazyRow(
+            // Barra de búsqueda Material You 3
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Buscar personas o hashtags") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                singleLine = true
+            )
+
+            if (searchQuery.trim().length >= 2) {
+                // Resultado de búsqueda de personas (como IG)
+                when {
+                    searchLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    searchUsers.value.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No encontré personas.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(searchUsers.value, key = { it.uid }) { user ->
+                            UserSearchItem(
+                                user = user,
+                                onClick = { onProfileClick(user.uid) },
+                                onMessageClick = { onProfileClick(user.uid) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Hashtags + grid de posts (explorar)
+                LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
