@@ -299,6 +299,17 @@ fun CreatePostScreen(
                                 "timestamp" to System.currentTimeMillis()
                             )
                             db.collection("posts").document(postId).set(postData).await()
+                            // Incrementar contador postsCount en perfil
+                            try {
+                                db.collection("users").document(user.uid)
+                                    .set(
+                                        mapOf(
+                                            "postsCount" to com.google.firebase.firestore.FieldValue.increment(1),
+                                            "updatedAt" to System.currentTimeMillis()
+                                        ),
+                                        com.google.firebase.firestore.SetOptions.merge()
+                                    ).await()
+                            } catch (_: Exception) {}
                             uploadProgress = "¡Publicado!"
                             isUploading = false
                             onPostCreated()

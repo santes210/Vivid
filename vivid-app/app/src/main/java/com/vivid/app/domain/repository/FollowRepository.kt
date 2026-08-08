@@ -176,19 +176,15 @@ class FollowRepository @Inject constructor(
         batch.delete(followerRef)
 
         val currentUserRef = firestore.collection("users").document(currentUserId)
-        val currentUserSnapshot = currentUserRef.get().await()
-        val currentFollowingCount = (currentUserSnapshot.getLong("followingCount") ?: 0L).coerceAtLeast(0L)
-
         val targetUserRef = firestore.collection("users").document(targetUserId)
-        val targetUserSnapshot = targetUserRef.get().await()
-        val targetFollowersCount = (targetUserSnapshot.getLong("followersCount") ?: 0L).coerceAtLeast(0L)
 
+        // Evita condiciones de carrera usando increment(-1)
         batch.set(
             currentUserRef,
             mapOf(
                 "uid" to currentUserId,
                 "updatedAt" to now,
-                "followingCount" to (currentFollowingCount - 1L).coerceAtLeast(0L)
+                "followingCount" to FieldValue.increment(-1)
             ),
             SetOptions.merge()
         )
@@ -198,7 +194,7 @@ class FollowRepository @Inject constructor(
             mapOf(
                 "uid" to targetUserId,
                 "updatedAt" to now,
-                "followersCount" to (targetFollowersCount - 1L).coerceAtLeast(0L)
+                "followersCount" to FieldValue.increment(-1)
             ),
             SetOptions.merge()
         )

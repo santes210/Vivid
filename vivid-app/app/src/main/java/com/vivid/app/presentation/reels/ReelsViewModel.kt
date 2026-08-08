@@ -119,6 +119,12 @@ class ReelsViewModel @Inject constructor(
             )
 
             val docRef = firestore.collection("reels").add(reelData).await()
+            try {
+                firestore.collection("users").document(user.uid).update(
+                    "reelsCount", com.google.firebase.firestore.FieldValue.increment(1),
+                    "updatedAt", System.currentTimeMillis()
+                ).await()
+            } catch (_: Exception) {}
             loadReels()
             Result.success(docRef.id)
         } catch (e: Exception) {
