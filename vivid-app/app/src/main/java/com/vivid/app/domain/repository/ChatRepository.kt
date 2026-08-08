@@ -277,8 +277,10 @@ class ChatRepository @Inject constructor(
         try {
             firestore.collection("chats").document(chatId)
                 .update(
-                    "unreadCounts.$currentUserId" to 0,
-                    "updatedAt" to System.currentTimeMillis()
+                    mapOf(
+                        "unreadCounts.$currentUserId" to 0,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
                 ).await()
         } catch (_: Exception) {
             firestore.collection("chats").document(chatId)
