@@ -5,7 +5,6 @@ import android.net.Uri
 import android.util.Log
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
-import com.otaliastudios.transcoder.source.UriDataSource
 import com.otaliastudios.transcoder.strategy.DefaultAudioStrategy
 import com.otaliastudios.transcoder.strategy.DefaultVideoStrategy
 import kotlinx.coroutines.Dispatchers
@@ -17,38 +16,24 @@ import kotlin.coroutines.resumeWithException
 
 /**
  * Compresión de videos usando la librería `android-transcoder` (Otalia Studios),
- * un wrapper ligero sobre MediaCodec (API nativa de Android).
+ * wrapper ligero sobre MediaCodec (GPU-accelerated, ~200KB APK vs 30-50MB FFmpeg).
  *
- * Por qué NO FFmpeg:
- *   - android-transcoder añade ~200 KB al APK.
- *   - FFmpegKit añade 30-50 MB y la versión original está deprecada.
- *   - MediaCodec es lo que usa la galería del sistema: GPU-accelerated,
- *     eficiente en batería y sin licencias extra.
+ * Problema anterior: solo seteaba bitrate, no resolución. Si el video original
+ * era 720p a 3.5Mbps, comprimir a 3.5Mbps de nuevo no reduce nada (20MB -> 17MB).
  *
- * Estrategia de compresión para Reels:
- *   - Resolución: 720 x 1280 (vertical, IG style).
- *   - Bitrate de video: 1.5 Mbps (suficiente para móvil).
- *   - Bitrate de audio: 96 kbps AAC.
- *   - Si el video original ya es más pequeño, se copia casi tal cual.
- *
- * Resultado típico: un video de 60 MB → 5-8 MB (factor 8-10x).
+ * Fix 2026-08-08:
+ * - Ahora usa atMost(720,1280) que fuerza downscale si el video es más grande.
+ * - Bitrates más agresivos: 0.8Mbps dataSaver, 1.2-1.5Mbps estándar, 2.5Mbps HD max.
+ * - Default hdUploads = false para que el estándar comprima fuerte.
+ * - Si el output es más grande que el input, se usa el input (evita inflar).
  */
 object VideoCompressor {
 
     private const val TAG = "VideoCompressor"
 
-    // Constantes de compresión — ajústalas si necesitas más/menos calidad
-    private const val TARGET_WIDTH = 720
-    private const val TARGET_HEIGHT = 1280
-    private const val VIDEO_BITRATE = 1_500_000   // 1.5 Mbps
-    private const val AUDIO_BITRATE = 96_000       // 96 kbps
-
     /**
      * Comprime el video y devuelve el path del archivo MP4 resultante
-     * en el cacheDir de la app. Si la compresión falla, devuelve el
-     * original (para no romper el upload).
-     *
-     * @param onProgress callback con % aproximado (0..100)
+     * en el cacheDir. Si falla, devuelve el original.
      */
     suspend fun compress(
         context: Context,
@@ -56,33 +41,45 @@ object VideoCompressor {
         onProgress: (Int) -> Unit = {}
     ): String = withContext(Dispatchers.IO) {
         val outputFile = File(context.cacheDir, "reel_${System.currentTimeMillis()}.mp4")
-
-        // Limpia intentos previos
         if (outputFile.exists()) outputFile.delete()
-
         onProgress(5)
 
         try {
             Log.d(TAG, "Comprimiendo ${inputUri.lastPathSegment ?: "video"}")
-            onProgress(15)
+            onProgress(10)
 
             val isHd = com.vivid.app.util.SettingsManager.hdUploadsEnabled
             val isDataSaver = com.vivid.app.util.SettingsManager.dataSaverMode
+
+            // Bitrates optimizados para TikTok-like
+            // 20MB original (30s, ~5Mbps) -> con 1.2Mbps = 4.5MB (77% reducción)
             val targetBitrate = when {
-                isDataSaver -> 800_000L      // 0.8 Mbps
-                isHd -> 3_500_000L           // 3.5 Mbps (Alta Definición HD)
-                else -> 1_500_000L           // 1.5 Mbps (Estándar)
+                isDataSaver -> 600_000L   // 0.6 Mbps - ultra ligero 480p
+                isHd -> 2_500_000L        // 2.5 Mbps - HD pero 720p max
+                else -> 1_200_000L        // 1.2 Mbps - estándar balanceado (default)
             }
 
-            val videoStrategy = DefaultVideoStrategy.Builder()
+            val targetAudioBitrate = when {
+                isDataSaver -> 64_000L
+                else -> 96_000L
+            }
+
+            // Resolución máxima según modo
+            val (maxWidth, maxHeight) = when {
+                isDataSaver -> 480 to 854   // 480p vertical
+                else -> 720 to 1280         // 720p vertical (TikTok/IG standard)
+            }
+
+            Log.d(TAG, "Target: ${maxWidth}x$maxHeight @ ${targetBitrate/1000}kbps (HD=$isHd, Saver=$isDataSaver)")
+
+            // Estrategia que asegura downscale si es necesario + bitrate
+            val videoStrategy = DefaultVideoStrategy.atMost(maxWidth, maxHeight)
                 .bitRate(targetBitrate)
-                .frameRate(30)
-                // Intento de forzar resolución. Si el codec no puede,
-                // Transcoder hace fallback automático.
+                .frameRate(30) // cappa al input frameRate
                 .build()
 
             val audioStrategy = DefaultAudioStrategy.Builder()
-                .bitRate(AUDIO_BITRATE.toLong())
+                .bitRate(targetAudioBitrate)
                 .channels(DefaultAudioStrategy.CHANNELS_AS_INPUT)
                 .sampleRate(DefaultAudioStrategy.SAMPLE_RATE_AS_INPUT)
                 .build()
@@ -99,20 +96,14 @@ object VideoCompressor {
                         }
 
                         override fun onTranscodeCompleted(successCode: Int) {
-                            Log.d(
-                                TAG,
-                                "Compresión OK code=$successCode " +
-                                        "size=${outputFile.length() / 1024}KB"
-                            )
+                            Log.d(TAG, "Compresión OK code=$successCode size=${outputFile.length() / 1024}KB (orig aprox calculada en log anterior)")
                             onProgress(100)
                             if (cont.isActive) cont.resume(outputFile.absolutePath)
                         }
 
                         override fun onTranscodeCanceled() {
                             Log.w(TAG, "Compresión cancelada")
-                            if (cont.isActive) cont.resumeWithException(
-                                RuntimeException("Transcode canceled")
-                            )
+                            if (cont.isActive) cont.resumeWithException(RuntimeException("Transcode canceled"))
                         }
 
                         override fun onTranscodeFailed(exception: Throwable) {
@@ -122,15 +113,23 @@ object VideoCompressor {
                     })
                     .transcode()
 
-                cont.invokeOnCancellation {
-                    future.cancel(true)
-                }
+                cont.invokeOnCancellation { future.cancel(true) }
             }
 
-            if (File(resultPath).exists() && File(resultPath).length() > 0) {
-                resultPath
+            val output = File(resultPath)
+            if (output.exists() && output.length() > 0) {
+                // Si el comprimido quedó MÁS GRANDE que el original (puede pasar si original ya es 480p a bajo bitrate), usa original
+                val inputSize = getInputSize(context, inputUri)
+                Log.d(TAG, "InputSize=${inputSize/1024}KB -> OutputSize=${output.length()/1024}KB")
+                if (inputSize > 0 && output.length() > inputSize * 1.1) { // 10% tolerancia
+                    Log.w(TAG, "Comprimido más grande que original, usando original")
+                    val fallback = File(context.cacheDir, "reel_orig_${System.currentTimeMillis()}.mp4")
+                    copyToCache(context, inputUri, fallback)
+                    fallback.absolutePath
+                } else {
+                    resultPath
+                }
             } else {
-                // Fallback: sube el original (peor pero no rompe el flujo)
                 Log.w(TAG, "Compresión no produjo output, subiendo original")
                 copyToCache(context, inputUri, outputFile)
                 outputFile.absolutePath
@@ -139,6 +138,14 @@ object VideoCompressor {
             Log.e(TAG, "Error comprimiendo — fallback a original", e)
             copyToCache(context, inputUri, outputFile)
             outputFile.absolutePath
+        }
+    }
+
+    private fun getInputSize(context: Context, uri: Uri): Long {
+        return try {
+            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: 0L
+        } catch (_: Exception) {
+            0L
         }
     }
 

@@ -43,7 +43,7 @@ object SettingsManager {
         private set
     var showReelsInFeed by mutableStateOf(true)
         private set
-    var hdUploadsEnabled by mutableStateOf(true)
+    var hdUploadsEnabled by mutableStateOf(false)
         private set
     var dataSaverMode by mutableStateOf(false)
         private set
@@ -77,7 +77,7 @@ object SettingsManager {
         smoothAnimationsEnabled = prefs.getBoolean(KEY_SMOOTH_ANIMATIONS, true)
         autoplayReels = prefs.getBoolean(KEY_AUTOPLAY_REELS, true)
         showReelsInFeed = prefs.getBoolean(KEY_SHOW_REELS_IN_FEED, true)
-        hdUploadsEnabled = prefs.getBoolean(KEY_HD_UPLOADS, true)
+        hdUploadsEnabled = prefs.getBoolean(KEY_HD_UPLOADS, false)
         dataSaverMode = prefs.getBoolean(KEY_DATA_SAVER, false)
         offensiveWordsFilter = prefs.getBoolean(KEY_OFFENSIVE_WORDS, true)
         hideLikesCount = prefs.getBoolean(KEY_HIDE_LIKES, false)
