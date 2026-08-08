@@ -6,7 +6,6 @@ import com.vivid.app.presentation.search.UserSearchItem
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -150,7 +149,7 @@ fun ExploreScreen(
                 // Resultado de búsqueda de personas (como IG)
                 when {
                     searchLoading.value -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    searchUsers.value.isEmpty()() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No encontré personas.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    searchUsers.value.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No encontré personas.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(searchUsers.value, key = { it.uid }) { user ->
                             UserSearchItem(
@@ -197,7 +196,7 @@ fun ExploreScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(posts, key = { it.id }) { post ->
+                    androidx.compose.foundation.lazy.grid.items(posts, key = { it.id }) { post ->
                         Card(
                             modifier = Modifier.aspectRatio(1f).clickable { onPostClick(post.id) },
                             shape = MaterialTheme.shapes.extraLarge
