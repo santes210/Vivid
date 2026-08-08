@@ -51,8 +51,8 @@ class CreatePostViewModel @Inject constructor(
 
 
 private fun extractHashtags(text: String): List<String> {
-    val regex = Regex("#(\w+)")
-    return regex.findAll(text).map { it.groupValues[1].lowercase() }.distinct()
+    val regex = Regex("#(\\w+)")
+    return regex.findAll(text).map { it.groupValues[1].lowercase() }.distinct().toList()
 }
     fun publishPost(context: Context, imageUri: Uri, caption: String) {
         viewModelScope.launch {

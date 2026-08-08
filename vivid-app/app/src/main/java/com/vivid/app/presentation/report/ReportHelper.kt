@@ -6,7 +6,7 @@ import android.net.Uri
 
 object ReportHelper {
     // ← Reemplazá esta dirección por tu correo real para recibir reportes
-    const val REPORT_EMAIL = "reportes@vivid.app"
+    const val REPORT_EMAIL = "poncho2010santes@gmail.com"
 
     fun sendPostReport(
         context: Context,
