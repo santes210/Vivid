@@ -1,10 +1,11 @@
-name: Deploy Firestore Rules
+name: Deploy Firestore Rules + Indexes
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'firestore.rules'
+      - 'firestore.indexes.json'
       - 'firebase.json'
       - '.firebaserc'
   workflow_dispatch:
@@ -30,10 +31,10 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
 
-      - name: Deploy Firestore Rules
+      - name: Deploy Firestore Rules + Indexes
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
         run: |
-          firebase deploy --only firestore:rules \
+          firebase deploy --only firestore:rules,firestore:indexes \
             --project verigram-c58a6 \
             --non-interactive
