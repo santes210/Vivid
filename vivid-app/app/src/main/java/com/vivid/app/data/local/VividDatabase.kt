@@ -15,7 +15,7 @@ import com.vivid.app.data.local.entity.UserEntity
 
 @Database(
     entities = [UserEntity::class, PostEntity::class, ChatEntity::class, MessageEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class VividDatabase : RoomDatabase() {
@@ -34,6 +34,15 @@ abstract class VividDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN imageUrl TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE messages ADD COLUMN imageKey TEXT NOT NULL DEFAULT ''")
+            }
+        }
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN isDelivered INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE messages ADD COLUMN voiceUrl TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE messages ADD COLUMN voiceKey TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE messages ADD COLUMN voiceDurationMs INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE messages ADD COLUMN replyToStoryId TEXT NOT NULL DEFAULT ''")
             }
         }
     }

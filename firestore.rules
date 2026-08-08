@@ -112,9 +112,19 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if signedIn() && (
         resource.data.userId == request.auth.uid ||
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes', 'comments'])
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes', 'comments', 'viewersCount', 'typing'])
       );
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+
+      // Vistas: quién vio la story
+      match /viewers/{viewerId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.auth.uid == viewerId;
+        allow update, delete: if signedIn() && (
+          request.auth.uid == viewerId ||
+          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid
+        );
+      }
     }
 
     // ── Reels ───────────────────────────────────────
