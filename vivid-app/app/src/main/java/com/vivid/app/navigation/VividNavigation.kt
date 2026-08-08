@@ -25,11 +25,13 @@ import kotlinx.coroutines.tasks.await
 import com.vivid.app.presentation.auth.AuthScreen
 import com.vivid.app.presentation.create.*
 import com.vivid.app.presentation.feed.FeedScreen
+import com.vivid.app.presentation.feed.PostDetailScreen
 import com.vivid.app.presentation.messages.ChatListScreen
 import com.vivid.app.presentation.messages.ChatScreen
 import com.vivid.app.presentation.profile.*
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.presentation.search.SearchScreen
+import com.vivid.app.presentation.explore.ExploreScreen
 import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
@@ -41,7 +43,7 @@ sealed class Screen(
 ) {
     object Auth : Screen("auth", "Auth")
     object Feed : Screen("feed", "Inicio", Icons.Default.Home)
-    object Search : Screen("search", "Buscar", Icons.Default.Search)
+    object Search : Screen("search", "Explorar", Icons.Default.Search)
     object Create : Screen("create", "Crear", Icons.Default.Add)
     object CreateReel : Screen("create_reel", "Reel", Icons.Default.MovieCreation)
     object CreateStory : Screen("create_story", "Story", Icons.Default.AutoAwesome)
@@ -63,7 +65,8 @@ fun VividNavigation(
     navController: NavHostController,
     deepLinkChatId: String? = null,
     deepLinkReelId: String? = null,
-    deepLinkProfileUserId: String? = null
+    deepLinkProfileUserId: String? = null,
+    deepLinkPostId: String? = null
 ) {
     val auth = FirebaseAuth.getInstance()
     val startDestination = remember(auth.currentUser?.uid) {
@@ -101,6 +104,15 @@ fun VividNavigation(
         if (!deepLinkReelId.isNullOrBlank()) {
             navController.navigate(Screen.Reels.route) {
                 popUpTo(Screen.Feed.route)
+            }
+        }
+    }
+    LaunchedEffect(deepLinkPostId) {
+        if (!deepLinkPostId.isNullOrBlank()) {
+            navController.navigate("post/${deepLinkPostId}") {
+                popUpTo(Screen.Feed.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
             }
         }
     }
@@ -183,9 +195,9 @@ fun VividNavigation(
                 )
             }
             composable(Screen.Search.route) {
-                SearchScreen(
-                    onUserClick = { user -> navController.navigate("profile/${user.uid}") },
-                    onMessageClick = { user -> navController.openChatWithUser(user) }
+                ExploreScreen(
+                    onPostClick = { postId -> navController.navigate("post/$postId") },
+                    onProfileClick = { userId -> navController.navigate("profile/$userId") }
                 )
             }
             composable(Screen.Create.route) {
@@ -299,6 +311,13 @@ fun VividNavigation(
             }
             composable(Screen.CloseFriends.route) {
                 CloseFriendsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = "post/{postId}",
+                arguments = listOf(navArgument("postId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val pid = backStackEntry.arguments?.getString("postId") ?: ""
+                PostDetailScreen(postId = pid, onBack = { navController.popBackStack() })
             }
             composable(Screen.BlockedUsers.route) {
                 BlockedUsersScreen(onBack = { navController.popBackStack() })

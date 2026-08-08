@@ -1,5 +1,6 @@
 package com.vivid.app.presentation.profile
 
+import com.vivid.app.presentation.report.ReportHelper
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -80,6 +81,7 @@ fun ProfileScreen(
     onNavigateToChat: (chatId: String, receiverId: String, name: String) -> Unit = { _, _, _ -> },
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val auth = FirebaseAuth.getInstance()
     val currentUserId = auth.currentUser?.uid.orEmpty()
     val isOwnProfile = userId == currentUserId
@@ -322,6 +324,19 @@ fun ProfileScreen(
                                         showProfileMenu = false
                                     },
                                     leadingIcon = { Icon(Icons.Default.Email, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Reportar usuario", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showProfileMenu = false
+                                        ReportHelper.sendUserReport(
+                                            context = context,
+                                            userId = userId,
+                                            username = profile.username,
+                                            reason = "Contenido o comportamiento inapropiado"
+                                        )
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Block, null, tint = MaterialTheme.colorScheme.error) }
                                 )
                             }
                         }

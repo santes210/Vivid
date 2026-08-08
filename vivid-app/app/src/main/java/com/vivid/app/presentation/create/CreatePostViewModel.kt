@@ -49,6 +49,11 @@ class CreatePostViewModel @Inject constructor(
     private val _state = MutableStateFlow<CreatePostUiState>(CreatePostUiState.Idle)
     val state: StateFlow<CreatePostUiState> = _state.asStateFlow()
 
+
+private fun extractHashtags(text: String): List<String> {
+    val regex = Regex("#(\\w+)")
+    return regex.findAll(text).map { it.groupValues[1].lowercase() }.distinct().toList()
+}
     fun publishPost(context: Context, imageUri: Uri, caption: String) {
         viewModelScope.launch {
             try {
@@ -92,6 +97,7 @@ class CreatePostViewModel @Inject constructor(
 
                 if (uploaded) {
                     // Guardar SOLO la URL (sin base64, sin límite 1MB)
+                    val hashtags = extractHashtags(caption)
                     val postData = mapOf(
                         "userId" to user.uid,
                         "username" to username,
@@ -101,7 +107,8 @@ class CreatePostViewModel @Inject constructor(
                         "caption" to caption.trim(),
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
-                        "timestamp" to System.currentTimeMillis()
+                        "timestamp" to System.currentTimeMillis(),
+                        "hashtags" to hashtags
                     )
                     try {
                         firestore.collection("posts").document(postId).set(postData).await()
@@ -117,6 +124,7 @@ class CreatePostViewModel @Inject constructor(
                     // Fallback: base64 comprimido (comportamiento original)
                     val compressedBase64 = ImageCompressor.compressToBase64(imageUri, context)
                         ?: throw IllegalStateException("No se pudo comprimir la imagen")
+                    val hashtags = extractHashtags(caption)
                     val postData = mapOf(
                         "userId" to user.uid,
                         "username" to username,
@@ -124,7 +132,8 @@ class CreatePostViewModel @Inject constructor(
                         "caption" to caption.trim(),
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
-                        "timestamp" to System.currentTimeMillis()
+                        "timestamp" to System.currentTimeMillis(),
+                        "hashtags" to hashtags
                     )
                     firestore.collection("posts").document(postId).set(postData).await()
                 }
