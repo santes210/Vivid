@@ -2,7 +2,6 @@ package com.vivid.app.presentation.explore
 
 import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.search.UserSearchItem
-import com.vivid.app.presentation.search.AvatarForSearch
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -87,7 +86,7 @@ fun ExploreScreen(
 
     LaunchedEffect(selectedTag) { loadPosts(selectedTag) }
 
-    val searchQuery by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     val searchUsers = remember { mutableStateOf<List<SearchUser>>(emptyList()) }
     val searchLoading = remember { mutableStateOf(false) }
 
@@ -150,8 +149,8 @@ fun ExploreScreen(
             if (searchQuery.trim().length >= 2) {
                 // Resultado de búsqueda de personas (como IG)
                 when {
-                    searchLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    searchUsers.value.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No encontré personas.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    searchLoading.value -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    searchUsers.value.isEmpty()() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No encontré personas.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(searchUsers.value, key = { it.uid }) { user ->
                             UserSearchItem(
