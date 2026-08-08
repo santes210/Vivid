@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
@@ -196,7 +197,7 @@ fun ExploreScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    androidx.compose.foundation.lazy.grid.items(posts, key = { it.id }) { post ->
+                    items(posts, key = { it.id }) { post ->
                         Card(
                             modifier = Modifier.aspectRatio(1f).clickable { onPostClick(post.id) },
                             shape = MaterialTheme.shapes.extraLarge
