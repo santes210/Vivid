@@ -30,7 +30,7 @@ import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private const val APP_VERSION_NAME = "2.1.0 - Material You 3 Design"
+private const val APP_VERSION_NAME = "2.2.0_5 - Material You 3 Design"
 
 data class SettingsInfoDialog(
     val title: String,
