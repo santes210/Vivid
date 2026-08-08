@@ -81,6 +81,7 @@ fun ProfileScreen(
     onNavigateToChat: (chatId: String, receiverId: String, name: String) -> Unit = { _, _, _ -> },
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val auth = FirebaseAuth.getInstance()
     val currentUserId = auth.currentUser?.uid.orEmpty()
     val isOwnProfile = userId == currentUserId
@@ -329,7 +330,7 @@ fun ProfileScreen(
                                     onClick = {
                                         showProfileMenu = false
                                         ReportHelper.sendUserReport(
-                                            context = androidx.compose.ui.platform.LocalContext.current,
+                                            context = context,
                                             userId = userId,
                                             username = profile.username,
                                             reason = "Contenido o comportamiento inapropiado"
