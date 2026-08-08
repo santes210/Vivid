@@ -189,23 +189,43 @@ class ChatRepository @Inject constructor(
         lastMessageType: String,
         now: Long
     ) {
-        firestore.collection("chats").document(chatId).set(
-            mapOf(
-                "participants" to listOf(currentUserId, receiverId),
-                "lastMessage" to lastMessage,
-                "lastMessageType" to lastMessageType,
-                "lastSenderId" to currentUserId,
-                "lastMessageSenderId" to currentUserId,
-                "lastTimestamp" to now,
-                // increment() para que los no-leídos se acumulen de verdad
-                "unreadCounts" to mapOf(
-                    currentUserId to 0,
-                    receiverId to FieldValue.increment(1)
+        // Actualizar preview del chat: participantes, último mensaje, timestamps
+        // y contadores de no leídos usando dot-notation para evitar sobrescribir
+        val chatRef = firestore.collection("chats").document(chatId)
+        try {
+            chatRef.update(
+                mapOf(
+                    "participants" to listOf(currentUserId, receiverId),
+                    "lastMessage" to lastMessage,
+                    "lastMessageType" to lastMessageType,
+                    "lastSenderId" to currentUserId,
+                    "lastMessageSenderId" to currentUserId,
+                    "lastTimestamp" to now,
+                    "updatedAt" to now,
+                    "unreadCounts.$currentUserId" to 0,
+                    "unreadCounts.$receiverId" to FieldValue.increment(1)
+                )
+            ).await()
+        } catch (e: Exception) {
+            // Si el documento no existe aún, crearlo con set merge
+            chatRef.set(
+                mapOf(
+                    "participants" to listOf(currentUserId, receiverId),
+                    "lastMessage" to lastMessage,
+                    "lastMessageType" to lastMessageType,
+                    "lastSenderId" to currentUserId,
+                    "lastMessageSenderId" to currentUserId,
+                    "lastTimestamp" to now,
+                    "unreadCounts" to mapOf(
+                        currentUserId to 0,
+                        receiverId to 1
+                    ),
+                    "updatedAt" to now,
+                    "createdAt" to now
                 ),
-                "updatedAt" to now
-            ),
-            SetOptions.merge()
-        ).await()
+                SetOptions.merge()
+            ).await()
+        }
     }
 
     suspend fun deleteMessage(chatId: String, message: Message) {
@@ -254,15 +274,24 @@ class ChatRepository @Inject constructor(
 
     suspend fun markChatAsRead(chatId: String) {
         if (currentUserId.isBlank() || chatId.isBlank()) return
-        firestore.collection("chats").document(chatId)
-            .set(
-                mapOf(
-                    "unreadCounts" to mapOf(currentUserId to 0),
-                    "updatedAt" to System.currentTimeMillis()
-                ),
-                SetOptions.merge()
-            )
-            .await()
+        try {
+            firestore.collection("chats").document(chatId)
+                .update(
+                    mapOf(
+                        "unreadCounts.$currentUserId" to 0,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                ).await()
+        } catch (_: Exception) {
+            firestore.collection("chats").document(chatId)
+                .set(
+                    mapOf(
+                        "unreadCounts" to mapOf(currentUserId to 0),
+                        "updatedAt" to System.currentTimeMillis()
+                    ),
+                    SetOptions.merge()
+                ).await()
+        }
     }
 
     /**
