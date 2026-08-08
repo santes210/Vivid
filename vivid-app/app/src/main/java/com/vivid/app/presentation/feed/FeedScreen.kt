@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -68,6 +69,11 @@ data class PostComment(
     val avatarUrl: String = "", val avatarBase64: String = ""
 )
 
+private data class FeedPageResult(
+    val posts: List<PostData>,
+    val lastDoc: com.google.firebase.firestore.DocumentSnapshot?
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
@@ -83,6 +89,11 @@ fun FeedScreen(
 
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var lastVisibleDoc by remember { mutableStateOf<com.google.firebase.firestore.DocumentSnapshot?>(null) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
+
     var followRequestsCount by remember { mutableIntStateOf(0) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
     var selectedPostViewerIndex by remember { mutableStateOf<Int?>(null) }
@@ -93,10 +104,36 @@ fun FeedScreen(
 
     LaunchedEffect(currentUserId) {
         isLoading = true
-        posts = runCatching {
-            loadPostsFromFirebase(currentUserId)
-        }.getOrElse { emptyList() }
+        val result = runCatching { loadInitialPostsFromFirebase(currentUserId) }.getOrElse { FeedPageResult(emptyList(), null) }
+        posts = result.posts
+        lastVisibleDoc = result.lastDoc
+        hasMore = result.posts.size >= 20
         isLoading = false
+    }
+
+    // Paginación real basada en scroll (startAfter)
+    val shouldLoadMore = remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemCount
+            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            totalItems > 0 && lastVisibleItemIndex >= totalItems - 3
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore.value) {
+        if (shouldLoadMore.value && !isLoadingMore && hasMore && lastVisibleDoc != null) {
+            isLoadingMore = true
+            val result = runCatching { loadMorePostsFromFirebase(currentUserId, lastVisibleDoc) }.getOrElse { FeedPageResult(emptyList(), null) }
+            if (result.posts.isNotEmpty()) {
+                posts = posts + result.posts
+                lastVisibleDoc = result.lastDoc
+                hasMore = result.posts.size >= 20
+            } else {
+                hasMore = false
+            }
+            isLoadingMore = false
+        }
     }
 
     DisposableEffect(currentUserId) {
@@ -162,6 +199,7 @@ fun FeedScreen(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
@@ -209,6 +247,22 @@ fun FeedScreen(
                                 )
                             }
                         )
+                    }
+
+                    if (isLoadingMore) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -367,15 +421,16 @@ private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
     }
 }
 
-private suspend fun loadPostsFromFirebase(currentUserId: String): List<PostData> = withContext(Dispatchers.IO) {
+private suspend fun loadInitialPostsFromFirebase(currentUserId: String): FeedPageResult = withContext(Dispatchers.IO) {
     val firestore = FirebaseFirestore.getInstance()
     val snapshot = firestore.collection("posts")
         .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-        .limit(40)
+        .limit(20)
         .get()
         .await()
 
-    coroutineScope {
+    val lastDoc = snapshot.documents.lastOrNull()
+    val posts = coroutineScope {
         snapshot.documents.map { doc ->
             async {
                 val isLiked = if (currentUserId.isBlank()) {
@@ -410,6 +465,56 @@ private suspend fun loadPostsFromFirebase(currentUserId: String): List<PostData>
             }
         }.awaitAll()
     }
+    FeedPageResult(posts, lastDoc)
+}
+
+private suspend fun loadMorePostsFromFirebase(currentUserId: String, lastDoc: com.google.firebase.firestore.DocumentSnapshot?): FeedPageResult = withContext(Dispatchers.IO) {
+    if (lastDoc == null) return@withContext FeedPageResult(emptyList(), null)
+    val firestore = FirebaseFirestore.getInstance()
+    val snapshot = firestore.collection("posts")
+        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+        .startAfter(lastDoc)
+        .limit(20)
+        .get()
+        .await()
+
+    val newLastDoc = snapshot.documents.lastOrNull() ?: lastDoc
+    val posts = coroutineScope {
+        snapshot.documents.map { doc ->
+            async {
+                val isLiked = if (currentUserId.isBlank()) {
+                    false
+                } else {
+                    firestore.collection("posts")
+                        .document(doc.id)
+                        .collection("likes")
+                        .document(currentUserId)
+                        .get()
+                        .await()
+                        .exists()
+                }
+                PostData(
+                    id = doc.id,
+                    userId = doc.getString("userId") ?: "",
+                    username = doc.getString("username") ?: "usuario",
+                    userProfilePicture = doc.getString("userAvatar")
+                        ?: doc.getString("userProfilePicture")
+                        ?: "",
+                    caption = doc.getString("caption") ?: "",
+                    imageUrl = doc.getString("imageUrl") ?: "",
+                    imageBase64 = doc.getString("imageBase64") ?: "",
+                    videoUrl = doc.getString("videoUrl") ?: "",
+                    thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
+                    isVideo = doc.getBoolean("isVideo") ?: false,
+                    likesCount = (doc.getLong("likesCount") ?: 0).toInt(),
+                    commentsCount = (doc.getLong("commentsCount") ?: 0).toInt(),
+                    timestamp = doc.getLong("timestamp") ?: 0L,
+                    isLiked = isLiked
+                )
+            }
+        }.awaitAll()
+    }
+    FeedPageResult(posts, newLastDoc)
 }
 
 private suspend fun togglePostLike(postId: String, currentUserId: String, shouldLike: Boolean) {

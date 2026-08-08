@@ -561,38 +561,83 @@ fun ChatScreen(
         }
     }
 
-    // ── Visor de imagen a pantalla completa ────────────────────────────────
+    // ── Visor de imagen a pantalla completa mejorado (Material You 3 & zoom/pan) ──
     viewerImageUrl?.let { url ->
         Dialog(
             onDismissRequest = { viewerImageUrl = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.95f))
+                    .background(Color.Black.copy(alpha = 0.96f))
                     .clickable { viewerImageUrl = null },
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = url,
-                    contentDescription = "Imagen del chat",
+                // Imagen con zoom y ajuste fluido
+                var scale by remember { mutableStateOf(1f) }
+                var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentScale = ContentScale.Fit
-                )
-                IconButton(
-                    onClick = { viewerImageUrl = null },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp)
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 4f)
+                                offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Cerrar",
-                        tint = Color.White
+                    AsyncImage(
+                        model = url,
+                        contentDescription = "Imagen del chat en alta definición",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            ),
+                        contentScale = ContentScale.Fit
                     )
+                }
+
+                // Barra superior flotante con Material You 3
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                    tonalElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Visor de Imagen",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.weight(1f))
+                        IconButton(
+                            onClick = { viewerImageUrl = null },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Cerrar",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -719,7 +764,9 @@ fun MessageBubble(
                                 message = message,
                                 isMine = isMine,
                                 onImageClick = onImageClick,
-                                onResignImage = onResignImage
+                                onResignImage = onResignImage,
+                                onLongPress = onLongPress,
+                                onDoubleTap = onDoubleTap
                             )
                         } else {
                             Column {
@@ -768,33 +815,44 @@ fun MessageBubble(
 }
 
 /** Contenido de una burbuja de imagen: thumbnail + hora + check de enviado. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ImageMessageContent(
     message: Message,
     isMine: Boolean,
     onImageClick: (String) -> Unit,
-    onResignImage: (Message) -> Unit
+    onResignImage: (Message) -> Unit,
+    onLongPress: () -> Unit = {},
+    onDoubleTap: () -> Unit = {}
 ) {
     var resignAttempted by remember(message.id) { mutableStateOf(false) }
 
     Column {
-        AsyncImage(
-            model = message.imageUrl,
-            contentDescription = "Imagen del chat",
+        Box(
             modifier = Modifier
                 .defaultMinSize(minWidth = 160.dp, minHeight = 160.dp)
                 .sizeIn(maxWidth = 240.dp, maxHeight = 320.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .clickable { onImageClick(message.imageUrl) },
-            contentScale = ContentScale.Crop,
-            onError = {
-                // URL firmada caducada (B2, TTL 7 días): se re-firma con la key
-                if (message.imageKey.isNotBlank() && !resignAttempted) {
-                    resignAttempted = true
-                    onResignImage(message)
+                .combinedClickable(
+                    onClick = { onImageClick(message.imageUrl) },
+                    onLongClick = { onLongPress() },
+                    onDoubleClick = { onDoubleTap() }
+                )
+        ) {
+            AsyncImage(
+                model = message.imageUrl,
+                contentDescription = "Imagen del chat",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onError = {
+                    // URL firmada caducada (B2, TTL 7 días): se re-firma con la key
+                    if (message.imageKey.isNotBlank() && !resignAttempted) {
+                        resignAttempted = true
+                        onResignImage(message)
+                    }
                 }
-            }
-        )
+            )
+        }
         Spacer(Modifier.height(3.dp))
         MessageMetaRow(message = message, isMine = isMine)
     }
