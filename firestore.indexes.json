@@ -67,13 +67,6 @@
         { "fieldPath": "participants", "order": "CONTAINS" },
         { "fieldPath": "lastTimestamp", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "likes",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []
