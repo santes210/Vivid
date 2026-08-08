@@ -112,7 +112,7 @@ class CreateStoryViewModel @Inject constructor(
     }
 
     /**
-     * Sube un story con foto (sin watermark ni compresión).
+     * Sube un story con foto usando compresión y Base64 (robusto y confiable).
      */
     fun publishPhotoStory(context: Context, photoUri: Uri, caption: String) {
         viewModelScope.launch {
@@ -121,29 +121,12 @@ class CreateStoryViewModel @Inject constructor(
                     ?: throw IllegalStateException("No hay sesión")
                 _state.value = CreateStoryUiState.Uploading(0)
 
-                val ts = System.currentTimeMillis()
-                val photoKey = "stories/${user.uid}/$ts.jpg"
-
-                // Copia el archivo a cache primero
-                val tempFile = File(context.cacheDir, "story_photo_$ts.jpg")
-                context.contentResolver.openInputStream(photoUri)?.use { input ->
-                    tempFile.outputStream().use { output -> input.copyTo(output) }
+                val result = uploadStoryWithCompression(context, photoUri, caption)
+                if (result.isSuccess) {
+                    _state.value = CreateStoryUiState.Success
+                } else {
+                    _state.value = CreateStoryUiState.Error(result.exceptionOrNull()?.message ?: "Error subiendo story")
                 }
-
-                val photoUrl = storage.uploadFile(tempFile.absolutePath, photoKey) { pct ->
-                    _state.value = CreateStoryUiState.Uploading(pct)
-                }
-
-                _state.value = CreateStoryUiState.SavingMetadata
-                writeStoryMetadata(
-                    uid = user.uid,
-                    videoUrl = "",
-                    thumbnailUrl = photoUrl,
-                    caption = caption,
-                    storageKey = photoKey
-                )
-
-                _state.value = CreateStoryUiState.Success
             } catch (e: Exception) {
                 _state.value = CreateStoryUiState.Error(e.message ?: "Error subiendo story")
             }

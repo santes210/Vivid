@@ -67,6 +67,11 @@ fun StoryViewerRoute(
 
     DisposableEffect(initialStoryId, currentUserId) {
         var registration: ListenerRegistration? = null
+        scope.launch {
+            if (currentUserId.isNotBlank()) {
+                runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
+            }
+        }
         registration = db.collection("stories")
             .whereGreaterThan("expiresAt", System.currentTimeMillis())
             .orderBy("expiresAt", Query.Direction.ASCENDING)
