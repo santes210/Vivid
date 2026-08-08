@@ -60,6 +60,10 @@ service cloud.firestore {
         );
       }
 
+      match /savedPosts/{postId} {
+        allow read, create, delete: if signedIn() && request.auth.uid == userId;
+      }
+
       // FCM Tokens — el usuario gestiona sus propios tokens de push
       match /fcmTokens/{token} {
         allow read, create, delete: if signedIn() && request.auth.uid == userId;
@@ -82,10 +86,18 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
         allow update: if signedIn() && (
-        resource.data.userId == request.auth.uid ||
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes'])
-      );
-      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+          resource.data.userId == request.auth.uid ||
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount'])
+        );
+        allow delete: if signedIn() && (
+          resource.data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/posts/$(postId)).data.userId == request.auth.uid
+        );
+
+        match /likes/{userId} {
+          allow read: if signedIn();
+          allow create, delete: if signedIn() && request.auth.uid == userId;
+        }
       }
 
       match /likes/{userId} {
@@ -123,10 +135,19 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if signedIn();
         allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+        allow update: if signedIn() && (
+          resource.data.userId == request.auth.uid ||
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount'])
+        );
         allow delete: if signedIn() && (
           request.auth.uid == resource.data.userId ||
           request.auth.uid == get(/databases/$(database)/documents/reels/$(reelId)).data.userId
         );
+
+        match /likes/{userId} {
+          allow read: if signedIn();
+          allow create, delete: if signedIn() && request.auth.uid == userId;
+        }
       }
     }
 

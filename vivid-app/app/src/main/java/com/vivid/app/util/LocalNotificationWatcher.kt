@@ -90,7 +90,7 @@ object LocalNotificationWatcher {
                         val type = msg["type"] as? String ?: "text"
                         val text = msg["text"] as? String ?: ""
                         // Los mensajes de imagen no traen texto: se notifica con un placeholder
-                        val displayText = if (type == "image" && text.isBlank()) "📷 Imagen" else text
+                        val displayText = if (type == "image" && text.isBlank()) "Imagen" else text
 
                         if (senderId != uid && !notifiedMessageIds.contains(msgId) && displayText.isNotBlank()) {
                             notifiedMessageIds.add(msgId)
@@ -213,7 +213,7 @@ object LocalNotificationWatcher {
                                     showLocalNotification(
                                         context = context,
                                         channelId = "general_channel",
-                                        title = "❤️ Nuevo like",
+                                        title = "Nuevo me gusta",
                                         body = "A $name le gustó tu reel",
                                         intent = Intent(context, MainActivity::class.java).apply {
                                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -264,7 +264,7 @@ object LocalNotificationWatcher {
                                     showLocalNotification(
                                         context = context,
                                         channelId = "general_channel",
-                                        title = "💬 $name comentó",
+                                        title = "$name comentó",
                                         body = text.take(100),
                                         intent = Intent(context, MainActivity::class.java).apply {
                                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

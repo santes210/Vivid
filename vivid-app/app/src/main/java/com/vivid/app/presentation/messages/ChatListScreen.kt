@@ -117,7 +117,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                             otherUserName = participantNames?.get(otherUserId) as? String ?: "Usuario",
                             lastMessage = when {
                                 lastMessageRaw.isNotBlank() -> lastMessageRaw
-                                lastMessageType == "image" -> "📷 Imagen"
+                                lastMessageType == "image" -> "Imagen"
                                 else -> ""
                             },
                             lastMessageSenderId = lastSenderId,

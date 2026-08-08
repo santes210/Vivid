@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -62,13 +63,23 @@ data class PostData(
     val videoUrl: String = "", val thumbnailUrl: String = "",
     val isVideo: Boolean = false, val caption: String,
     val likesCount: Int = 0, val commentsCount: Int = 0,
-    val timestamp: Long, val isLiked: Boolean = false
+    val timestamp: Long, val isLiked: Boolean = false,
+    val isSaved: Boolean = false
 )
 
 data class PostComment(
-    val id: String, val userId: String, val username: String,
-    val text: String, val timestamp: Long,
-    val avatarUrl: String = "", val avatarBase64: String = ""
+    val id: String,
+    val userId: String,
+    val username: String,
+    val text: String,
+    val timestamp: Long,
+    val avatarUrl: String = "",
+    val avatarBase64: String = "",
+    val likesCount: Int = 0,
+    val isLiked: Boolean = false,
+    val isEdited: Boolean = false,
+    val parentId: String? = null,
+    val replyToUsername: String = ""
 )
 
 private data class FeedPageResult(
@@ -95,9 +106,15 @@ fun FeedScreen(
     var lastVisibleDoc by remember { mutableStateOf<com.google.firebase.firestore.DocumentSnapshot?>(null) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
+
     // IDs de posts a los que ya di like (1 sola consulta collectionGroup).
-    // null = no se pudo consultar → el cargador usa el modo anterior (1 read por post).
     var likedPostIds by remember { mutableStateOf<Set<String>?>(null) }
+    // IDs de usuarios a los que ya sigo o tengo solicitud enviada
+    var followingUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingFollowUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // IDs de posts guardados por el usuario
+    var savedPostIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
     // Posts cuyo storageKey ya se intentó re-firmar tras un error 403 (evita loops)
     var refreshAttemptedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val listState = rememberLazyListState()
@@ -112,7 +129,6 @@ fun FeedScreen(
 
     LaunchedEffect(currentUserId) {
         isLoading = true
-        // 1 sola consulta para saber qué posts ya tienen mi like (en vez de 20)
         val likedIds = feedViewModel.fetchLikedPostIds(currentUserId)
         likedPostIds = likedIds
         val result = runCatching {
@@ -152,12 +168,36 @@ fun FeedScreen(
     }
 
     DisposableEffect(currentUserId) {
-        var reg: ListenerRegistration? = null
+        var regRequests: ListenerRegistration? = null
+        var regFollowing: ListenerRegistration? = null
+        var regPending: ListenerRegistration? = null
+        var regSaved: ListenerRegistration? = null
+
         if (currentUserId.isNotBlank()) {
-            reg = FirebaseFirestore.getInstance().collection("users").document(currentUserId)
-                .collection("followRequests").addSnapshotListener { snap, _ -> followRequestsCount = snap?.size() ?: 0 }
+            val db = FirebaseFirestore.getInstance()
+            regRequests = db.collection("users").document(currentUserId)
+                .collection("followRequests").addSnapshotListener { snap, _ ->
+                    followRequestsCount = snap?.size() ?: 0
+                }
+            regFollowing = db.collection("users").document(currentUserId)
+                .collection("following").addSnapshotListener { snap, _ ->
+                    followingUserIds = snap?.documents?.map { it.id }?.toSet().orEmpty()
+                }
+            regPending = db.collection("users").document(currentUserId)
+                .collection("sentFollowRequests").addSnapshotListener { snap, _ ->
+                    pendingFollowUserIds = snap?.documents?.map { it.id }?.toSet().orEmpty()
+                }
+            regSaved = db.collection("users").document(currentUserId)
+                .collection("savedPosts").addSnapshotListener { snap, _ ->
+                    savedPostIds = snap?.documents?.map { it.id }?.toSet().orEmpty()
+                }
         }
-        onDispose { reg?.remove() }
+        onDispose {
+            regRequests?.remove()
+            regFollowing?.remove()
+            regPending?.remove()
+            regSaved?.remove()
+        }
     }
 
     Scaffold(
@@ -219,14 +259,31 @@ fun FeedScreen(
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
+                        val isFollowingAuthor = post.userId in followingUserIds
+                        val hasPendingRequestToAuthor = post.userId in pendingFollowUserIds
+                        val isSaved = post.id in savedPostIds
+
                         PostCard(
-                            post = post,
+                            post = post.copy(isSaved = isSaved),
                             currentUserId = currentUserId,
+                            isFollowingAuthor = isFollowingAuthor,
+                            hasPendingRequestToAuthor = hasPendingRequestToAuthor,
                             onOpenPost = { selectedPostViewerIndex = index },
                             onOpenComments = { selectedPostForComments = post },
                             onOpenDetails = { selectedPostForDetails = post },
                             onEditPost = { selectedPostForEdit = post },
                             onDeletePost = { selectedPostForDelete = post },
+                            onToggleFollow = { targetUserId ->
+                                feedViewModel.toggleFollowUser(targetUserId) { msg ->
+                                    msg?.let { scope.launch { snackbarHostState.showSnackbar(it) } }
+                                }
+                            },
+                            onToggleSave = {
+                                val shouldSave = !isSaved
+                                feedViewModel.toggleSavePost(post.id, currentUserId, shouldSave) { _, msg ->
+                                    msg?.let { scope.launch { snackbarHostState.showSnackbar(it) } }
+                                }
+                            },
                             onToggleLike = {
                                 val target = post
                                 val newLiked = !target.isLiked
@@ -238,7 +295,6 @@ fun FeedScreen(
                                         )
                                     } else it
                                 }
-                                // Mantener el set de likes local sin lecturas extra
                                 likedPostIds = likedPostIds?.let { ids ->
                                     if (newLiked) ids + target.id else ids - target.id
                                 }
@@ -257,7 +313,6 @@ fun FeedScreen(
                                 }
                             },
                             onImageUrlExpired = {
-                                // La URL firmada de B2 expiró (403): re-firmar una vez
                                 val key = post.storageKey
                                 if (key.isNotBlank() && post.id !in refreshAttemptedIds) {
                                     refreshAttemptedIds = refreshAttemptedIds + post.id
@@ -324,7 +379,6 @@ fun FeedScreen(
                 Button(onClick = {
                     scope.launch {
                         try {
-                            // Borrar binario de B2 (best-effort) si el post usaba storage
                             if (post.storageKey.isNotBlank()) {
                                 feedViewModel.deleteRemoteFile(post.storageKey)
                             }
@@ -347,11 +401,15 @@ fun FeedScreen(
 private fun PostCard(
     post: PostData,
     currentUserId: String,
+    isFollowingAuthor: Boolean,
+    hasPendingRequestToAuthor: Boolean,
     onOpenPost: () -> Unit,
     onOpenComments: () -> Unit,
     onOpenDetails: () -> Unit,
     onEditPost: () -> Unit,
     onDeletePost: () -> Unit,
+    onToggleFollow: (String) -> Unit,
+    onToggleSave: () -> Unit,
     onToggleLike: () -> Unit,
     onShare: () -> Unit,
     onImageUrlExpired: () -> Unit = {}
@@ -374,6 +432,16 @@ private fun PostCard(
                     Text(post.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                     Text(formatTimestamp(post.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+
+                // Botón inline Seguir / Dejar de seguir (estilo Material You 3 / Instagram)
+                if (post.userId != currentUserId && currentUserId.isNotBlank()) {
+                    InlineFollowButton(
+                        isFollowing = isFollowingAuthor,
+                        hasPendingRequest = hasPendingRequestToAuthor,
+                        onClick = { onToggleFollow(post.userId) }
+                    )
+                }
+
                 if (post.userId == currentUserId) {
                     var showMenu by remember { mutableStateOf(false) }
                     Box {
@@ -414,6 +482,14 @@ private fun PostCard(
 
                 Spacer(Modifier.weight(1f))
 
+                // Botón Guardar / Bookmark
+                IconButton(onClick = onToggleSave) {
+                    Icon(
+                        if (post.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        "Guardar",
+                        tint = if (post.isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
                 IconButton(onClick = onShare) { Icon(Icons.Default.Share, "Compartir") }
             }
 
@@ -443,6 +519,60 @@ private fun PostCard(
             }
 
             Spacer(Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun InlineFollowButton(
+    isFollowing: Boolean,
+    hasPendingRequest: Boolean,
+    onClick: () -> Unit
+) {
+    val containerColor = when {
+        isFollowing || hasPendingRequest -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.primaryContainer
+    }
+    val contentColor = when {
+        isFollowing || hasPendingRequest -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    val label = when {
+        isFollowing -> "Siguiendo"
+        hasPendingRequest -> "Solicitado"
+        else -> "Seguir"
+    }
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        modifier = Modifier.padding(start = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isFollowing && !hasPendingRequest) {
+                Icon(
+                    Icons.Default.PersonAdd,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+            } else if (isFollowing) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+            )
         }
     }
 }
@@ -518,15 +648,6 @@ private suspend fun loadMorePostsFromFirebase(
     FeedPageResult(posts, newLastDoc)
 }
 
-/**
- * Mapea un documento de posts a [PostData].
- *
- * - Likes: si [likedPostIds] no es null usa el set (0 lecturas extra);
- *   si es null (falló la consulta collectionGroup) hace la lectura
- *   individual `likes/{currentUserId}` como antes.
- * - B2: si el post tiene `storageKey` (imagen en Backblaze), re-firma la
- *   URL (TTL 7 días) en paralelo; si falla, conserva la guardada.
- */
 private suspend fun mapPostDoc(
     doc: com.google.firebase.firestore.DocumentSnapshot,
     currentUserId: String,
@@ -538,7 +659,6 @@ private suspend fun mapPostDoc(
         currentUserId.isBlank() -> false
         likedPostIds != null -> doc.id in likedPostIds
         else -> {
-            // Fallback: 1 lectura por post (solo si la query de likes falló)
             try {
                 FirebaseFirestore.getInstance()
                     .collection("posts")
@@ -557,7 +677,6 @@ private suspend fun mapPostDoc(
     val savedImageUrl = data["imageUrl"] as? String ?: ""
     val storageKey = data["storageKey"] as? String ?: ""
 
-    // URL firmada fresca si el post vive en B2 (expira a los 7 días)
     val imageUrl = if (storageKey.isNotBlank() && savedImageUrl.isNotBlank()) {
         try {
             feedViewModel.refreshSignedUrl(storageKey) ?: savedImageUrl
@@ -647,7 +766,6 @@ fun PostImage(
     var bmp by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
     var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
-    // Solo avisar de URL expirada una vez por storageKey (evita loops de re-firma)
     var notifiedExpired by remember(storageKey) { mutableStateOf(false) }
     val urlPainter = rememberAsyncImagePainter(model = imageUrl)
     val urlState = urlPainter.state
@@ -666,7 +784,6 @@ fun PostImage(
                 is AsyncImagePainter.State.Error -> {
                     isLoading = false
                     hasError = true
-                    // URL de B2 expirada (403): pedir una re-firma una sola vez
                     if (storageKey.isNotBlank() && !notifiedExpired) {
                         notifiedExpired = true
                         onUrlExpired()
@@ -684,68 +801,262 @@ fun PostImage(
             hasError -> Icon(Icons.Default.BrokenImage, "Error", modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             bmp != null -> Image(bmp!!.asImageBitmap(), "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             imageUrl.isNotBlank() -> Image(painter = urlPainter, "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            else -> Text("📷 $username", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Text(username, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
 
-// ── PostCommentsSheet (BottomSheet simplificado) ──
+// ── PostCommentsSheet (Comentarios anidados, likes y edición) ──
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
     val db = FirebaseFirestore.getInstance()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     var comments by remember { mutableStateOf<List<PostComment>>(emptyList()) }
+    var likedCommentIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var commentText by remember { mutableStateOf("") }
+    var replyingTo by remember { mutableStateOf<PostComment?>(null) }
+    var editingComment by remember { mutableStateOf<PostComment?>(null) }
     var isSending by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(post.id) {
-        db.collection("posts").document(post.id).collection("comments")
+    DisposableEffect(post.id) {
+        val listener = db.collection("posts").document(post.id).collection("comments")
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
             .addSnapshotListener { snap, _ ->
                 comments = snap?.documents?.mapNotNull { doc ->
-                    PostComment(id = doc.id, userId = doc.getString("userId") ?: "", username = doc.getString("username") ?: "?", text = doc.getString("text") ?: "", timestamp = doc.getLong("timestamp") ?: 0L, avatarUrl = doc.getString("avatarUrl") ?: "", avatarBase64 = doc.getString("avatarBase64") ?: "")
+                    PostComment(
+                        id = doc.id,
+                        userId = doc.getString("userId") ?: "",
+                        username = doc.getString("username") ?: "?",
+                        text = doc.getString("text") ?: "",
+                        timestamp = doc.getLong("timestamp") ?: 0L,
+                        avatarUrl = doc.getString("avatarUrl") ?: "",
+                        avatarBase64 = doc.getString("avatarBase64") ?: "",
+                        likesCount = (doc.getLong("likesCount") ?: 0L).toInt(),
+                        isEdited = doc.getBoolean("isEdited") ?: false,
+                        parentId = doc.getString("parentId"),
+                        replyToUsername = doc.getString("replyToUsername") ?: ""
+                    )
                 } ?: emptyList()
             }
+        onDispose { listener.remove() }
+    }
+
+    DisposableEffect(post.id, currentUserId) {
+        var listener: ListenerRegistration? = null
+        if (currentUserId.isNotBlank()) {
+            listener = db.collectionGroup("likes")
+                .whereEqualTo("userId", currentUserId)
+                .addSnapshotListener { snap, _ ->
+                    likedCommentIds = snap?.documents?.mapNotNull { doc ->
+                        if (doc.reference.path.contains("posts/${post.id}/comments/")) {
+                            doc.reference.parent.parent?.id
+                        } else null
+                    }?.toSet().orEmpty()
+                }
+        }
+        onDispose { listener?.remove() }
+    }
+
+    fun toggleCommentLike(comment: PostComment) {
+        if (currentUserId.isBlank()) return
+        val isLiked = comment.id in likedCommentIds
+        val newLiked = !isLiked
+        likedCommentIds = if (newLiked) likedCommentIds + comment.id else likedCommentIds - comment.id
+
+        val commentRef = db.collection("posts").document(post.id)
+            .collection("comments").document(comment.id)
+        val likeRef = commentRef.collection("likes").document(currentUserId)
+
+        scope.launch {
+            runCatching {
+                if (newLiked) {
+                    likeRef.set(mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis())).await()
+                    commentRef.update("likesCount", FieldValue.increment(1)).await()
+                } else {
+                    likeRef.delete().await()
+                    commentRef.update("likesCount", FieldValue.increment(-1)).await()
+                }
+            }.onFailure {
+                likedCommentIds = if (newLiked) likedCommentIds - comment.id else likedCommentIds + comment.id
+            }
+        }
+    }
+
+    fun deleteComment(comment: PostComment) {
+        scope.launch {
+            try {
+                db.collection("posts").document(post.id)
+                    .collection("comments").document(comment.id).delete().await()
+                db.collection("posts").document(post.id)
+                    .update("commentsCount", FieldValue.increment(-1)).await()
+            } catch (e: Exception) {
+                errorMsg = e.message
+            }
+        }
+    }
+
+    val rootComments = remember(comments) { comments.filter { it.parentId.isNullOrBlank() } }
+    val repliesMap = remember(comments) {
+        comments.filter { !it.parentId.isNullOrBlank() }.groupBy { it.parentId!! }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Comentarios", fontWeight = FontWeight.Bold) },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Comentarios (${comments.size})", fontWeight = FontWeight.Bold)
+            }
+        },
         text = {
             Column {
-                if (comments.isEmpty()) { Text("No hay comentarios aún.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                        itemsIndexed(comments) { _, comment -> CommentRow(comment); Spacer(Modifier.height(10.dp)) }
+                if (comments.isEmpty()) {
+                    Text("No hay comentarios aún. ¡Sé el primero!", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 340.dp)) {
+                        items(rootComments, key = { it.id }) { rootComment ->
+                            CommentRow(
+                                comment = rootComment.copy(isLiked = rootComment.id in likedCommentIds),
+                                currentUserId = currentUserId,
+                                postAuthorId = post.userId,
+                                onReply = { replyingTo = rootComment },
+                                onLike = { toggleCommentLike(rootComment) },
+                                onEdit = { editingComment = rootComment },
+                                onDelete = { deleteComment(rootComment) }
+                            )
+
+                            val replies = repliesMap[rootComment.id].orEmpty()
+                            replies.forEach { replyComment ->
+                                Spacer(Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(start = 18.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                                            .width(2.dp)
+                                            .height(32.dp)
+                                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    )
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        CommentRow(
+                                            comment = replyComment.copy(isLiked = replyComment.id in likedCommentIds),
+                                            currentUserId = currentUserId,
+                                            postAuthorId = post.userId,
+                                            isReply = true,
+                                            onReply = { replyingTo = replyComment },
+                                            onLike = { toggleCommentLike(replyComment) },
+                                            onEdit = { editingComment = replyComment },
+                                            onDelete = { deleteComment(replyComment) }
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                 }
+
                 Spacer(Modifier.height(12.dp))
+
+                // Replying To Banner
+                replyingTo?.let { replyTarget ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Reply, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Respondiendo a @${replyTarget.username}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Spacer(Modifier.weight(1f))
+                            IconButton(onClick = { replyingTo = null }, modifier = Modifier.size(20.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
+
+                // Comment Input Box
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
-                        value = commentText, onValueChange = { commentText = it }, placeholder = { Text("Escribe un comentario...") },
-                        modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(20.dp)
+                        value = commentText,
+                        onValueChange = { commentText = it },
+                        placeholder = { Text(if (replyingTo != null) "Escribe tu respuesta..." else "Escribe un comentario...") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(onClick = {
-                        if (commentText.isBlank()) return@FilledTonalButton
-                        isSending = true; errorMsg = null
-                        scope.launch {
-                            try {
-                                val userDoc = db.collection("users").document(currentUserId).get().await()
-                                db.collection("posts").document(post.id).collection("comments").add(mapOf(
-                                    "userId" to currentUserId, "username" to (userDoc.getString("username") ?: "yo"),
-                                    "text" to commentText.trim(), "timestamp" to System.currentTimeMillis(),
-                                    "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""), "avatarBase64" to (userDoc.getString("avatarBase64") ?: "")
-                                )).await()
-                                db.collection("posts").document(post.id).update("commentsCount", FieldValue.increment(1)).await()
-                                commentText = ""
-                            } catch (e: Exception) { errorMsg = e.message }
-                            isSending = false
-                        }
-                    }, enabled = !isSending, shape = RoundedCornerShape(20.dp)) {
+                    FilledTonalButton(
+                        onClick = {
+                            if (commentText.isBlank() || isSending) return@FilledTonalButton
+                            isSending = true
+                            errorMsg = null
+                            val replyTarget = replyingTo
+                            val targetParentId = replyTarget?.let { it.parentId.takeIf { p -> !p.isNullOrBlank() } ?: it.id }
+                            val targetReplyToUser = replyTarget?.username.orEmpty()
+                            val textToSend = commentText.trim()
+
+                            scope.launch {
+                                try {
+                                    val userDoc = db.collection("users").document(currentUserId).get().await()
+                                    val commentData = hashMapOf<String, Any>(
+                                        "userId" to currentUserId,
+                                        "username" to (userDoc.getString("username") ?: "yo"),
+                                        "text" to textToSend,
+                                        "timestamp" to System.currentTimeMillis(),
+                                        "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""),
+                                        "avatarBase64" to (userDoc.getString("avatarBase64") ?: ""),
+                                        "likesCount" to 0,
+                                        "isEdited" to false
+                                    )
+                                    if (!targetParentId.isNullOrBlank()) {
+                                        commentData["parentId"] = targetParentId
+                                    }
+                                    if (targetReplyToUser.isNotBlank()) {
+                                        commentData["replyToUsername"] = targetReplyToUser
+                                    }
+
+                                    db.collection("posts").document(post.id)
+                                        .collection("comments").add(commentData).await()
+
+                                    db.collection("posts").document(post.id)
+                                        .update("commentsCount", FieldValue.increment(1)).await()
+
+                                    commentText = ""
+                                    replyingTo = null
+                                } catch (e: Exception) {
+                                    errorMsg = e.message
+                                } finally {
+                                    isSending = false
+                                }
+                            }
+                        },
+                        enabled = !isSending,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
                         Text(if (isSending) "..." else "Enviar", fontWeight = FontWeight.Bold)
                     }
                 }
@@ -754,16 +1065,155 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
     )
+
+    // Editing Dialog
+    editingComment?.let { commentToEdit ->
+        var editText by remember(commentToEdit) { mutableStateOf(commentToEdit.text) }
+        AlertDialog(
+            onDismissRequest = { editingComment = null },
+            title = { Text("Editar comentario", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    maxLines = 3,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editText.isNotBlank()) {
+                        scope.launch {
+                            try {
+                                db.collection("posts").document(post.id)
+                                    .collection("comments").document(commentToEdit.id)
+                                    .update(
+                                        mapOf(
+                                            "text" to editText.trim(),
+                                            "isEdited" to true,
+                                            "editedAt" to System.currentTimeMillis()
+                                        )
+                                    ).await()
+                            } catch (e: Exception) {
+                                errorMsg = e.message
+                            }
+                        }
+                    }
+                    editingComment = null
+                }) { Text("Guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingComment = null }) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
-private fun CommentRow(comment: PostComment) {
+private fun CommentRow(
+    comment: PostComment,
+    currentUserId: String,
+    postAuthorId: String,
+    isReply: Boolean = false,
+    onReply: () -> Unit,
+    onLike: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         CommentAvatar(comment)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(comment.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            Text(SettingsManager.filterOffensiveWords(comment.text), style = MaterialTheme.typography.bodyMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    comment.username,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                )
+                if (comment.isEdited) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "(editado)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+
+            if (comment.replyToUsername.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "@${comment.replyToUsername} ",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    Text(
+                        SettingsManager.filterOffensiveWords(comment.text),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                Text(
+                    SettingsManager.filterOffensiveWords(comment.text),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Responder",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onReply() }
+                )
+
+                if (comment.userId == currentUserId) {
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Editar",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable { onEdit() }
+                    )
+                }
+
+                if (comment.userId == currentUserId || currentUserId == postAuthorId) {
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Eliminar",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.clickable { onDelete() }
+                    )
+                }
+            }
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onLike,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    if (comment.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Like comentario",
+                    tint = if (comment.isLiked) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            if (comment.likesCount > 0) {
+                Text(
+                    comment.likesCount.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -786,7 +1236,7 @@ private fun CommentAvatar(comment: PostComment) {
     }
 }
 
-// ── Diálogos placeholder (los originales se mantienen, aquí versiones reducidas) ──
+// ── Diálogos ──
 @Composable
 private fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss: () -> Unit) {
     if (initialIndex !in posts.indices) { onDismiss(); return }
@@ -817,9 +1267,35 @@ private fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss
 
 @Composable
 private fun PostDetailsDialog(post: PostData, onDismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Detalles", fontWeight = FontWeight.Bold) },
-        text = { Column { Text("👤 ${post.username}"); Text("❤️ ${post.likesCount} Me gusta"); Text("💬 ${post.commentsCount} Comentarios"); Text("🕐 ${formatTimestamp(post.timestamp)}") } },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } })
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Detalles", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(10.dp))
+                    Text(post.username, style = MaterialTheme.typography.bodyLarge)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Red)
+                    Spacer(Modifier.width(10.dp))
+                    Text("${post.likesCount} Me gusta", style = MaterialTheme.typography.bodyLarge)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(10.dp))
+                    Text("${post.commentsCount} Comentarios", style = MaterialTheme.typography.bodyLarge)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(10.dp))
+                    Text(formatTimestamp(post.timestamp), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+    )
 }
 
 @Composable

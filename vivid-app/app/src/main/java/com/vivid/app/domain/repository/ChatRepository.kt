@@ -179,7 +179,7 @@ class ChatRepository @Inject constructor(
                 )
             ).await()
 
-        updateChatPreview(chatId, receiverId, lastMessage = "📷 Imagen", lastMessageType = "image", now)
+        updateChatPreview(chatId, receiverId, lastMessage = "Imagen", lastMessageType = "image", now)
     }
 
     private suspend fun updateChatPreview(
@@ -257,7 +257,7 @@ class ChatRepository @Inject constructor(
         val latestSenderId = latestRemaining?.getString("senderId").orEmpty()
         val latestType = latestRemaining?.getString("type") ?: "text"
         val latestText = latestRemaining?.getString("text").orEmpty()
-        val lastMessageDisplay = if (latestType == "image") "📷 Imagen" else latestText
+        val lastMessageDisplay = if (latestType == "image") "Imagen" else latestText
 
         firestore.collection("chats").document(chatId).set(
             mapOf(

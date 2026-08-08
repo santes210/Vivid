@@ -37,6 +37,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class ProfileUiState(
     val uid: String = "",
@@ -65,7 +66,8 @@ data class ProfilePost(
     val isVideo: Boolean = false,
     val caption: String = "",
     val timestamp: Long = 0L,
-    val username: String = ""
+    val username: String = "",
+    val isSaved: Boolean = false
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,15 +88,18 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
 
     var profile by remember { mutableStateOf(ProfileUiState(uid = userId, isCurrentUser = isOwnProfile)) }
-    var posts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var photoPosts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var reelPosts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var savedPosts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
     var selectedPost by remember { mutableStateOf<ProfilePost?>(null) }
     var showProfileMenu by remember { mutableStateOf(false) }
+    var selectedTabIndex by remember { mutableIntStateOf(0) } // 0: Posts, 1: Reels, 2: Guardados
+
     val relationshipState by viewModel.relationshipState.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
     val followActionMessage by viewModel.followActionMessage.collectAsState()
 
-    // ── Determinar si se puede ver contenido ──
     val canViewContent = isOwnProfile || !profile.isPrivate || profile.isFollowedByCurrentUser
 
     LaunchedEffect(userId) {
@@ -112,6 +117,7 @@ fun ProfileScreen(
         var followListener: ListenerRegistration? = null
         var postsListener: ListenerRegistration? = null
         var reelsListener: ListenerRegistration? = null
+        var savedListener: ListenerRegistration? = null
 
         if (userId.isNotBlank()) {
             // ── Perfil ──
@@ -135,14 +141,12 @@ fun ProfileScreen(
                     )
                 }
 
-            // ── Estado de seguimiento (para ver si currentUser sigue a este perfil) ──
             if (!isOwnProfile) {
                 followListener = db.collection("users").document(userId)
                     .collection("followers").document(currentUserId)
                     .addSnapshotListener { snap, _ ->
                         val followed = snap?.exists() == true
                         profile = profile.copy(isFollowedByCurrentUser = followed)
-                        // También chequear followRequests
                         db.collection("users").document(userId)
                             .collection("followRequests").document(currentUserId)
                             .get().addOnSuccessListener { reqSnap ->
@@ -151,32 +155,28 @@ fun ProfileScreen(
                     }
             }
 
-            // ── Posts y Reels ──
-            var photoPosts = emptyList<ProfilePost>()
-            var reelPosts = emptyList<ProfilePost>()
-            fun publish() { posts = (photoPosts + reelPosts).sortedByDescending { it.timestamp } }
-
+            // ── Posts y Reels del usuario ──
             postsListener = db.collection("posts")
                 .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, _ ->
                     photoPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
-                            id = doc.id, imageUrl = doc.getString("imageUrl").orEmpty(),
+                            id = doc.id,
+                            imageUrl = doc.getString("imageUrl").orEmpty(),
                             imageBase64 = doc.getString("imageBase64").orEmpty(),
                             storageKey = doc.getString("storageKey").orEmpty(),
                             caption = doc.getString("caption").orEmpty(),
                             timestamp = doc.getLong("timestamp") ?: 0L,
                             username = doc.getString("username").orEmpty()
                         )
-                    }
-                    publish()
-                    // Re-firmar URLs de B2 expiradas (TTL 7d) — best-effort
+                    }.sortedByDescending { it.timestamp }
+
                     snapshot?.documents.orEmpty().forEach { doc ->
                         val key = doc.getString("storageKey").orEmpty()
                         if (key.isNotBlank()) {
                             scope.launch {
                                 viewModel.refreshSignedUrl(key)?.let { freshUrl ->
-                                    posts = posts.map {
+                                    photoPosts = photoPosts.map {
                                         if (it.id == doc.id && it.imageUrl != freshUrl) it.copy(imageUrl = freshUrl) else it
                                     }
                                 }
@@ -194,20 +194,70 @@ fun ProfileScreen(
                         ProfilePost(
                             id = "reel_${doc.id}",
                             imageUrl = doc.getString("thumbnailUrl").orEmpty(),
-                            videoUrl = videoUrl, thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
-                            isVideo = true, caption = doc.getString("caption").orEmpty(),
+                            videoUrl = videoUrl,
+                            thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+                            isVideo = true,
+                            caption = doc.getString("caption").orEmpty(),
                             timestamp = doc.getLong("timestamp") ?: 0L,
                             username = doc.getString("username").orEmpty()
                         )
-                    }
-                    publish()
+                    }.sortedByDescending { it.timestamp }
                 }
+
+            // ── Pestaña Guardados (solo en el perfil propio) ──
+            if (isOwnProfile) {
+                savedListener = db.collection("users").document(userId)
+                    .collection("savedPosts")
+                    .addSnapshotListener { snap, _ ->
+                        val savedIds = snap?.documents.orEmpty().map { it.id }
+                        if (savedIds.isEmpty()) {
+                            savedPosts = emptyList()
+                        } else {
+                            scope.launch {
+                                val list = mutableListOf<ProfilePost>()
+                                for (savedId in savedIds) {
+                                    runCatching {
+                                        val postDoc = db.collection("posts").document(savedId).get().await()
+                                        if (postDoc.exists()) {
+                                            list.add(
+                                                ProfilePost(
+                                                    id = postDoc.id,
+                                                    imageUrl = postDoc.getString("imageUrl").orEmpty(),
+                                                    imageBase64 = postDoc.getString("imageBase64").orEmpty(),
+                                                    storageKey = postDoc.getString("storageKey").orEmpty(),
+                                                    videoUrl = postDoc.getString("videoUrl").orEmpty(),
+                                                    thumbnailUrl = postDoc.getString("thumbnailUrl").orEmpty(),
+                                                    isVideo = postDoc.getBoolean("isVideo") ?: false,
+                                                    caption = postDoc.getString("caption").orEmpty(),
+                                                    timestamp = postDoc.getLong("timestamp") ?: 0L,
+                                                    username = postDoc.getString("username").orEmpty(),
+                                                    isSaved = true
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                                savedPosts = list.sortedByDescending { it.timestamp }
+                            }
+                        }
+                    }
+            }
         }
 
         onDispose {
-            profileListener?.remove(); followListener?.remove()
-            postsListener?.remove(); reelsListener?.remove()
+            profileListener?.remove()
+            followListener?.remove()
+            postsListener?.remove()
+            reelsListener?.remove()
+            savedListener?.remove()
         }
+    }
+
+    val currentDisplayList = when (selectedTabIndex) {
+        0 -> photoPosts
+        1 -> reelPosts
+        2 -> savedPosts
+        else -> photoPosts
     }
 
     Scaffold(
@@ -303,7 +353,41 @@ fun ProfileScreen(
                 )
             }
 
-            // ── Si es privado y no es el dueño ni seguidor → candado ──
+            // ── Pestañas Material You 3 (Posts / Reels / Guardados) ──
+            if (canViewContent) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                    TabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) },
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        Tab(
+                            selected = selectedTabIndex == 0,
+                            onClick = { selectedTabIndex = 0 },
+                            icon = { Icon(Icons.Default.GridView, contentDescription = "Posts") },
+                            text = { Text("Posts", fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Normal) }
+                        )
+                        Tab(
+                            selected = selectedTabIndex == 1,
+                            onClick = { selectedTabIndex = 1 },
+                            icon = { Icon(Icons.Default.Movie, contentDescription = "Reels") },
+                            text = { Text("Reels", fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Normal) }
+                        )
+                        if (isOwnProfile) {
+                            Tab(
+                                selected = selectedTabIndex == 2,
+                                onClick = { selectedTabIndex = 2 },
+                                icon = { Icon(Icons.Default.Bookmark, contentDescription = "Guardados") },
+                                text = { Text("Guardados", fontWeight = if (selectedTabIndex == 2) FontWeight.Bold else FontWeight.Normal) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Contenido de la pestaña activa ──
             if (!canViewContent) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
                     PrivateProfileLock(
@@ -311,12 +395,16 @@ fun ProfileScreen(
                         hasPendingRequest = profile.isFollowRequestPending
                     )
                 }
-            } else if (posts.isEmpty()) {
+            } else if (selectedTabIndex == 2 && savedPosts.isEmpty()) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                    EmptySavedPostsPlaceholder()
+                }
+            } else if (currentDisplayList.isEmpty()) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
                     EmptyPostsPlaceholder()
                 }
             } else {
-                items(posts, key = { it.id }) { post ->
+                items(currentDisplayList, key = { it.id }) { post ->
                     ProfilePostThumbnail(post = post, onClick = { selectedPost = post })
                 }
             }
@@ -325,7 +413,22 @@ fun ProfileScreen(
 
     // ── Visor de post ──
     selectedPost?.let { post ->
-        ProfilePostViewerDialog(post = post, onDismiss = { selectedPost = null })
+        ProfilePostViewerDialog(
+            post = post,
+            currentUserId = currentUserId,
+            onUnsave = {
+                scope.launch {
+                    runCatching {
+                        db.collection("users").document(currentUserId)
+                            .collection("savedPosts").document(post.id).delete().await()
+                        savedPosts = savedPosts.filter { it.id != post.id }
+                        snackbarHostState.showSnackbar("Publicación eliminada de guardados")
+                    }
+                }
+                selectedPost = null
+            },
+            onDismiss = { selectedPost = null }
+        )
     }
 }
 
@@ -505,6 +608,40 @@ private fun EmptyPostsPlaceholder() {
     }
 }
 
+@Composable
+private fun EmptySavedPostsPlaceholder() {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                Icons.Default.BookmarkBorder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier.size(56.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Aún no has guardado publicaciones",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Toca el ícono de marcador en cualquier publicación del feed para guardarla aquí. Solo tú puedes ver tus elementos guardados.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
 // ── Componentes reutilizables ──
 
 @Composable
@@ -556,18 +693,34 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProfilePostViewerDialog(post: ProfilePost, onDismiss: () -> Unit) {
+private fun ProfilePostViewerDialog(
+    post: ProfilePost,
+    currentUserId: String = "",
+    onUnsave: () -> Unit = {},
+    onDismiss: () -> Unit
+) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column {
                         Text(post.username.ifBlank { "Publicación" }, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                         if (post.timestamp > 0)
                             Text(java.text.SimpleDateFormat("dd MMM yyyy · HH:mm", java.util.Locale.getDefault()).format(java.util.Date(post.timestamp)),
                                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = onDismiss) { Text("Cerrar", fontWeight = FontWeight.Bold) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (post.isSaved) {
+                            IconButton(onClick = onUnsave) {
+                                Icon(Icons.Default.Bookmark, contentDescription = "Eliminar de guardados", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        TextButton(onClick = onDismiss) { Text("Cerrar", fontWeight = FontWeight.Bold) }
+                    }
                 }
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     when {
