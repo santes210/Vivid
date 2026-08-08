@@ -7,6 +7,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.local.dao.PostDao
 import com.vivid.app.data.local.entity.PostEntity
 import com.vivid.app.data.storage.StorageProvider
+import com.vivid.app.domain.repository.FollowActionResult
+import com.vivid.app.domain.repository.FollowRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,8 @@ import javax.inject.Inject
 class FeedViewModel @Inject constructor(
     private val storage: StorageProvider,
     private val postDao: PostDao,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val followRepository: FollowRepository
 ) : ViewModel() {
 
     // Caché Room (feature futura de offline). La carga Firestore→Room se
@@ -42,6 +45,51 @@ class FeedViewModel @Inject constructor(
                     .await()
             }.onFailure {
                 postDao.updateLike(postId, currentPost.likesCount, currentPost.isLiked)
+            }
+        }
+    }
+
+    fun toggleFollowUser(targetUserId: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            runCatching {
+                followRepository.toggleFollow(targetUserId)
+            }.onSuccess { action ->
+                val msg = when (action) {
+                    FollowActionResult.FOLLOWED -> "Ahora sigues a esta cuenta."
+                    FollowActionResult.UNFOLLOWED -> "Dejaste de seguir esta cuenta."
+                    FollowActionResult.REQUESTED -> "Solicitud de seguimiento enviada."
+                    FollowActionResult.REQUEST_CANCELLED -> "Solicitud cancelada."
+                }
+                onResult(msg)
+            }.onFailure { e ->
+                onResult(e.message ?: "No se pudo actualizar el seguimiento.")
+            }
+        }
+    }
+
+    fun toggleSavePost(
+        postId: String,
+        currentUserId: String,
+        shouldSave: Boolean,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        if (currentUserId.isBlank() || postId.isBlank()) return
+        viewModelScope.launch {
+            runCatching {
+                val savedRef = firestore.collection("users").document(currentUserId)
+                    .collection("savedPosts").document(postId)
+                if (shouldSave) {
+                    savedRef.set(mapOf(
+                        "postId" to postId,
+                        "savedAt" to System.currentTimeMillis()
+                    )).await()
+                } else {
+                    savedRef.delete().await()
+                }
+            }.onSuccess {
+                onResult(true, if (shouldSave) "Publicación guardada" else "Publicación eliminada de guardados")
+            }.onFailure { e ->
+                onResult(false, e.message ?: "Error al actualizar guardados")
             }
         }
     }
