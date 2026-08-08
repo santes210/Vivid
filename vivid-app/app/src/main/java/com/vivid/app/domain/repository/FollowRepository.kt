@@ -1,7 +1,6 @@
 package com.vivid.app.domain.repository
 
 import com.google.firebase.auth.FirebaseAuth
-import com.vivid.app.data.storage.StorageProvider
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -34,8 +33,7 @@ enum class FollowActionResult {
 @Singleton
 class FollowRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth,
-    private val storage: StorageProvider
+    private val auth: FirebaseAuth
 ) {
     private val currentUserId get() = auth.currentUser?.uid ?: ""
 
@@ -482,29 +480,5 @@ class FollowRepository @Inject constructor(
             ),
             SetOptions.merge()
         ).await()
-    }
-
-    suspend fun closeAccountAndPurgeData(targetUserId: String): Boolean {
-        if (targetUserId.isBlank()) return false
-        return try {
-            // 1. Borrar posts y videos de Backblaze
-            val postsSnapshot = firestore.collection("posts")
-                .whereEqualTo("userId", targetUserId)
-                .get()
-                .await()
-            for (doc in postsSnapshot.documents) {
-                val storageKey = doc.getString("storageKey")
-                if (!storageKey.isNullOrBlank()) {
-                    try { storage.deleteFile(storageKey) } catch (_: Exception) {}
-                }
-                // También borrar de Firestore
-                doc.reference.delete().await()
-            }
-            // 2. Borrar usuario de Firestore
-            firestore.collection("users").document(targetUserId).delete().await()
-            true
-        } catch (e: Exception) {
-            false
-        }
     }
 }

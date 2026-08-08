@@ -335,7 +335,7 @@ fun ProfileScreen(
                                             reason = "Contenido o comportamiento inapropiado"
                                         )
                                     },
-                                    leadingIcon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) }
+                                    leadingIcon = { Icon(Icons.Default.Block, null, tint = MaterialTheme.colorScheme.error) }
                                 )
                             }
                         }
