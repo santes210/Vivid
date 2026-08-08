@@ -1,5 +1,6 @@
 package com.vivid.app.presentation.profile
 
+import com.vivid.app.presentation.report.ReportHelper
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -322,6 +323,19 @@ fun ProfileScreen(
                                         showProfileMenu = false
                                     },
                                     leadingIcon = { Icon(Icons.Default.Email, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Reportar usuario", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showProfileMenu = false
+                                        ReportHelper.sendUserReport(
+                                            context = androidx.compose.ui.platform.LocalContext.current,
+                                            userId = userId,
+                                            username = profile.username,
+                                            reason = "Contenido o comportamiento inapropiado"
+                                        )
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) }
                                 )
                             }
                         }

@@ -42,6 +42,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.vivid.app.presentation.report.ReportHelper
 import com.vivid.app.presentation.stories.StoriesTray
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.Dispatchers
@@ -125,6 +126,12 @@ fun FeedScreen(
     var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForEdit by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
+    // Reporte de publicaciones
+    var showReportDialog by remember { mutableStateOf(false) }
+    var reportPostId by remember { mutableStateOf("") }
+    var reportPostUser by remember { mutableStateOf("") }
+    var reportPostCaption by remember { mutableStateOf("") }
+    var reportReason by remember { mutableStateOf("Inapropiado") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(currentUserId) {
@@ -326,16 +333,23 @@ fun FeedScreen(
                                 }
                             },
                             onShare = {
+                                // Deep link de Material You 3: enlace vívido que abre la app
+                                val deepLink = "vivid://post/${post.id}"
                                 shareText(
                                     context = context,
                                     title = "Compartir publicación",
                                     text = buildString {
                                         append("Mira esta publicación de @${post.username} en Vivid")
                                         if (post.caption.isNotBlank()) append("\n\n${post.caption}")
-                                        if (post.imageUrl.isNotBlank()) append("\n\n${post.imageUrl}")
-                                        if (post.videoUrl.isNotBlank()) append("\n\n${post.videoUrl}")
+                                        append("\n\n$deepLink")
                                     }
                                 )
+                            },
+                            onReportPost = { pid, user, cap ->
+                                showReportDialog = true
+                                reportPostId = pid
+                                reportPostUser = user
+                                reportPostCaption = cap
                             }
                         )
                     }
@@ -394,6 +408,51 @@ fun FeedScreen(
             dismissButton = { TextButton(onClick = { selectedPostForDelete = null }) { Text("Cancelar") } }
         )
     }
+
+    // ── Diálogo de reporte (Material You 3) ──
+    if (showReportDialog) {
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false },
+            title = { Text("Reportar publicación") },
+            text = {
+                Column {
+                    Text("Motivo:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
+                    val reasons = listOf("Spam", "Contenido inapropiado", "Acoso", "Otro")
+                    reasons.forEach { reason ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                            RadioButton(
+                                selected = reportReason == reason,
+                                onClick = { reportReason = reason }
+                            )
+                            Text(reason, modifier = Modifier.padding(start = 4.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Post: $reportPostUser — ${reportPostCaption.take(60)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        ReportHelper.sendPostReport(
+                            context = context,
+                            postId = reportPostId,
+                            username = reportPostUser,
+                            caption = reportPostCaption,
+                            reason = reportReason
+                        )
+                        showReportDialog = false
+                        scope.launch { snackbarHostState.showSnackbar("Reporte enviado. Reviso tu correo.") }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Enviar reporte") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReportDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 // ── PostCard (Material You 3 Card) ──
@@ -412,6 +471,7 @@ private fun PostCard(
     onToggleSave: () -> Unit,
     onToggleLike: () -> Unit,
     onShare: () -> Unit,
+    onReportPost: (String, String, String) -> Unit = { _, _, _ -> },
     onImageUrlExpired: () -> Unit = {}
 ) {
     Card(
@@ -442,14 +502,23 @@ private fun PostCard(
                     )
                 }
 
-                if (post.userId == currentUserId) {
-                    var showMenu by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Más") }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                // Menú de opciones (Material You 3): editar/eliminar solo para autor; reportar para todos
+                var showMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Más opciones") }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        if (post.userId == currentUserId) {
                             DropdownMenuItem(text = { Text("Editar") }, onClick = { showMenu = false; onEditPost() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
                             DropdownMenuItem(text = { Text("Eliminar", color = MaterialTheme.colorScheme.error) }, onClick = { showMenu = false; onDeletePost() }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) })
                         }
+                        DropdownMenuItem(
+                            text = { Text("Reportar publicación", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                onReportPost(post.id, post.username, post.caption)
+                            },
+                            leadingIcon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) }
+                        )
                     }
                 }
             }

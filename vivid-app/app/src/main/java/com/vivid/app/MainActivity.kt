@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
     private var pendingChatId: String? = null
     private var pendingReelId: String? = null
     private var pendingProfileUserId: String? = null
+    private var pendingPostId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
             val deepLinkChatId = remember { pendingChatId }
             val deepLinkReelId = remember { pendingReelId }
             val deepLinkProfileUserId = remember { pendingProfileUserId }
+            val deepLinkPostId = remember { pendingPostId }
 
             VividTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 Surface(
@@ -76,7 +78,8 @@ class MainActivity : ComponentActivity() {
                     VividApp(
                         deepLinkChatId = deepLinkChatId,
                         deepLinkReelId = deepLinkReelId,
-                        deepLinkProfileUserId = deepLinkProfileUserId
+                        deepLinkProfileUserId = deepLinkProfileUserId,
+                        deepLinkPostId = deepLinkPostId
                     )
                 }
             }
@@ -103,6 +106,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readNotificationExtras(intent: android.content.Intent) {
+        // Deep links Material You 3: vivid://post/xxx
+        if (intent.action == android.content.Intent.ACTION_VIEW) {
+            val data = intent.data
+            if (data != null && data.scheme == "vivid" && data.host == "post") {
+                val path = data.path ?: ""
+                val postId = path.removePrefix("/")
+                if (postId.isNotBlank()) pendingPostId = postId
+            }
+        }
         if (intent.getBooleanExtra("openChat", false)) {
             pendingChatId = intent.getStringExtra("chatId")
         }
@@ -119,13 +131,15 @@ class MainActivity : ComponentActivity() {
 fun VividApp(
     deepLinkChatId: String? = null,
     deepLinkReelId: String? = null,
-    deepLinkProfileUserId: String? = null
+    deepLinkProfileUserId: String? = null,
+    deepLinkPostId: String? = null
 ) {
     val navController = rememberNavController()
     VividNavigation(
         navController = navController,
         deepLinkChatId = deepLinkChatId,
         deepLinkReelId = deepLinkReelId,
-        deepLinkProfileUserId = deepLinkProfileUserId
+        deepLinkProfileUserId = deepLinkProfileUserId,
+        deepLinkPostId = deepLinkPostId
     )
 }
