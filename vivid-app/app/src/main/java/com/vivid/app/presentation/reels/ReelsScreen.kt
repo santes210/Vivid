@@ -53,20 +53,33 @@ fun ReelsScreen(
 ) {
     val reels by viewModel.reels.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val pagerState = rememberPagerState(pageCount = { reels.size.coerceAtLeast(1) })
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
 
+    // Estado del pager: el count se actualiza automáticamente con reels.size
+    val pagerState = rememberPagerState(pageCount = { reels.size })
+
+    // Deep link: saltar al reel específico si viene desde notificación
     LaunchedEffect(initialReelId, reels) {
         val reelId = initialReelId ?: return@LaunchedEffect
+        if (reels.isEmpty()) return@LaunchedEffect
         val index = reels.indexOfFirst { it.id == reelId }
         if (index >= 0 && index != pagerState.currentPage) {
             pagerState.scrollToPage(index)
         }
     }
 
+    // Scroll infinito TikTok: cuando llegas a los últimos 3, carga más
+    LaunchedEffect(pagerState.currentPage, reels.size, hasMore) {
+        if (reels.isNotEmpty() && hasMore && pagerState.currentPage >= reels.size - 3) {
+            viewModel.loadMore()
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                CircularProgressIndicator(color = Color.White)
             }
 
             reels.isEmpty() -> EmptyReelsState(onCreateReel = onCreateReel)
@@ -74,16 +87,20 @@ fun ReelsScreen(
             else -> VerticalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1
+                beyondViewportPageCount = 1,
+                key = { index -> if (index < reels.size) reels[index].id else index }
             ) { page ->
-                val reel = reels[page]
-                ReelPage(
-                    reel = reel,
-                    isPlaying = page == pagerState.currentPage || page == pagerState.settledPage
-                )
+                if (page in reels.indices) {
+                    val reel = reels[page]
+                    ReelPage(
+                        reel = reel,
+                        isPlaying = page == pagerState.currentPage
+                    )
+                }
             }
         }
 
+        // Header "Reels" flotante
         Surface(
             color = Color.Black.copy(alpha = 0.25f),
             shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
@@ -103,6 +120,7 @@ fun ReelsScreen(
             }
         }
 
+        // Indicador de progreso vertical estilo TikTok (derecha)
         if (reels.size > 1) {
             Column(
                 modifier = Modifier
@@ -127,6 +145,22 @@ fun ReelsScreen(
             }
         }
 
+        // Loading more indicator
+        if (isLoadingMore) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 90.dp)
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp
+                )
+            }
+        }
+
+        // FAB Crear Reel
         ExtendedFloatingActionButton(
             onClick = onCreateReel,
             modifier = Modifier
@@ -188,6 +222,7 @@ private fun ReelPage(
     val scope = rememberCoroutineScope()
     val followRepository = remember { FollowRepository(firestore, FirebaseAuth.getInstance()) }
 
+    // ExoPlayer con remember keyed por videoUrl para que se recicle correctamente
     val exoPlayer = remember(reel.videoUrl) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(reel.videoUrl))
@@ -229,7 +264,8 @@ private fun ReelPage(
         }
     }
 
-    LaunchedEffect(isPlaying, isPausedByUser, SettingsManager.autoplayReels) {
+    // Control de reproducción tipo TikTok: solo el reel visible reproduce
+    LaunchedEffect(isPlaying, isPausedByUser) {
         if (isPlaying && !isPausedByUser && SettingsManager.autoplayReels) {
             exoPlayer.playWhenReady = true
             exoPlayer.play()
@@ -269,6 +305,7 @@ private fun ReelPage(
             .clickable {
                 val now = System.currentTimeMillis()
                 if (now - lastTapTime < 300) {
+                    // Doble tap = like
                     if (!isLiked) {
                         isLiked = true
                         likeCount++
@@ -280,6 +317,8 @@ private fun ReelPage(
                                     likeCount = (likeCount - 1).coerceAtLeast(0)
                                 }
                         }
+                    } else {
+                        showHeartAnimation = true
                     }
                 } else {
                     isPausedByUser = !isPausedByUser
@@ -287,6 +326,7 @@ private fun ReelPage(
                 lastTapTime = now
             }
     ) {
+        // Thumbnail mientras carga
         if (!isPlayerReady && reel.thumbnailUrl.isNotBlank()) {
             AsyncImage(
                 model = reel.thumbnailUrl,
@@ -355,10 +395,11 @@ private fun ReelPage(
             }
         }
 
+        // Degradado inferior para legibilidad
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(220.dp)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
@@ -367,10 +408,11 @@ private fun ReelPage(
                 )
         )
 
+        // Info usuario + caption (abajo izquierda)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 16.dp, end = 80.dp)
+                .padding(start = 16.dp, bottom = 24.dp, end = 80.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (reel.userAvatar.isNotBlank()) {
@@ -414,15 +456,10 @@ private fun ReelPage(
                         modifier = Modifier.clickable(enabled = !isFollowLoading) {
                             scope.launch {
                                 isFollowLoading = true
-                                val action = runCatching {
-                                    followRepository.toggleFollow(reel.userId)
-                                }.getOrNull()
+                                runCatching { followRepository.toggleFollow(reel.userId) }
                                 relationshipState = runCatching {
                                     followRepository.getRelationshipState(reel.userId)
                                 }.getOrDefault(relationshipState)
-                                if (action == FollowActionResult.FOLLOWED || action == FollowActionResult.REQUESTED) {
-                                    // No-op, UI se refresca por relationshipState
-                                }
                                 isFollowLoading = false
                             }
                         }
@@ -453,10 +490,11 @@ private fun ReelPage(
             )
         }
 
+        // Acciones derecha (like, comment, share, mute)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 16.dp),
+                .padding(end = 12.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -503,12 +541,7 @@ private fun ReelPage(
 
             Spacer(Modifier.height(6.dp))
 
-            IconButton(onClick = {
-                shareReel(
-                    context = context,
-                    reel = reel
-                )
-            }) {
+            IconButton(onClick = { shareReel(context = context, reel = reel) }) {
                 Icon(
                     Icons.Default.Share,
                     contentDescription = "Compartir",
@@ -577,8 +610,6 @@ private fun ReelCommentsDialog(
                     androidx.compose.foundation.lazy.LazyColumn(
                         modifier = Modifier.heightIn(max = 300.dp)
                     ) {
-                        // items es extension function de LazyListScope: con FQN no
-                        // resuelve el receiver implícito (bug de Kotlin), se importa.
                         items(comments, key = { it.id }) { comment ->
                             ReelCommentRow(comment)
                             Spacer(Modifier.height(10.dp))
