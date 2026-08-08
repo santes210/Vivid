@@ -115,7 +115,7 @@ fun FeedScreen(
     val shouldLoadMore = remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            val totalItems = layoutInfo.totalItemCount
+            val totalItems = layoutInfo.totalItemsCount
             val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             totalItems > 0 && lastVisibleItemIndex >= totalItems - 3
         }
