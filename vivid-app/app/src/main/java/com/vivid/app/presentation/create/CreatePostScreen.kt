@@ -15,19 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.AsyncImage
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.vivid.app.data.local.entity.PostEntity
-import com.vivid.app.presentation.stories.uploadStoryWithCompression
-import com.vivid.app.util.ImageCompressor
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-import java.util.*
 
 private enum class CreateContentType {
     POST,
@@ -46,7 +37,8 @@ private enum class CreateContentType {
 @Composable
 fun CreatePostScreen(
     navController: NavController,
-    onPostCreated: () -> Unit = {}
+    onPostCreated: () -> Unit = {},
+    viewModel: CreatePostViewModel = hiltViewModel()
 ) {
     var selectedContentType by remember { mutableStateOf(CreateContentType.POST) }
     var caption by remember { mutableStateOf("") }
@@ -54,7 +46,6 @@ fun CreatePostScreen(
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val capturedPhotoPathState = currentBackStackEntry
@@ -62,6 +53,31 @@ fun CreatePostScreen(
         ?.getStateFlow("capturedPhoto", "")
         ?.collectAsState()
     val capturedPhotoPath = capturedPhotoPathState?.value.orEmpty()
+
+    // Estado del ViewModel → estado local de la UI
+    val publishState by viewModel.state.collectAsState()
+    LaunchedEffect(publishState) {
+        when (publishState) {
+            is CreatePostUiState.Idle -> { isUploading = false; errorMessage = null }
+            is CreatePostUiState.Compressing -> { isUploading = true; uploadProgress = "Comprimiendo..." }
+            is CreatePostUiState.Uploading -> {
+                isUploading = true
+                uploadProgress = "Subiendo a la nube (${(publishState as CreatePostUiState.Uploading).percent}%)"
+            }
+            is CreatePostUiState.SavingMetadata -> { isUploading = true; uploadProgress = "Guardando..." }
+            is CreatePostUiState.Success -> {
+                isUploading = false
+                uploadProgress = "¡Publicado!"
+                viewModel.reset()
+                onPostCreated()
+                navController.popBackStack()
+            }
+            is CreatePostUiState.Error -> {
+                isUploading = false
+                errorMessage = (publishState as CreatePostUiState.Error).message
+            }
+        }
+    }
 
     LaunchedEffect(capturedPhotoPath) {
         if (capturedPhotoPath.isNotBlank()) {
@@ -274,52 +290,7 @@ fun CreatePostScreen(
                     isUploading = true
                     errorMessage = null
                     uploadProgress = "Comprimiendo..."
-                    scope.launch {
-                        try {
-                            val auth = FirebaseAuth.getInstance()
-                            val user = auth.currentUser
-                                ?: throw IllegalStateException("No autenticado")
-                            val db = FirebaseFirestore.getInstance()
-                            val userSnapshot = db.collection("users").document(user.uid).get().await()
-                            val username = userSnapshot.getString("username")
-                                ?: user.displayName
-                                ?: user.email?.substringBefore('@')
-                                ?: "usuario"
-                            val compressed = ImageCompressor.compressToBase64(
-                                selectedImageUri!!, context
-                            ) ?: throw IllegalStateException("No se pudo comprimir")
-
-                            uploadProgress = "Guardando..."
-                            val postId = "post_${user.uid}_${System.currentTimeMillis()}"
-                            val postData = hashMapOf(
-                                "userId" to user.uid,
-                                "username" to username,
-                                "imageBase64" to compressed,
-                                "caption" to caption,
-                                "timestamp" to System.currentTimeMillis()
-                            )
-                            db.collection("posts").document(postId).set(postData).await()
-                            // Incrementar contador postsCount en perfil
-                            try {
-                                db.collection("users").document(user.uid)
-                                    .set(
-                                        mapOf(
-                                            "postsCount" to com.google.firebase.firestore.FieldValue.increment(1),
-                                            "updatedAt" to System.currentTimeMillis()
-                                        ),
-                                        com.google.firebase.firestore.SetOptions.merge()
-                                    ).await()
-                            } catch (_: Exception) {}
-                            uploadProgress = "¡Publicado!"
-                            isUploading = false
-                            onPostCreated()
-                            navController.popBackStack()
-                        } catch (e: Exception) {
-                            uploadProgress = "Error: ${e.message}"
-                            isUploading = false
-                            errorMessage = e.message
-                        }
-                    }
+                    viewModel.publishPost(context, selectedImageUri!!, caption)
                 }
             },
             enabled = !isUploading && selectedImageUri != null,
