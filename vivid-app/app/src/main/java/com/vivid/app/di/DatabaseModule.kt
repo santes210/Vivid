@@ -26,7 +26,9 @@ object DatabaseModule {
             VividDatabase::class.java,
             "vivid_database"
         )
-            .addMigrations(VividDatabase.MIGRATION_1_2)
+            .addMigrations(VividDatabase.MIGRATION_1_2, VividDatabase.MIGRATION_2_3)
+            .fallbackToDestructiveMigrationOnDowngrade()
+            .fallbackToDestructiveMigration()
             .build()
     }
 

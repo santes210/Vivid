@@ -99,25 +99,33 @@ class ChatRepository @Inject constructor(
                     senderId = entity.senderId,
                     timestamp = entity.timestamp,
                     isRead = entity.isRead,
+                    isDelivered = entity.isDelivered,
                     type = entity.type,
                     imageUrl = entity.imageUrl,
-                    imageKey = entity.imageKey
+                    imageKey = entity.imageKey,
+                    voiceUrl = entity.voiceUrl,
+                    voiceKey = entity.voiceKey,
+                    voiceDurationMs = entity.voiceDurationMs,
+                    replyToStoryId = entity.replyToStoryId
                 )
             }.sortedBy { it.timestamp }
         }
     }
 
-    suspend fun sendMessage(chatId: String, text: String, receiverId: String) {
+    suspend fun sendMessage(chatId: String, text: String, receiverId: String, replyToStoryId: String = "") {
         if (currentUserId.isBlank() || receiverId.isBlank() || text.isBlank()) return
 
         val now = System.currentTimeMillis()
         val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
+        val type = if (replyToStoryId.isNotBlank()) "story_reply" else "text"
         val message = MessageEntity(
             id = messageId,
             chatId = chatId,
             senderId = currentUserId,
             text = text,
-            timestamp = now
+            timestamp = now,
+            type = type,
+            replyToStoryId = replyToStoryId
         )
 
         messageDao.insertMessage(message)
@@ -132,12 +140,18 @@ class ChatRepository @Inject constructor(
                     "senderId" to currentUserId,
                     "receiverId" to receiverId,
                     "timestamp" to now,
-                    "type" to "text",
-                    "isRead" to false
+                    "type" to type,
+                    "isRead" to false,
+                    "isDelivered" to false,
+                    "replyToStoryId" to replyToStoryId
                 )
             ).await()
 
-        updateChatPreview(chatId, receiverId, lastMessage = text, lastMessageType = "text", now)
+        val preview = when (type) {
+            "story_reply" -> "↳ Respondió a tu story"
+            else -> text
+        }
+        updateChatPreview(chatId, receiverId, lastMessage = preview, lastMessageType = type, now)
     }
 
     /**
@@ -174,12 +188,58 @@ class ChatRepository @Inject constructor(
                     "timestamp" to now,
                     "type" to "image",
                     "isRead" to false,
+                    "isDelivered" to false,
                     "imageUrl" to imageUrl,
                     "imageKey" to imageKey
                 )
             ).await()
 
         updateChatPreview(chatId, receiverId, lastMessage = "Imagen", lastMessageType = "image", now)
+    }
+
+    /**
+     * Envía una nota de voz. El audio YA está en B2; guarda URL + duración.
+     */
+    suspend fun sendVoiceMessage(chatId: String, receiverId: String, voiceUrl: String, voiceKey: String, durationMs: Long) {
+        if (currentUserId.isBlank() || receiverId.isBlank() || voiceUrl.isBlank()) return
+        val now = System.currentTimeMillis()
+        val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
+        val message = MessageEntity(
+            id = messageId,
+            chatId = chatId,
+            senderId = currentUserId,
+            text = "",
+            timestamp = now,
+            type = "voice",
+            voiceUrl = voiceUrl,
+            voiceKey = voiceKey,
+            voiceDurationMs = durationMs
+        )
+        messageDao.insertMessage(message)
+        firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .set(
+                mapOf(
+                    "text" to "",
+                    "senderId" to currentUserId,
+                    "receiverId" to receiverId,
+                    "timestamp" to now,
+                    "type" to "voice",
+                    "isRead" to false,
+                    "isDelivered" to false,
+                    "voiceUrl" to voiceUrl,
+                    "voiceKey" to voiceKey,
+                    "voiceDurationMs" to durationMs
+                )
+            ).await()
+        updateChatPreview(chatId, receiverId, lastMessage = "🎙️ Nota de voz ${formatDuration(durationMs)}", lastMessageType = "voice", now)
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val s = (ms / 1000).toInt()
+        return "%d:%02d".format(s / 60, s % 60)
     }
 
     private suspend fun updateChatPreview(
@@ -233,6 +293,9 @@ class ChatRepository @Inject constructor(
         if (message.type == "image" && message.imageKey.isNotBlank()) {
             runCatching { storage.deleteFile(message.imageKey) }
         }
+        if (message.type == "voice" && message.voiceKey.isNotBlank()) {
+            runCatching { storage.deleteFile(message.voiceKey) }
+        }
 
         // 2. Borrar local + Firestore
         messageDao.deleteMessage(message.id)
@@ -257,7 +320,12 @@ class ChatRepository @Inject constructor(
         val latestSenderId = latestRemaining?.getString("senderId").orEmpty()
         val latestType = latestRemaining?.getString("type") ?: "text"
         val latestText = latestRemaining?.getString("text").orEmpty()
-        val lastMessageDisplay = if (latestType == "image") "Imagen" else latestText
+        val lastMessageDisplay = when (latestType) {
+            "image" -> "Imagen"
+            "voice" -> "🎙️ Nota de voz"
+            "story_reply" -> "↳ Respondió a tu story"
+            else -> latestText
+        }
 
         firestore.collection("chats").document(chatId).set(
             mapOf(
@@ -292,6 +360,106 @@ class ChatRepository @Inject constructor(
                     SetOptions.merge()
                 ).await()
         }
+        // Marca todos los mensajes recibidos como leídos (read receipts)
+        markMessagesAsRead(chatId)
+    }
+
+    /**
+     * Marca como leídos (isRead=true, isDelivered=true) todos los mensajes donde
+     * el receiver es el usuario actual y aún no están leídos.
+     */
+    suspend fun markMessagesAsRead(chatId: String) {
+        if (currentUserId.isBlank() || chatId.isBlank()) return
+        try {
+            val unread = firestore.collection("chats").document(chatId)
+                .collection("messages")
+                .whereEqualTo("receiverId", currentUserId)
+                .whereEqualTo("isRead", false)
+                .get().await()
+            if (unread.isEmpty) return
+            val batch = firestore.batch()
+            unread.documents.forEach { doc ->
+                batch.update(doc.reference, mapOf("isRead" to true, "isDelivered" to true))
+            }
+            batch.commit().await()
+            // Update local Room
+            unread.documents.forEach { doc ->
+                repositoryScope.launch {
+                    val id = doc.id
+                    val text = doc.getString("text").orEmpty()
+                    val sender = doc.getString("senderId").orEmpty()
+                    val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                    val type = doc.getString("type") ?: "text"
+                    messageDao.insertMessage(
+                        MessageEntity(
+                            id = id,
+                            chatId = chatId,
+                            senderId = sender,
+                            text = text,
+                            timestamp = ts,
+                            isRead = true,
+                            isDelivered = true,
+                            type = type,
+                            imageUrl = doc.getString("imageUrl").orEmpty(),
+                            imageKey = doc.getString("imageKey").orEmpty(),
+                            voiceUrl = doc.getString("voiceUrl").orEmpty(),
+                            voiceKey = doc.getString("voiceKey").orEmpty(),
+                            voiceDurationMs = doc.getLong("voiceDurationMs") ?: 0L,
+                            replyToStoryId = doc.getString("replyToStoryId").orEmpty()
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Typing indicator — guarda timestamp del usuario que escribe.
+     * El campo se llama `typing` : Map<userId, timestampMillis>.
+     * Se borra después de 5s de inactividad (el cliente hace remove).
+     */
+    suspend fun setTyping(chatId: String, isTyping: Boolean) {
+        if (currentUserId.isBlank() || chatId.isBlank()) return
+        try {
+            val ref = firestore.collection("chats").document(chatId)
+            if (isTyping) {
+                ref.set(
+                    mapOf("typing" to mapOf(currentUserId to System.currentTimeMillis())),
+                    SetOptions.merge()
+                ).await()
+            } else {
+                ref.update("typing.$currentUserId", FieldValue.delete()).await()
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Escucha el mapa typing del chat.
+     */
+    fun listenTyping(chatId: String, onTypingChanged: (Map<String, Long>) -> Unit): ListenerRegistration {
+        return firestore.collection("chats").document(chatId)
+            .addSnapshotListener { snap, _ ->
+                val typing = snap?.get("typing") as? Map<String, Long> ?: run {
+                    val raw = snap?.get("typing") as? Map<*, *>
+                    raw?.mapNotNull { (k, v) ->
+                        val key = k as? String ?: return@mapNotNull null
+                        val ts = (v as? Long) ?: (v as? Number)?.toLong() ?: return@mapNotNull null
+                        key to ts
+                    }?.toMap() ?: emptyMap()
+                }
+                onTypingChanged(typing)
+            }
+    }
+
+    /**
+     * Marca un mensaje individual como entregado (cuando el receptor lo recibió)
+     */
+    suspend fun markMessageDelivered(chatId: String, messageId: String) {
+        try {
+            firestore.collection("chats").document(chatId)
+                .collection("messages").document(messageId)
+                .update("isDelivered", true).await()
+        } catch (_: Exception) {}
     }
 
     /**
@@ -313,10 +481,15 @@ class ChatRepository @Inject constructor(
                         senderId = change.document.getString("senderId").orEmpty(),
                         timestamp = timestamp,
                         isRead = change.document.getBoolean("isRead") ?: false,
+                        isDelivered = change.document.getBoolean("isDelivered") ?: false,
                         reaction = change.document.getString("reaction").orEmpty(),
                         type = change.document.getString("type") ?: "text",
                         imageUrl = change.document.getString("imageUrl").orEmpty(),
-                        imageKey = change.document.getString("imageKey").orEmpty()
+                        imageKey = change.document.getString("imageKey").orEmpty(),
+                        voiceUrl = change.document.getString("voiceUrl").orEmpty(),
+                        voiceKey = change.document.getString("voiceKey").orEmpty(),
+                        voiceDurationMs = change.document.getLong("voiceDurationMs") ?: 0L,
+                        replyToStoryId = change.document.getString("replyToStoryId").orEmpty()
                     )
 
                     when (change.type) {
@@ -331,9 +504,14 @@ class ChatRepository @Inject constructor(
                                         text = msg.text,
                                         timestamp = msg.timestamp,
                                         isRead = msg.isRead,
+                                        isDelivered = msg.isDelivered,
                                         type = msg.type,
                                         imageUrl = msg.imageUrl,
-                                        imageKey = msg.imageKey
+                                        imageKey = msg.imageKey,
+                                        voiceUrl = msg.voiceUrl,
+                                        voiceKey = msg.voiceKey,
+                                        voiceDurationMs = msg.voiceDurationMs,
+                                        replyToStoryId = msg.replyToStoryId
                                     )
                                 )
                             }

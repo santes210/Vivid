@@ -26,6 +26,7 @@ import javax.inject.Inject
 sealed interface CreateReelUiState {
     data object Idle : CreateReelUiState
     data class Compressing(val percent: Int) : CreateReelUiState
+    data class MixingAudio(val percent: Int) : CreateReelUiState
     data class Watermarking(val percent: Int) : CreateReelUiState
     data class Uploading(val percent: Int) : CreateReelUiState
     data object SavingMetadata : CreateReelUiState
@@ -58,7 +59,11 @@ class CreateReelViewModel @Inject constructor(
         caption: String,
         trimStartMs: Long = 0,
         trimEndMs: Long = -1,
-        withWatermark: Boolean = true
+        withWatermark: Boolean = true,
+        musicUri: Uri? = null,
+        musicAssetFile: String? = null,
+        musicVolume: Float = 1.0f,
+        originalVolume: Float = 0.3f
     ) {
         viewModelScope.launch {
             try {
@@ -89,14 +94,44 @@ class CreateReelViewModel @Inject constructor(
                     _state.value = CreateReelUiState.Compressing(pct)
                 }
 
+                // 2.5 Mezcla de música si el usuario eligió canción (Material You 3 — selector)
+                var musicMixedPath = compressedPath
+                val effectiveMusicUri: Uri? = when {
+                    musicUri != null -> musicUri
+                    musicAssetFile != null -> {
+                        // Copia asset a cache para AudioMixer
+                        try {
+                            val assetIn = context.assets.open(musicAssetFile)
+                            val tmp = File(context.cacheDir, "music_${System.currentTimeMillis()}.mp3")
+                            tmp.outputStream().use { out -> assetIn.copyTo(out) }
+                            assetIn.close()
+                            Uri.fromFile(tmp)
+                        } catch (_: Exception) { null }
+                    }
+                    else -> null
+                }
+                if (effectiveMusicUri != null) {
+                    _state.value = CreateReelUiState.MixingAudio(0)
+                    val mixedFile = File(context.cacheDir, "reel_mixed_${System.currentTimeMillis()}.mp4")
+                    musicMixedPath = com.vivid.app.util.AudioMixer.replaceAudio(
+                        context = context,
+                        videoUri = Uri.fromFile(File(compressedPath)),
+                        musicUri = effectiveMusicUri,
+                        outputFile = mixedFile,
+                        musicVolume = musicVolume,
+                        originalVolume = originalVolume
+                    )
+                    _state.value = CreateReelUiState.MixingAudio(100)
+                }
+
                 // 3. Watermark (si el usuario lo eligió)
-                var finalVideoPath = compressedPath
+                var finalVideoPath = musicMixedPath
                 if (withWatermark) {
                     _state.value = CreateReelUiState.Watermarking(0)
                     val wmFile = File(context.cacheDir, "reel_wm_${System.currentTimeMillis()}.mp4")
                     finalVideoPath = VideoWatermarker.applyWatermark(
                         context = context,
-                        inputUri = Uri.fromFile(File(compressedPath)),
+                        inputUri = Uri.fromFile(File(musicMixedPath)),
                         outputFile = wmFile
                     )
                     _state.value = CreateReelUiState.Watermarking(100)

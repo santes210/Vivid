@@ -11,7 +11,12 @@ data class MessageEntity(
     val text: String,
     val timestamp: Long,
     val isRead: Boolean = false,
-    val type: String = "text", // text, image, video
+    val isDelivered: Boolean = false,
+    val type: String = "text", // text, image, video, voice, story_reply
     val imageUrl: String = "",
-    val imageKey: String = ""
+    val imageKey: String = "",
+    val voiceUrl: String = "",
+    val voiceKey: String = "",
+    val voiceDurationMs: Long = 0L,
+    val replyToStoryId: String = ""
 )
