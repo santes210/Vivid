@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
@@ -17,7 +18,8 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val followRepository: FollowRepository,
     private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val storage: StorageProvider
 ) : ViewModel() {
 
     private val _relationshipState = MutableStateFlow(FollowRelationshipState())
@@ -113,5 +115,15 @@ class ProfileViewModel @Inject constructor(
 
     fun clearFollowActionMessage() {
         _followActionMessage.value = null
+    }
+
+    /**
+     * Regenera la URL firmada de una imagen de post en B2 (TTL 7 días).
+     * Devuelve null si falla para conservar la URL guardada.
+     */
+    suspend fun refreshSignedUrl(storageKey: String): String? = try {
+        storage.signDownloadUrl(storageKey)
+    } catch (e: Exception) {
+        null
     }
 }

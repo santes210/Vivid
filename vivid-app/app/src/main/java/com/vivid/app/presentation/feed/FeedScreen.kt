@@ -40,6 +40,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.vivid.app.presentation.stories.StoriesTray
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,7 @@ data class PostData(
     val id: String, val userId: String, val username: String,
     val userProfilePicture: String, val userProfilePictureBase64: String = "",
     val imageUrl: String = "", val imageBase64: String = "",
+    val storageKey: String = "",
     val videoUrl: String = "", val thumbnailUrl: String = "",
     val isVideo: Boolean = false, val caption: String,
     val likesCount: Int = 0, val commentsCount: Int = 0,
@@ -86,12 +88,18 @@ fun FeedScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val feedViewModel: FeedViewModel = hiltViewModel()
 
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var lastVisibleDoc by remember { mutableStateOf<com.google.firebase.firestore.DocumentSnapshot?>(null) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
+    // IDs de posts a los que ya di like (1 sola consulta collectionGroup).
+    // null = no se pudo consultar → el cargador usa el modo anterior (1 read por post).
+    var likedPostIds by remember { mutableStateOf<Set<String>?>(null) }
+    // Posts cuyo storageKey ya se intentó re-firmar tras un error 403 (evita loops)
+    var refreshAttemptedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val listState = rememberLazyListState()
 
     var followRequestsCount by remember { mutableIntStateOf(0) }
@@ -104,7 +112,12 @@ fun FeedScreen(
 
     LaunchedEffect(currentUserId) {
         isLoading = true
-        val result = runCatching { loadInitialPostsFromFirebase(currentUserId) }.getOrElse { FeedPageResult(emptyList(), null) }
+        // 1 sola consulta para saber qué posts ya tienen mi like (en vez de 20)
+        val likedIds = feedViewModel.fetchLikedPostIds(currentUserId)
+        likedPostIds = likedIds
+        val result = runCatching {
+            loadInitialPostsFromFirebase(currentUserId, likedIds, feedViewModel)
+        }.getOrElse { FeedPageResult(emptyList(), null) }
         posts = result.posts
         lastVisibleDoc = result.lastDoc
         hasMore = result.posts.size >= 20
@@ -124,7 +137,9 @@ fun FeedScreen(
     LaunchedEffect(shouldLoadMore.value) {
         if (shouldLoadMore.value && !isLoadingMore && hasMore && lastVisibleDoc != null) {
             isLoadingMore = true
-            val result = runCatching { loadMorePostsFromFirebase(currentUserId, lastVisibleDoc) }.getOrElse { FeedPageResult(emptyList(), null) }
+            val result = runCatching {
+                loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, feedViewModel)
+            }.getOrElse { FeedPageResult(emptyList(), null) }
             if (result.posts.isNotEmpty()) {
                 posts = posts + result.posts
                 lastVisibleDoc = result.lastDoc
@@ -223,6 +238,10 @@ fun FeedScreen(
                                         )
                                     } else it
                                 }
+                                // Mantener el set de likes local sin lecturas extra
+                                likedPostIds = likedPostIds?.let { ids ->
+                                    if (newLiked) ids + target.id else ids - target.id
+                                }
                                 scope.launch {
                                     runCatching {
                                         togglePostLike(target.id, currentUserId, newLiked)
@@ -230,7 +249,24 @@ fun FeedScreen(
                                         posts = posts.map {
                                             if (it.id == target.id) target else it
                                         }
+                                        likedPostIds = likedPostIds?.let { ids ->
+                                            if (newLiked) ids - target.id else ids + target.id
+                                        }
                                         snackbarHostState.showSnackbar(it.message ?: "No se pudo actualizar el like")
+                                    }
+                                }
+                            },
+                            onImageUrlExpired = {
+                                // La URL firmada de B2 expiró (403): re-firmar una vez
+                                val key = post.storageKey
+                                if (key.isNotBlank() && post.id !in refreshAttemptedIds) {
+                                    refreshAttemptedIds = refreshAttemptedIds + post.id
+                                    scope.launch {
+                                        feedViewModel.refreshSignedUrl(key)?.let { freshUrl ->
+                                            posts = posts.map {
+                                                if (it.id == post.id) it.copy(imageUrl = freshUrl) else it
+                                            }
+                                        }
                                     }
                                 }
                             },
@@ -288,8 +324,13 @@ fun FeedScreen(
                 Button(onClick = {
                     scope.launch {
                         try {
+                            // Borrar binario de B2 (best-effort) si el post usaba storage
+                            if (post.storageKey.isNotBlank()) {
+                                feedViewModel.deleteRemoteFile(post.storageKey)
+                            }
                             FirebaseFirestore.getInstance().collection("posts").document(post.id).delete().await()
                             posts = posts.filter { it.id != post.id }
+                            likedPostIds = likedPostIds?.let { ids -> ids - post.id }
                             snackbarHostState.showSnackbar("Publicación eliminada")
                         } catch (e: Exception) { snackbarHostState.showSnackbar("Error: ${e.message}") }
                         selectedPostForDelete = null
@@ -312,7 +353,8 @@ private fun PostCard(
     onEditPost: () -> Unit,
     onDeletePost: () -> Unit,
     onToggleLike: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onImageUrlExpired: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -348,7 +390,13 @@ private fun PostCard(
             Box(modifier = Modifier.fillMaxWidth().clickable { onOpenPost() }) {
                 when {
                     post.isVideo && post.videoUrl.isNotBlank() -> PostVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
-                    else -> PostImage(imageBase64 = post.imageBase64, imageUrl = post.imageUrl, username = post.username)
+                    else -> PostImage(
+                        imageBase64 = post.imageBase64,
+                        imageUrl = post.imageUrl,
+                        username = post.username,
+                        storageKey = post.storageKey,
+                        onUrlExpired = onImageUrlExpired
+                    )
                 }
             }
 
@@ -421,7 +469,11 @@ private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
     }
 }
 
-private suspend fun loadInitialPostsFromFirebase(currentUserId: String): FeedPageResult = withContext(Dispatchers.IO) {
+private suspend fun loadInitialPostsFromFirebase(
+    currentUserId: String,
+    likedPostIds: Set<String>?,
+    feedViewModel: FeedViewModel
+): FeedPageResult = withContext(Dispatchers.IO) {
     val firestore = FirebaseFirestore.getInstance()
     val snapshot = firestore.collection("posts")
         .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
@@ -433,42 +485,19 @@ private suspend fun loadInitialPostsFromFirebase(currentUserId: String): FeedPag
     val posts = coroutineScope {
         snapshot.documents.map { doc ->
             async {
-                val isLiked = if (currentUserId.isBlank()) {
-                    false
-                } else {
-                    firestore.collection("posts")
-                        .document(doc.id)
-                        .collection("likes")
-                        .document(currentUserId)
-                        .get()
-                        .await()
-                        .exists()
-                }
-                PostData(
-                    id = doc.id,
-                    userId = doc.getString("userId") ?: "",
-                    username = doc.getString("username") ?: "usuario",
-                    userProfilePicture = doc.getString("userAvatar")
-                        ?: doc.getString("userProfilePicture")
-                        ?: "",
-                    caption = doc.getString("caption") ?: "",
-                    imageUrl = doc.getString("imageUrl") ?: "",
-                    imageBase64 = doc.getString("imageBase64") ?: "",
-                    videoUrl = doc.getString("videoUrl") ?: "",
-                    thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
-                    isVideo = doc.getBoolean("isVideo") ?: false,
-                    likesCount = (doc.getLong("likesCount") ?: 0).toInt(),
-                    commentsCount = (doc.getLong("commentsCount") ?: 0).toInt(),
-                    timestamp = doc.getLong("timestamp") ?: 0L,
-                    isLiked = isLiked
-                )
+                mapPostDoc(doc, currentUserId, likedPostIds, feedViewModel)
             }
-        }.awaitAll()
+        }.awaitAll().filterNotNull()
     }
     FeedPageResult(posts, lastDoc)
 }
 
-private suspend fun loadMorePostsFromFirebase(currentUserId: String, lastDoc: com.google.firebase.firestore.DocumentSnapshot?): FeedPageResult = withContext(Dispatchers.IO) {
+private suspend fun loadMorePostsFromFirebase(
+    currentUserId: String,
+    lastDoc: com.google.firebase.firestore.DocumentSnapshot?,
+    likedPostIds: Set<String>?,
+    feedViewModel: FeedViewModel
+): FeedPageResult = withContext(Dispatchers.IO) {
     if (lastDoc == null) return@withContext FeedPageResult(emptyList(), null)
     val firestore = FirebaseFirestore.getInstance()
     val snapshot = firestore.collection("posts")
@@ -482,39 +511,80 @@ private suspend fun loadMorePostsFromFirebase(currentUserId: String, lastDoc: co
     val posts = coroutineScope {
         snapshot.documents.map { doc ->
             async {
-                val isLiked = if (currentUserId.isBlank()) {
-                    false
-                } else {
-                    firestore.collection("posts")
-                        .document(doc.id)
-                        .collection("likes")
-                        .document(currentUserId)
-                        .get()
-                        .await()
-                        .exists()
-                }
-                PostData(
-                    id = doc.id,
-                    userId = doc.getString("userId") ?: "",
-                    username = doc.getString("username") ?: "usuario",
-                    userProfilePicture = doc.getString("userAvatar")
-                        ?: doc.getString("userProfilePicture")
-                        ?: "",
-                    caption = doc.getString("caption") ?: "",
-                    imageUrl = doc.getString("imageUrl") ?: "",
-                    imageBase64 = doc.getString("imageBase64") ?: "",
-                    videoUrl = doc.getString("videoUrl") ?: "",
-                    thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
-                    isVideo = doc.getBoolean("isVideo") ?: false,
-                    likesCount = (doc.getLong("likesCount") ?: 0).toInt(),
-                    commentsCount = (doc.getLong("commentsCount") ?: 0).toInt(),
-                    timestamp = doc.getLong("timestamp") ?: 0L,
-                    isLiked = isLiked
-                )
+                mapPostDoc(doc, currentUserId, likedPostIds, feedViewModel)
             }
-        }.awaitAll()
+        }.awaitAll().filterNotNull()
     }
     FeedPageResult(posts, newLastDoc)
+}
+
+/**
+ * Mapea un documento de posts a [PostData].
+ *
+ * - Likes: si [likedPostIds] no es null usa el set (0 lecturas extra);
+ *   si es null (falló la consulta collectionGroup) hace la lectura
+ *   individual `likes/{currentUserId}` como antes.
+ * - B2: si el post tiene `storageKey` (imagen en Backblaze), re-firma la
+ *   URL (TTL 7 días) en paralelo; si falla, conserva la guardada.
+ */
+private suspend fun mapPostDoc(
+    doc: com.google.firebase.firestore.DocumentSnapshot,
+    currentUserId: String,
+    likedPostIds: Set<String>?,
+    feedViewModel: FeedViewModel
+): PostData? {
+    val data = doc.data ?: return null
+    val isLiked = when {
+        currentUserId.isBlank() -> false
+        likedPostIds != null -> doc.id in likedPostIds
+        else -> {
+            // Fallback: 1 lectura por post (solo si la query de likes falló)
+            try {
+                FirebaseFirestore.getInstance()
+                    .collection("posts")
+                    .document(doc.id)
+                    .collection("likes")
+                    .document(currentUserId)
+                    .get()
+                    .await()
+                    .exists()
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    val savedImageUrl = data["imageUrl"] as? String ?: ""
+    val storageKey = data["storageKey"] as? String ?: ""
+
+    // URL firmada fresca si el post vive en B2 (expira a los 7 días)
+    val imageUrl = if (storageKey.isNotBlank() && savedImageUrl.isNotBlank()) {
+        try {
+            feedViewModel.refreshSignedUrl(storageKey) ?: savedImageUrl
+        } catch (_: Exception) {
+            savedImageUrl
+        }
+    } else savedImageUrl
+
+    return PostData(
+        id = doc.id,
+        userId = data["userId"] as? String ?: "",
+        username = data["username"] as? String ?: "usuario",
+        userProfilePicture = data["userAvatar"] as? String
+            ?: data["userProfilePicture"] as? String
+            ?: "",
+        caption = data["caption"] as? String ?: "",
+        imageUrl = imageUrl,
+        imageBase64 = data["imageBase64"] as? String ?: "",
+        storageKey = storageKey,
+        videoUrl = data["videoUrl"] as? String ?: "",
+        thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
+        isVideo = data["isVideo"] as? Boolean ?: false,
+        likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
+        commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
+        timestamp = data["timestamp"] as? Long ?: 0L,
+        isLiked = isLiked
+    )
 }
 
 private suspend fun togglePostLike(postId: String, currentUserId: String, shouldLike: Boolean) {
@@ -565,10 +635,20 @@ private fun PostAuthorAvatar(post: PostData) {
 
 // ── PostImage ──
 @Composable
-fun PostImage(imageBase64: String, imageUrl: String, username: String, modifier: Modifier = Modifier, useDefaultHeight: Boolean = true) {
+fun PostImage(
+    imageBase64: String,
+    imageUrl: String,
+    username: String,
+    modifier: Modifier = Modifier,
+    useDefaultHeight: Boolean = true,
+    storageKey: String = "",
+    onUrlExpired: () -> Unit = {}
+) {
     var bmp by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
     var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
+    // Solo avisar de URL expirada una vez por storageKey (evita loops de re-firma)
+    var notifiedExpired by remember(storageKey) { mutableStateOf(false) }
     val urlPainter = rememberAsyncImagePainter(model = imageUrl)
     val urlState = urlPainter.state
 
@@ -583,7 +663,15 @@ fun PostImage(imageBase64: String, imageUrl: String, username: String, modifier:
             when (urlState) {
                 is AsyncImagePainter.State.Loading -> { isLoading = true; hasError = false }
                 is AsyncImagePainter.State.Success -> { isLoading = false; hasError = false }
-                is AsyncImagePainter.State.Error -> { isLoading = false; hasError = true }
+                is AsyncImagePainter.State.Error -> {
+                    isLoading = false
+                    hasError = true
+                    // URL de B2 expirada (403): pedir una re-firma una sola vez
+                    if (storageKey.isNotBlank() && !notifiedExpired) {
+                        notifiedExpired = true
+                        onUrlExpired()
+                    }
+                }
                 else -> {}
             }
         }

@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.local.dao.PostDao
 import com.vivid.app.data.local.entity.PostEntity
+import com.vivid.app.data.storage.StorageProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,48 +17,15 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
+    private val storage: StorageProvider,
     private val postDao: PostDao,
     private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
+    // Caché Room (feature futura de offline). La carga Firestore→Room se
+    // hace bajo demanda; FeedScreen muestra sus propios datos en vivo.
     val posts: StateFlow<List<PostEntity>> = postDao.getAllPosts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    init {
-        loadPostsFromFirestore()
-    }
-
-    private fun loadPostsFromFirestore() {
-        viewModelScope.launch {
-            try {
-                val snapshot = firestore.collection("posts")
-                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                    .limit(20)
-                    .get()
-                    .await()
-
-                val entities = snapshot.documents.mapNotNull { doc ->
-                    val data = doc.data ?: return@mapNotNull null
-                    PostEntity(
-                        id = doc.id,
-                        userId = data["userId"] as? String ?: "",
-                        username = data["username"] as? String ?: "",
-                        userProfilePicture = data["userProfilePicture"] as? String ?: "",
-                        imageUrl = data["imageUrl"] as? String ?: "",
-                        imageBase64 = data["imageBase64"] as? String ?: "",
-                        caption = data["caption"] as? String ?: "",
-                        likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
-                        commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
-                        timestamp = (data["timestamp"] as? Long) ?: System.currentTimeMillis(),
-                        isLiked = false
-                    )
-                }
-                postDao.insertPosts(entities)
-            } catch (_: Exception) {
-                // Offline mode: Room seguirá mostrando el caché actual.
-            }
-        }
-    }
 
     fun likePost(postId: String) {
         viewModelScope.launch {
@@ -77,4 +45,40 @@ class FeedViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Obtiene en UNA sola consulta los IDs de posts que el usuario ya dio
+     * like (collectionGroup "likes"), en vez de 1 lectura por post (N+1).
+     *
+     * @return Set de IDs, o null si la consulta falla (p. ej. índice aún no
+     *         desplegado) para que el feed caiga al modo anterior.
+     */
+    suspend fun fetchLikedPostIds(currentUserId: String): Set<String>? {
+        if (currentUserId.isBlank()) return emptySet()
+        return try {
+            firestore.collectionGroup("likes")
+                .whereEqualTo("userId", currentUserId)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { it.id }
+                .toSet()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Regenera la URL firmada de un archivo en B2 (expira a los 7 días).
+     * Devuelve null si falla para que el llamador conserve la URL guardada.
+     */
+    suspend fun refreshSignedUrl(storageKey: String): String? = try {
+        storage.signDownloadUrl(storageKey)
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Borra best-effort un archivo remoto (al eliminar un post). */
+    suspend fun deleteRemoteFile(storageKey: String): Boolean =
+        runCatching { storage.deleteFile(storageKey) }.getOrDefault(false)
 }

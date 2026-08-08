@@ -59,6 +59,7 @@ data class ProfilePost(
     val id: String,
     val imageUrl: String = "",
     val imageBase64: String = "",
+    val storageKey: String = "",
     val videoUrl: String = "",
     val thumbnailUrl: String = "",
     val isVideo: Boolean = false,
@@ -162,12 +163,26 @@ fun ProfileScreen(
                         ProfilePost(
                             id = doc.id, imageUrl = doc.getString("imageUrl").orEmpty(),
                             imageBase64 = doc.getString("imageBase64").orEmpty(),
+                            storageKey = doc.getString("storageKey").orEmpty(),
                             caption = doc.getString("caption").orEmpty(),
                             timestamp = doc.getLong("timestamp") ?: 0L,
                             username = doc.getString("username").orEmpty()
                         )
                     }
                     publish()
+                    // Re-firmar URLs de B2 expiradas (TTL 7d) — best-effort
+                    snapshot?.documents.orEmpty().forEach { doc ->
+                        val key = doc.getString("storageKey").orEmpty()
+                        if (key.isNotBlank()) {
+                            scope.launch {
+                                viewModel.refreshSignedUrl(key)?.let { freshUrl ->
+                                    posts = posts.map {
+                                        if (it.id == doc.id && it.imageUrl != freshUrl) it.copy(imageUrl = freshUrl) else it
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
             reelsListener = db.collection("reels")
