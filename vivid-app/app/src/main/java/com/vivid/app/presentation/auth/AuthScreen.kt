@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,7 +93,7 @@ class AuthViewModel @Inject constructor(
 
     fun login(email: String, password: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, info = null)
             try {
                 auth.signInWithEmailAndPassword(email.trim(), password).await()
                 ensureUserProfile()
@@ -107,7 +109,7 @@ class AuthViewModel @Inject constructor(
 
     fun register(email: String, password: String, username: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, info = null)
             try {
                 val cleanEmail = email.trim()
                 val cleanUsername = username.trim().ifBlank { cleanEmail.substringBefore("@") }
@@ -118,7 +120,14 @@ class AuthViewModel @Inject constructor(
                         .build()
                 )?.await()
                 ensureUserProfile(cleanUsername)
-                _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
+                runCatching {
+                    result.user?.sendEmailVerification()?.await()
+                }
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isSuccess = true,
+                    info = "Te enviamos un correo de verificación a $cleanEmail."
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -130,12 +139,38 @@ class AuthViewModel @Inject constructor(
 
     fun loginWithGoogle(idToken: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, info = null)
             try {
                 val credential = GoogleAuthProvider.getCredential(idToken, null)
                 auth.signInWithCredential(credential).await()
                 ensureUserProfile()
                 _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.toReadableAuthMessage()
+                )
+            }
+        }
+    }
+
+    fun sendPasswordReset(email: String) {
+        viewModelScope.launch {
+            val cleanEmail = email.trim()
+            if (cleanEmail.isBlank()) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Ingresa tu correo electrónico para restablecer tu contraseña.",
+                    info = null
+                )
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, info = null)
+            try {
+                auth.sendPasswordResetEmail(cleanEmail).await()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    info = "Te enviamos un enlace de recuperación a $cleanEmail. Revisa tu bandeja de entrada o spam."
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -186,16 +221,29 @@ class AuthViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
+
+    fun clearInfo() {
+        _uiState.value = _uiState.value.copy(info = null)
+    }
+
+    fun clearMessages() {
+        _uiState.value = _uiState.value.copy(error = null, info = null)
+    }
 }
 
 data class AuthUiState(
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val info: String? = null
 )
 
 private fun Exception.toReadableAuthMessage(): String {
     return when (this) {
+        is com.google.firebase.auth.FirebaseAuthInvalidUserException -> "No existe ninguna cuenta registrada con este correo."
+        is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> "Correo o contraseña incorrectos."
+        is com.google.firebase.auth.FirebaseAuthUserCollisionException -> "Este correo ya está registrado en otra cuenta."
+        is com.google.firebase.auth.FirebaseAuthWeakPasswordException -> "La contraseña es muy débil (debe tener al menos 6 caracteres)."
         is FirebaseNetworkException -> "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
         else -> message ?: "Ocurrió un error de autenticación."
     }
@@ -222,6 +270,7 @@ fun AuthScreen(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     var isLoginMode by remember { mutableStateOf(true) }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -428,10 +477,74 @@ fun AuthScreen(
                         keyboardActions = KeyboardActions(onDone = { submit() }),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    if (loginMode) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    showForgotPasswordDialog = true
+                                    viewModel.clearMessages()
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "¿Olvidaste tu contraseña?",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Info (correo de verificación o recuperación) ────────────────
+            AnimatedVisibility(visible = uiState.info != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = uiState.info.orEmpty(),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.clearInfo() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Cerrar",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            if (uiState.info != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // ── Error ──────────────────────────────────────────────────────
             AnimatedVisibility(visible = uiState.error != null) {
@@ -570,6 +683,87 @@ fun AuthScreen(
                 )
             }
         }
+    }
+
+    if (showForgotPasswordDialog) {
+        var resetEmail by remember(email) { mutableStateOf(email) }
+        var resetError by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showForgotPasswordDialog = false },
+            title = {
+                Text(
+                    text = "Restablecer contraseña",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Ingresa tu correo electrónico. Te enviaremos un enlace para crear una nueva contraseña.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = resetEmail,
+                        onValueChange = {
+                            resetEmail = it
+                            resetError = null
+                        },
+                        label = { Text("Email") },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Email, contentDescription = null)
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                val cleanEmail = resetEmail.trim()
+                                if (cleanEmail.isBlank()) {
+                                    resetError = "Por favor ingresa un correo válido."
+                                } else {
+                                    showForgotPasswordDialog = false
+                                    viewModel.sendPasswordReset(cleanEmail)
+                                }
+                            }
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (resetError != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = resetError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val cleanEmail = resetEmail.trim()
+                        if (cleanEmail.isBlank()) {
+                            resetError = "Por favor ingresa un correo válido."
+                            return@TextButton
+                        }
+                        showForgotPasswordDialog = false
+                        viewModel.sendPasswordReset(cleanEmail)
+                    }
+                ) {
+                    Text("Enviar enlace")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForgotPasswordDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 

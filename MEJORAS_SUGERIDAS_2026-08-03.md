@@ -6,6 +6,18 @@
 
 ---
 
+## ✅ Implementado (2026-08-08) — Splash screen, Verificación de email y Olvidé mi contraseña
+
+| Archivo | Cambio |
+|---|---|
+| `vivid-app/gradle/libs.versions.toml` + `app/build.gradle.kts` | Agregada la librería `androidx.core:core-splashscreen` (1.0.1) |
+| `res/values/themes.xml` + `AndroidManifest.xml` | Creado `@style/Theme.Vivid.Splash` heredando de `Theme.SplashScreen` con `@color/ic_launcher_background` y `@mipmap/ic_launcher_round`. Asignado al launcher activity en el manifest |
+| `MainActivity.kt` | Llamado `installSplashScreen()` antes de `super.onCreate` para eliminar la pantalla blanca durante el cold start |
+| `presentation/auth/AuthScreen.kt` | • Envío de correo de verificación tras registro (`sendEmailVerification()`).<br>• Agregado botón y diálogo de **"¿Olvidaste tu contraseña?"** en login con llamada a `sendPasswordResetEmail(email)`.<br>• Banner informativo superior (`uiState.info`) para avisar del envío exitoso.<br>• Traducción al español de errores frecuentes de Firebase Auth (`FirebaseAuthInvalidUserException`, etc.) |
+| `.github/workflows/build-apk.yml` | Agregado `working-directory: vivid-app` a los pasos de Gradle y corregidas rutas de artefactos para compilación exitosa en GitHub Actions |
+
+---
+
 ## ✅ Implementado (2026-08-03) — Sistema de mensajes completo
 
 El sistema de mensajes fue renovado y ahora soporta **imágenes por Backblaze B2**
