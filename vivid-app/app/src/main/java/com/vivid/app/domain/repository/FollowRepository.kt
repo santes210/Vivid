@@ -1,6 +1,7 @@
 package com.vivid.app.domain.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.data.storage.StorageProvider
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -494,7 +495,7 @@ class FollowRepository @Inject constructor(
             for (doc in postsSnapshot.documents) {
                 val storageKey = doc.getString("storageKey")
                 if (!storageKey.isNullOrBlank()) {
-                    runCatching { storage.deleteFile(storageKey) }
+                    try { storage.deleteFile(storageKey) } catch (_: Exception) {}
                 }
                 // También borrar de Firestore
                 doc.reference.delete().await()
