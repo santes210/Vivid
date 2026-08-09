@@ -52,6 +52,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.util.formatVoiceDuration
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,6 +77,7 @@ fun ChatScreen(
     val context = LocalContext.current
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val clipboardManager = LocalClipboardManager.current
+    val animationsEnabled = LocalVividAnimationsEnabled.current
     val messages: List<Message> = viewModel.messages.collectAsState(initial = emptyList()).value
     val canMessage: Boolean = viewModel.canMessage.collectAsState(initial = true).value
     val isOtherTyping: Boolean = viewModel.isOtherTyping.collectAsState().value
@@ -110,10 +112,21 @@ fun ChatScreen(
         viewModel.openChat(chatId, receiverId, otherUserName)
     }
 
-    LaunchedEffect(messages.size, imageUploads.size, voiceUploads.size, isOtherTyping) {
+    LaunchedEffect(
+        messages.size,
+        imageUploads.size,
+        voiceUploads.size,
+        isOtherTyping,
+        animationsEnabled
+    ) {
         if (messages.isNotEmpty() || isOtherTyping) {
-            // stay at bottom
-            try { listState.animateScrollToItem(0) } catch (_: Exception) {}
+            // Mantener el chat abajo; sin movimiento, saltar directamente al último mensaje.
+            try {
+                if (animationsEnabled) listState.animateScrollToItem(0)
+                else listState.scrollToItem(0)
+            } catch (_: Exception) {
+                // La lista puede cambiar mientras se ejecuta el desplazamiento.
+            }
         }
     }
 
@@ -400,8 +413,8 @@ fun ChatScreen(
 
             AnimatedVisibility(
                 visible = activeReactionMessageId != null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
+                enter = if (animationsEnabled) fadeIn() + scaleIn() else EnterTransition.None,
+                exit = if (animationsEnabled) fadeOut() + scaleOut() else ExitTransition.None,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp)
             ) {
                 Card(
@@ -495,8 +508,29 @@ private fun RecordingBar(durationMs: Long, onCancel: () -> Unit, onSend: () -> U
 
 @Composable
 private fun RecordingWaveform(modifier: Modifier = Modifier) {
-    val infinite = rememberInfiniteTransition(label = "wave")
+    val animationsEnabled = LocalVividAnimationsEnabled.current
     val bars = 18
+
+    if (!animationsEnabled) {
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(bars) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+                )
+            }
+        }
+        return
+    }
+
+    val infinite = rememberInfiniteTransition(label = "wave")
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
         repeat(bars) { i ->
             val anim by infinite.animateFloat(initialValue = 0.3f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(420 + i * 35, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "bar$i")
@@ -507,6 +541,22 @@ private fun RecordingWaveform(modifier: Modifier = Modifier) {
 
 @Composable
 private fun TypingIndicatorBubble() {
+    val animationsEnabled = LocalVividAnimationsEnabled.current
+    if (!animationsEnabled) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
+            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), tonalElevation = 1.dp, shadowElevation = 0.5.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    repeat(3) {
+                        Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)))
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text("escribiendo…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        return
+    }
+
     val infinite = rememberInfiniteTransition(label = "typing")
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
         Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), tonalElevation = 1.dp, shadowElevation = 0.5.dp, modifier = Modifier.widthIn(max = 120.dp)) {

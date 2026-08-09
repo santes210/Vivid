@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -75,6 +77,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -269,6 +272,7 @@ fun AuthScreen(
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val animationsEnabled = LocalVividAnimationsEnabled.current
     var isLoginMode by remember { mutableStateOf(true) }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
@@ -379,8 +383,12 @@ fun AuthScreen(
             AnimatedContent(
                 targetState = isLoginMode,
                 transitionSpec = {
-                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 10 }) togetherWith
-                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 10 })
+                    if (animationsEnabled) {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 10 }) togetherWith
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 10 })
+                    } else {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    }
                 },
                 label = "authMode"
             ) { loginMode ->
@@ -505,7 +513,11 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ── Info (correo de verificación o recuperación) ────────────────
-            AnimatedVisibility(visible = uiState.info != null) {
+            AnimatedVisibility(
+                visible = uiState.info != null,
+                enter = if (animationsEnabled) fadeIn(tween(180)) else EnterTransition.None,
+                exit = if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
@@ -547,7 +559,11 @@ fun AuthScreen(
             }
 
             // ── Error ──────────────────────────────────────────────────────
-            AnimatedVisibility(visible = uiState.error != null) {
+            AnimatedVisibility(
+                visible = uiState.error != null,
+                enter = if (animationsEnabled) fadeIn(tween(180)) else EnterTransition.None,
+                exit = if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,

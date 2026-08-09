@@ -22,6 +22,33 @@ hilt {
 // StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
 val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
 
+// En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
+// Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
+val configuredVersionCode = providers.gradleProperty("vividVersionCode")
+    .orElse(providers.environmentVariable("VIVID_VERSION_CODE"))
+    .orElse(providers.environmentVariable("GITHUB_RUN_NUMBER"))
+    .orNull
+val vividVersionCode = configuredVersionCode?.let { rawValue ->
+    rawValue.toIntOrNull()
+        ?.takeIf { it in 1..2_100_000_000 }
+        ?: error("vividVersionCode debe ser un entero entre 1 y 2100000000 (recibido: '$rawValue')")
+} ?: 2
+logger.lifecycle("Vivid versionCode: $vividVersionCode")
+
+// La firma de release se inyecta desde GitHub Actions o desde variables locales.
+// Si no están presentes, Gradle aún puede compilar un release sin firmar; el workflow de
+// release valida las cuatro credenciales antes de empezar para no publicar un APK inválido.
+val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.vivid.app"
     compileSdk = 35
@@ -30,7 +57,7 @@ android {
         applicationId = "com.vivid.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
+        versionCode = vividVersionCode
         versionName = "2.2.0-7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -40,12 +67,24 @@ android {
         buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = requireNotNull(releaseKeystorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

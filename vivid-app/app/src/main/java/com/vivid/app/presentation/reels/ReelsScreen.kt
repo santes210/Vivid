@@ -2,6 +2,8 @@ package com.vivid.app.presentation.reels
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -39,6 +41,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -218,6 +221,7 @@ private fun ReelPage(
 ) {
     val context = LocalContext.current
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val animationsEnabled = LocalVividAnimationsEnabled.current
     val firestore = remember { FirebaseFirestore.getInstance() }
     val scope = rememberCoroutineScope()
     val followRepository = remember { FollowRepository(firestore, FirebaseAuth.getInstance()) }
@@ -364,8 +368,8 @@ private fun ReelPage(
 
         AnimatedVisibility(
             visible = showHeartAnimation,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
+            exit = if (animationsEnabled) fadeOut() else ExitTransition.None,
             modifier = Modifier.align(Alignment.Center)
         ) {
             Icon(
@@ -378,8 +382,8 @@ private fun ReelPage(
 
         AnimatedVisibility(
             visible = isPausedByUser,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
+            exit = if (animationsEnabled) fadeOut() else ExitTransition.None,
             modifier = Modifier.align(Alignment.Center)
         ) {
             Surface(
