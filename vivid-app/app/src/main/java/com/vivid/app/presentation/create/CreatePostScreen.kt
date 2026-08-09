@@ -58,6 +58,11 @@ fun CreatePostScreen(
     var selectedMusicUri by remember { mutableStateOf<Uri?>(null) }
     var showMusicSheet by remember { mutableStateOf(false) }
 
+    // Trim de audio del dispositivo a 15s
+    var pendingTrimUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingTrimTrack by remember { mutableStateOf<MusicTrack?>(null) }
+    var showTrimSheet by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val capturedPhotoPathState = currentBackStackEntry
@@ -494,11 +499,57 @@ fun CreatePostScreen(
             originalVolume = 0f,
             onDismiss = { showMusicSheet = false },
             onSelected = { track, uri ->
-                selectedTrack = track
-                selectedMusicUri = uri
+                // Si es audio del dispositivo (uri != null), ofrecer recorte a 15s
+                if (uri != null && track.artist == "Tu dispositivo") {
+                    pendingTrimTrack = track
+                    pendingTrimUri = uri
+                    showTrimSheet = true
+                    showMusicSheet = false
+                } else {
+                    // Asset del APK: usar directo (ya es corto, pero también se puede recortar si el usuario quiere)
+                    // Para assets largos, también permitir recorte
+                    if (uri != null) {
+                        // uri de dispositivo ya con posible recorte previo, o asset copiado
+                        pendingTrimTrack = track
+                        pendingTrimUri = uri
+                        showTrimSheet = true
+                        showMusicSheet = false
+                    } else {
+                        // Asset sin uri: track.assetFile != null, se usará directo sin recorte (o recorte posterior si quiere)
+                        selectedTrack = track
+                        selectedMusicUri = null
+                        showMusicSheet = false
+                    }
+                }
             },
             onRemove = { selectedTrack = null; selectedMusicUri = null },
             onVolumeChange = { _, _ -> }
+        )
+    }
+
+    if (showTrimSheet && pendingTrimUri != null) {
+        AudioTrimBottomSheet(
+            audioUri = pendingTrimUri!!,
+            originalName = pendingTrimTrack?.title ?: "Audio",
+            onDismiss = {
+                showTrimSheet = false
+                // Si cancela el trim, usar el original sin recortar
+                selectedTrack = pendingTrimTrack
+                selectedMusicUri = pendingTrimUri
+                pendingTrimUri = null
+                pendingTrimTrack = null
+            },
+            onTrimConfirmed = { trimmedUri, startMs, endMs ->
+                // Guardar el recorte de 15s
+                selectedTrack = pendingTrimTrack?.copy(
+                    title = "${pendingTrimTrack?.title ?: "Audio"} (${(endMs - startMs)/1000}s recorte)",
+                    durationLabel = "${(endMs - startMs)/1000}s"
+                ) ?: pendingTrimTrack
+                selectedMusicUri = trimmedUri
+                showTrimSheet = false
+                pendingTrimUri = null
+                pendingTrimTrack = null
+            }
         )
     }
 }

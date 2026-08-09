@@ -63,6 +63,11 @@ fun CreateStoryScreen(
     var audioFileName by remember { mutableStateOf<String?>(null) }
     var showMusicSheet by remember { mutableStateOf(false) }
 
+    // Trim de audio a 15s (nuevo)
+    var pendingTrimUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingTrimTrack by remember { mutableStateOf<MusicTrack?>(null) }
+    var showTrimSheet by remember { mutableStateOf(false) }
+
     val backStackEntry = navController.currentBackStackEntry
     val recordedFlow = backStackEntry?.savedStateHandle?.getStateFlow("recordedVideo", "")
     val recordedPathState = recordedFlow?.collectAsState(initial = "")
@@ -503,12 +508,68 @@ fun CreateStoryScreen(
             originalVolume = 0.3f,
             onDismiss = { showMusicSheet = false },
             onSelected = { track, uri ->
-                selectedTrack = track
-                selectedAudioUri = uri
-                audioFileName = track.title
+                // Si el usuario eligió audio del dispositivo (uri != null) → ofrecer recorte a 15s
+                if (uri != null) {
+                    pendingTrimTrack = track
+                    pendingTrimUri = uri
+                    showTrimSheet = true
+                    showMusicSheet = false
+                } else if (track.assetFile != null) {
+                    // Asset del APK: copiar a cache y ofrecer recorte también (por si quiere recortar)
+                    try {
+                        val assetPath = track.assetFile
+                        val input = context.assets.open(assetPath)
+                        val tempFile = java.io.File(context.cacheDir, "story_asset_${System.currentTimeMillis()}_${assetPath.substringAfterLast("/")}")
+                        tempFile.outputStream().use { out -> input.copyTo(out) }
+                        input.close()
+                        val assetUri = Uri.fromFile(tempFile)
+                        pendingTrimTrack = track
+                        pendingTrimUri = assetUri
+                        showTrimSheet = true
+                        showMusicSheet = false
+                    } catch (_: Exception) {
+                        // Si falla el copy, usar directo sin recorte
+                        selectedTrack = track
+                        selectedAudioUri = uri
+                        audioFileName = track.title
+                        showMusicSheet = false
+                    }
+                } else {
+                    selectedTrack = track
+                    selectedAudioUri = uri
+                    audioFileName = track.title
+                    showMusicSheet = false
+                }
             },
             onRemove = { selectedTrack = null; selectedAudioUri = null; audioFileName = null },
             onVolumeChange = { _, _ -> }
+        )
+    }
+
+    if (showTrimSheet && pendingTrimUri != null) {
+        com.vivid.app.presentation.create.AudioTrimBottomSheet(
+            audioUri = pendingTrimUri!!,
+            originalName = pendingTrimTrack?.title ?: "Audio",
+            onDismiss = {
+                // Si cancela recorte, usar original sin recortar
+                showTrimSheet = false
+                selectedTrack = pendingTrimTrack
+                selectedAudioUri = pendingTrimUri
+                audioFileName = pendingTrimTrack?.title
+                pendingTrimUri = null
+                pendingTrimTrack = null
+            },
+            onTrimConfirmed = { trimmedUri, startMs, endMs ->
+                selectedTrack = pendingTrimTrack?.copy(
+                    title = "${pendingTrimTrack?.title} (${(endMs - startMs)/1000}s recorte)",
+                    durationLabel = "${(endMs - startMs)/1000}s"
+                ) ?: pendingTrimTrack
+                selectedAudioUri = trimmedUri
+                audioFileName = "${pendingTrimTrack?.title} recortado ${startMs/1000}-${endMs/1000}s"
+                showTrimSheet = false
+                pendingTrimUri = null
+                pendingTrimTrack = null
+            }
         )
     }
 }
