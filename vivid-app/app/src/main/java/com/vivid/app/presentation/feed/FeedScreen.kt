@@ -53,6 +53,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -764,14 +765,12 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
         }
     }
 
-    // Resolver URI final de música
+    // Resolver URI final de música - FIX: usar variable local para evitar smart cast en delegated property
     val musicUriString = remember(post, resolvedAssetFile) {
+        val raf = resolvedAssetFile
         when {
             post.musicUrl.isNotBlank() -> post.musicUrl
-            resolvedAssetFile != null && resolvedAssetFile!!.exists() -> resolvedAssetFile!!.absolutePath.let { path ->
-                // Usar file:// Uri para ExoPlayer
-                "file://$path"
-            }
+            raf != null && raf.exists() -> "file://${raf.absolutePath}"
             post.musicAssetFile.isNotBlank() -> "asset:///${post.musicAssetFile}"
             else -> null
         }
@@ -779,10 +778,12 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
 
     // Manejar preview con ExoPlayer, con listener de error para debug
     DisposableEffect(musicUriString, isPlaying) {
-        if (isPlaying && musicUriString != null) {
+        val shouldPlay = isPlaying
+        val uri = musicUriString
+        if (shouldPlay && uri != null) {
             try {
                 val p = ExoPlayer.Builder(context).build().apply {
-                    setMediaItem(MediaItem.fromUri(musicUriString))
+                    setMediaItem(MediaItem.fromUri(uri))
                     prepare()
                     playWhenReady = true
                     volume = 1.0f
