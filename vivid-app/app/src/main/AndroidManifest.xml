@@ -17,6 +17,30 @@
     <!-- Shizuku (opcional) — permite al usuario otorgar permisos avanzados -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!--
+        Package visibility (Android 11 / API 30+).
+        Sin esto, resolveActivity() devuelve null para enlaces web y correos,
+        incluso cuando hay un navegador o app de correo instalada.
+    -->
+    <queries>
+        <!-- Navegadores web (http/https) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+        <!-- Apps de correo -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
+
     <application
         android:name=".VividApplication"
         android:allowBackup="true"

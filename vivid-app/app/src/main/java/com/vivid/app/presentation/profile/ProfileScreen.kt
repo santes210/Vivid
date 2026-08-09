@@ -329,12 +329,18 @@ fun ProfileScreen(
                                     text = { Text("Reportar usuario", color = MaterialTheme.colorScheme.error) },
                                     onClick = {
                                         showProfileMenu = false
-                                        ReportHelper.sendUserReport(
+                                        val opened = ReportHelper.sendUserReport(
                                             context = context,
                                             userId = userId,
                                             username = profile.username,
                                             reason = "Contenido o comportamiento inapropiado"
                                         )
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (opened) "Redactando reporte en tu correo."
+                                                else "No se encontró una app de correo instalada."
+                                            )
+                                        }
                                     },
                                     leadingIcon = { Icon(Icons.Default.Block, null, tint = MaterialTheme.colorScheme.error) }
                                 )
