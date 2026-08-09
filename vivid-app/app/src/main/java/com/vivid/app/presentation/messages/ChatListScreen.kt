@@ -184,7 +184,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold)
                         )
                         Text(
-                            "Tus conversaciones en tiempo real",
+                            "Mensajes en tiempo real",
                             style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.primary)
                         )
                     }
@@ -206,7 +206,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar conversación o amigo...") },
+                placeholder = { Text("Buscar conversación....") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -292,7 +292,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                     ) {
                         if (searchQuery.isNotBlank()) {
                             Text(
-                                "No se encontraron resultados para '$searchQuery'",
+                                "No se encontraron usuarios como '$searchQuery'",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -344,10 +344,10 @@ private fun EmptyMessagesState() {
             }
         }
         Spacer(modifier = Modifier.height(20.dp))
-        Text("¡Chatea con tu comunidad!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("¡Chatea con tus amigos!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Visita perfiles de creadores o amigos, toca 'Mensaje' e inicia una plática vibrante.",
+            "Visita perfiles de creadores o amigos, toca 'Mensaje' e inicia una conversación.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
