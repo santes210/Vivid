@@ -66,7 +66,13 @@ data class PostData(
     val isVideo: Boolean = false, val caption: String,
     val likesCount: Int = 0, val commentsCount: Int = 0,
     val timestamp: Long, val isLiked: Boolean = false,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    // Música opcional (nuevo)
+    val musicTitle: String = "",
+    val musicArtist: String = "",
+    val musicAssetFile: String = "",
+    val musicUrl: String = "",
+    val musicStorageKey: String = ""
 )
 
 data class PostComment(
@@ -184,7 +190,12 @@ fun FeedScreen(
                                 likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
                                 commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
                                 timestamp = data["timestamp"] as? Long ?: 0L,
-                                isLiked = isLiked
+                                isLiked = isLiked,
+                                musicTitle = data["musicTitle"] as? String ?: "",
+                                musicArtist = data["musicArtist"] as? String ?: "",
+                                musicAssetFile = data["musicAssetFile"] as? String ?: "",
+                                musicUrl = data["musicUrl"] as? String ?: "",
+                                musicStorageKey = data["musicStorageKey"] as? String ?: ""
                             )
                         } catch (_: Exception) { null }
                     }
@@ -592,6 +603,11 @@ private fun PostCard(
                 }
             }
 
+            // ── Música opcional (Material You 3) ──
+            if (post.musicTitle.isNotBlank() || post.musicUrl.isNotBlank() || post.musicAssetFile.isNotBlank()) {
+                PostMusicChip(post = post)
+            }
+
             // ── Acciones ──
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onToggleLike) {
@@ -697,6 +713,109 @@ private fun InlineFollowButton(
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
             )
+        }
+    }
+}
+
+@Composable
+private fun PostMusicChip(post: PostData) {
+    val context = LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+
+    // Resolver URI de música: URL firmada B2 o asset interno
+    val musicUriString = remember(post) {
+        when {
+            post.musicUrl.isNotBlank() -> post.musicUrl
+            post.musicAssetFile.isNotBlank() -> "asset:///${post.musicAssetFile}"
+            else -> null
+        }
+    }
+
+    DisposableEffect(musicUriString, isPlaying) {
+        if (isPlaying && musicUriString != null) {
+            val p = ExoPlayer.Builder(context).build().apply {
+                setMediaItem(MediaItem.fromUri(musicUriString))
+                prepare()
+                playWhenReady = true
+                volume = 0.8f
+            }
+            player = p
+        } else {
+            player?.release()
+            player = null
+        }
+        onDispose {
+            player?.release()
+            player = null
+        }
+    }
+
+    val hasMusic = post.musicTitle.isNotBlank() || post.musicAssetFile.isNotBlank() || post.musicUrl.isNotBlank()
+
+    if (!hasMusic) return
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = post.musicTitle.ifBlank { "Música" },
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (post.musicArtist.isNotBlank()) {
+                    Text(
+                        text = post.musicArtist,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        maxLines = 1
+                    )
+                }
+            }
+            if (musicUriString != null) {
+                FilledTonalIconButton(
+                    onClick = { isPlaying = !isPlaying },
+                    modifier = Modifier.size(36.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        contentColor = if (isPlaying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -824,7 +943,12 @@ private suspend fun mapPostDoc(
         likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
         commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
         timestamp = data["timestamp"] as? Long ?: 0L,
-        isLiked = isLiked
+        isLiked = isLiked,
+        musicTitle = data["musicTitle"] as? String ?: "",
+        musicArtist = data["musicArtist"] as? String ?: "",
+        musicAssetFile = data["musicAssetFile"] as? String ?: "",
+        musicUrl = data["musicUrl"] as? String ?: "",
+        musicStorageKey = data["musicStorageKey"] as? String ?: ""
     )
 }
 

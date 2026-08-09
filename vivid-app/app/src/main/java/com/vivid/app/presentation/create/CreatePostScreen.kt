@@ -3,8 +3,11 @@ package com.vivid.app.presentation.create
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,8 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -27,13 +32,14 @@ private enum class CreateContentType {
 }
 
 /**
- * CreatePostScreen v2 — punto de entrada único para crear contenido.
+ * CreatePostScreen v3 — Material You 3 + Música
  *
- * Opciones:
- *   - POST: foto con caption
- *   - STORY: foto o video, expira a 24h
- *   - REEL: video para el feed, con trim/watermark opcional
+ * - Posts ahora pueden llevar música: del dispositivo o de la librería del APK (assets/music)
+ * - Diseño Material You 3 completo con colores temáticos por defecto (primaryContainer, secondaryContainer)
+ * - Preview grande con Card redondeada
+ * - Selector de música estilo Reel
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePostScreen(
     navController: NavController,
@@ -46,6 +52,12 @@ fun CreatePostScreen(
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Música
+    var selectedTrack by remember { mutableStateOf<MusicTrack?>(null) }
+    var selectedMusicUri by remember { mutableStateOf<Uri?>(null) }
+    var showMusicSheet by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val capturedPhotoPathState = currentBackStackEntry
@@ -54,17 +66,14 @@ fun CreatePostScreen(
         ?.collectAsState()
     val capturedPhotoPath = capturedPhotoPathState?.value.orEmpty()
 
-    // Estado del ViewModel → estado local de la UI
     val publishState by viewModel.state.collectAsState()
     LaunchedEffect(publishState) {
         when (publishState) {
             is CreatePostUiState.Idle -> { isUploading = false; errorMessage = null }
-            is CreatePostUiState.Compressing -> { isUploading = true; uploadProgress = "Comprimiendo..." }
-            is CreatePostUiState.Uploading -> {
-                isUploading = true
-                uploadProgress = "Subiendo a la nube (${(publishState as CreatePostUiState.Uploading).percent}%)"
-            }
-            is CreatePostUiState.SavingMetadata -> { isUploading = true; uploadProgress = "Guardando..." }
+            is CreatePostUiState.Compressing -> { isUploading = true; uploadProgress = "Comprimiendo… ${(publishState as CreatePostUiState.Compressing).percent}%" }
+            is CreatePostUiState.Uploading -> { isUploading = true; uploadProgress = "Subiendo imagen… ${(publishState as CreatePostUiState.Uploading).percent}%" }
+            is CreatePostUiState.UploadingAudio -> { isUploading = true; uploadProgress = "Subiendo audio… ${(publishState as CreatePostUiState.UploadingAudio).percent}%" }
+            is CreatePostUiState.SavingMetadata -> { isUploading = true; uploadProgress = "Guardando…" }
             is CreatePostUiState.Success -> {
                 isUploading = false
                 uploadProgress = "¡Publicado!"
@@ -94,227 +103,402 @@ fun CreatePostScreen(
         errorMessage = null
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                when (selectedContentType) {
-                    CreateContentType.POST -> "Crear publicación"
-                    CreateContentType.STORY -> "Crear story"
-                    CreateContentType.REEL -> "Crear Reel"
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        when (selectedContentType) {
+                            CreateContentType.POST -> "Crear publicación"
+                            CreateContentType.STORY -> "Crear story"
+                            CreateContentType.REEL -> "Crear Reel"
+                        },
+                        fontWeight = FontWeight.Bold
+                    )
                 },
-                style = MaterialTheme.typography.headlineSmall
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
+                )
             )
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(Icons.Default.Close, contentDescription = "Cerrar")
-            }
-        }
-
-        // Selector de tipo (3 chips)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            FilterChip(
-                selected = selectedContentType == CreateContentType.POST,
-                onClick = { selectedContentType = CreateContentType.POST },
-                label = { Text("Publicación") },
-                leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
-                modifier = Modifier.weight(1f)
-            )
-            FilterChip(
-                selected = selectedContentType == CreateContentType.STORY,
-                onClick = { selectedContentType = CreateContentType.STORY },
-                label = { Text("Story") },
-                leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                modifier = Modifier.weight(1f)
-            )
-            FilterChip(
-                selected = selectedContentType == CreateContentType.REEL,
-                onClick = { selectedContentType = CreateContentType.REEL },
-                label = { Text("Reel") },
-                leadingIcon = { Icon(Icons.Default.MovieCreation, contentDescription = null) },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Si eligió Reel, redirigir a CreateReelScreen
-        if (selectedContentType == CreateContentType.REEL) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Selector de tipo (Material You 3 FilterChips con colores temáticos)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    Icons.Default.MovieCreation,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(80.dp)
+                FilterChip(
+                    selected = selectedContentType == CreateContentType.POST,
+                    onClick = { selectedContentType = CreateContentType.POST },
+                    label = { Text("Publicación", fontWeight = if (selectedContentType == CreateContentType.POST) FontWeight.Bold else FontWeight.Normal) },
+                    leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 )
+                FilterChip(
+                    selected = selectedContentType == CreateContentType.STORY,
+                    onClick = { selectedContentType = CreateContentType.STORY },
+                    label = { Text("Story") },
+                    leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+                FilterChip(
+                    selected = selectedContentType == CreateContentType.REEL,
+                    onClick = { selectedContentType = CreateContentType.REEL },
+                    label = { Text("Reel") },
+                    leadingIcon = { Icon(Icons.Default.MovieCreation, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Si eligió Reel, redirigir
+            if (selectedContentType == CreateContentType.REEL) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(80.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    Icons.Default.MovieCreation,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text("Crear Reel con video", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Elige o graba → ajusta el trim → agrega música del dispositivo o de la librería del APK → watermark → publica",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            onClick = { navController.navigate("create_reel") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ir a crear Reel")
+                        }
+                    }
+                }
+                return@Column
+            }
+
+            if (selectedContentType == CreateContentType.STORY) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Stories", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Las stories duran 24h, se recortan a 15s automáticamente y ahora soportan música del dispositivo y de la APK.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        FilledTonalButton(
+                            onClick = { navController.navigate("create_story") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Ir a crear Story")
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
-                Text(
-                    "Para crear un Reel con video:",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    "Elige o graba → ajusta el trim → agrega watermark → publica",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = { navController.navigate("create_reel") },
+            }
+
+            // Preview grande con Material You 3 Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            ) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(380.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Ir a crear Reel")
+                    if (selectedImageUri != null) {
+                        AsyncImage(
+                            model = selectedImageUri,
+                            contentDescription = "Imagen seleccionada",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(100.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        Icons.Default.AddPhotoAlternate,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "Selecciona o toma una foto",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Luego podrás añadir música",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
                 }
             }
-            return@Column
-        }
 
-        if (selectedContentType == CreateContentType.STORY) {
+            Spacer(Modifier.height(16.dp))
+
+            // Botones Galería / Cámara — Material You 3
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedButton(
-                    onClick = { navController.navigate("create_story") },
-                    modifier = Modifier.weight(1f)
+                FilledTonalButton(
+                    onClick = { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Foto / Video")
+                    Spacer(Modifier.width(8.dp))
+                    Text("Galería")
+                }
+                Button(
+                    onClick = { navController.navigate("camera") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Cámara")
                 }
             }
-            Text(
-                "Las stories duran 24 horas y respetan tu privacidad.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(20.dp))
 
-        // Image preview o botones (solo para POST)
-        if (selectedImageUri != null) {
-            AsyncImage(
-                model = selectedImageUri,
-                contentDescription = "Imagen seleccionada",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            // ── Selector de música (Material You 3) ──
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ),
+                border = if (selectedTrack != null) androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                ) else null
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    "Selecciona o toma una foto",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (selectedTrack != null) selectedTrack!!.title else "Agregar música",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (selectedTrack != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}" else "Del dispositivo o de la librería del APK",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                    if (selectedTrack != null) {
+                        IconButton(onClick = { selectedTrack = null; selectedMusicUri = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Quitar música")
+                        }
+                    }
+                    FilledTonalButton(
+                        onClick = { showMusicSheet = true },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (selectedTrack != null) "Cambiar" else "Elegir")
+                    }
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = { imagePickerLauncher.launch("image/*") },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Galería")
-            }
+            // Caption con Material You 3
+            OutlinedTextField(
+                value = caption,
+                onValueChange = { caption = it },
+                label = { Text("Caption") },
+                placeholder = { Text("Escribe algo bonito… #vivid") },
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 4,
+                shape = RoundedCornerShape(20.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                )
+            )
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.height(20.dp))
 
+            // Botón Publicar — Material You 3 con progreso
             Button(
                 onClick = {
-                    navController.navigate("camera")
+                    if (selectedContentType == CreateContentType.POST && selectedImageUri != null) {
+                        isUploading = true
+                        errorMessage = null
+                        uploadProgress = "Comprimiendo..."
+                        viewModel.publishPost(
+                            context = context,
+                            imageUri = selectedImageUri!!,
+                            caption = caption,
+                            musicTrack = selectedTrack,
+                            musicUri = selectedMusicUri
+                        )
+                    }
                 },
-                modifier = Modifier.weight(1f)
+                enabled = !isUploading && selectedImageUri != null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Cámara")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        OutlinedTextField(
-            value = caption,
-            onValueChange = { caption = it },
-            label = { Text("Caption") },
-            modifier = Modifier.fillMaxWidth(),
-            maxLines = 4
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Button(
-            onClick = {
-                if (selectedContentType == CreateContentType.POST && selectedImageUri != null) {
-                    isUploading = true
-                    errorMessage = null
-                    uploadProgress = "Comprimiendo..."
-                    viewModel.publishPost(context, selectedImageUri!!, caption)
+                if (isUploading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(uploadProgress, fontWeight = FontWeight.SemiBold)
+                } else {
+                    Icon(Icons.Default.Send, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Publicar", fontWeight = FontWeight.Bold)
                 }
-            },
-            enabled = !isUploading && selectedImageUri != null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-        ) {
-            if (isUploading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(uploadProgress)
-            } else {
-                Icon(Icons.Default.Send, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Publicar")
             }
-        }
 
-        errorMessage?.let { msg ->
-            Spacer(Modifier.height(12.dp))
-            Text(msg, color = MaterialTheme.colorScheme.error)
+            errorMessage?.let { msg ->
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                        Spacer(Modifier.width(8.dp))
+                        Text(msg, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (showMusicSheet) {
+        MusicSelectorBottomSheet(
+            selected = selectedTrack,
+            selectedUri = selectedMusicUri,
+            musicVolume = 1f,
+            originalVolume = 0f,
+            onDismiss = { showMusicSheet = false },
+            onSelected = { track, uri ->
+                selectedTrack = track
+                selectedMusicUri = uri
+            },
+            onRemove = { selectedTrack = null; selectedMusicUri = null },
+            onVolumeChange = { _, _ -> }
+        )
     }
 }

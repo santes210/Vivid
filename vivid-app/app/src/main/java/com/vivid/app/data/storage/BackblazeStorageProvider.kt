@@ -311,7 +311,13 @@ class BackblazeStorageProvider(
         key.endsWith(".png", true) -> "image/png"
         key.endsWith(".gif", true) -> "image/gif"
         key.endsWith(".webp", true) -> "image/webp"
-        else -> "video/mp4"
+        key.endsWith(".mp3", true) -> "audio/mpeg"
+        key.endsWith(".m4a", true) -> "audio/mp4"
+        key.endsWith(".aac", true) -> "audio/aac"
+        key.endsWith(".wav", true) -> "audio/wav"
+        key.endsWith(".ogg", true) -> "audio/ogg"
+        key.endsWith(".mp4", true) -> "video/mp4"
+        else -> "application/octet-stream"
     }
 
     private fun sha1Hex(file: File): String {
