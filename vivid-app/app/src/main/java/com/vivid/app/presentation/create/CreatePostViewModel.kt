@@ -112,7 +112,8 @@ private fun extractHashtags(text: String): List<String> {
                         }
                         if (audioTempFile.exists() && audioTempFile.length() > 0) {
                             val ts = System.currentTimeMillis()
-                            musicStorageKey = "posts/${user.uid}/${ts}_audio.mp3"
+                            // FIX: usar .m4a para que el Content-Type sea audio/mp4 y ExoPlayer lo reproduzca bien
+                            musicStorageKey = "posts/${user.uid}/${ts}_audio.m4a"
                             musicUrl = storage.uploadFile(audioTempFile.absolutePath, musicStorageKey) { pct ->
                                 _state.value = CreatePostUiState.UploadingAudio(pct)
                             }

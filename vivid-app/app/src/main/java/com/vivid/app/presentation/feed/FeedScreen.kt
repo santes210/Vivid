@@ -398,6 +398,18 @@ fun FeedScreen(
                                     }
                                 }
                             },
+                            onMusicUrlExpired = {
+                                val mKey = post.musicStorageKey
+                                if (mKey.isNotBlank()) {
+                                    scope.launch {
+                                        feedViewModel.refreshSignedUrl(mKey)?.let { freshUrl ->
+                                            posts = posts.map {
+                                                if (it.id == post.id) it.copy(musicUrl = freshUrl) else it
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             onShare = {
                                 // Deep link de Material You 3: enlace vívido que abre la app
                                 val deepLink = "vivid://post/${post.id}"
@@ -538,7 +550,8 @@ private fun PostCard(
     onToggleLike: () -> Unit,
     onShare: () -> Unit,
     onReportPost: (String, String, String) -> Unit = { _, _, _ -> },
-    onImageUrlExpired: () -> Unit = {}
+    onImageUrlExpired: () -> Unit = {},
+    onMusicUrlExpired: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -605,7 +618,7 @@ private fun PostCard(
 
             // ── Música opcional (Material You 3) ──
             if (post.musicTitle.isNotBlank() || post.musicUrl.isNotBlank() || post.musicAssetFile.isNotBlank()) {
-                PostMusicChip(post = post)
+                PostMusicChip(post = post, onMusicUrlExpired = onMusicUrlExpired)
             }
 
             // ── Acciones ──
@@ -718,29 +731,85 @@ private fun InlineFollowButton(
 }
 
 @Composable
-private fun PostMusicChip(post: PostData) {
+private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    var resolvedAssetFile by remember(post.musicAssetFile) { mutableStateOf<File?>(null) }
+    var isPreparingAsset by remember { mutableStateOf(false) }
 
-    // Resolver URI de música: URL firmada B2 o asset interno
-    val musicUriString = remember(post) {
+    // Para assets del APK: copiar a cache para reproducción más fiable que asset://
+    LaunchedEffect(post.musicAssetFile) {
+        if (post.musicAssetFile.isNotBlank() && post.musicUrl.isBlank()) {
+            isPreparingAsset = true
+            resolvedAssetFile = withContext(Dispatchers.IO) {
+                try {
+                    val assetPath = post.musicAssetFile
+                    val input = context.assets.open(assetPath)
+                    val tempFile = File(context.cacheDir, "post_music_asset_${post.id}_${assetPath.substringAfterLast("/")}")
+                    // Si ya existe y tiene tamaño, reusar
+                    if (!tempFile.exists() || tempFile.length() < 1024) {
+                        tempFile.outputStream().use { out -> input.copyTo(out) }
+                    }
+                    input.close()
+                    tempFile
+                } catch (e: Exception) {
+                    android.util.Log.w("PostMusicChip", "No se pudo copiar asset ${post.musicAssetFile}: ${e.message}")
+                    null
+                }
+            }
+            isPreparingAsset = false
+        } else {
+            resolvedAssetFile = null
+        }
+    }
+
+    // Resolver URI final de música
+    val musicUriString = remember(post, resolvedAssetFile) {
         when {
             post.musicUrl.isNotBlank() -> post.musicUrl
+            resolvedAssetFile != null && resolvedAssetFile!!.exists() -> resolvedAssetFile!!.absolutePath.let { path ->
+                // Usar file:// Uri para ExoPlayer
+                "file://$path"
+            }
             post.musicAssetFile.isNotBlank() -> "asset:///${post.musicAssetFile}"
             else -> null
         }
     }
 
+    // Manejar preview con ExoPlayer, con listener de error para debug
     DisposableEffect(musicUriString, isPlaying) {
         if (isPlaying && musicUriString != null) {
-            val p = ExoPlayer.Builder(context).build().apply {
-                setMediaItem(MediaItem.fromUri(musicUriString))
-                prepare()
-                playWhenReady = true
-                volume = 0.8f
+            try {
+                val p = ExoPlayer.Builder(context).build().apply {
+                    setMediaItem(MediaItem.fromUri(musicUriString))
+                    prepare()
+                    playWhenReady = true
+                    volume = 1.0f
+                    repeatMode = ExoPlayer.REPEAT_MODE_OFF
+                }
+                // Listener para log de errores + re-intento con URL fresca si es B2
+                p.addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        android.util.Log.e("PostMusicChip", "Error reproduciendo ${post.musicTitle}: ${error.message}", error)
+                        if (post.musicStorageKey.isNotBlank()) {
+                            // Si el error es 403 (URL expirada), intentar regenerar
+                            onMusicUrlExpired()
+                            isPlaying = false
+                        }
+                    }
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                            isPlaying = false
+                        }
+                    }
+                })
+                player = p
+            } catch (e: Exception) {
+                android.util.Log.e("PostMusicChip", "No se pudo crear player para ${post.musicTitle}: ${e.message}", e)
+                player = null
+                isPlaying = false
             }
-            player = p
         } else {
             player?.release()
             player = null
@@ -760,50 +829,61 @@ private fun PostMusicChip(post: PostData) {
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        tonalElevation = 1.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         Icons.Default.MusicNote,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = post.musicTitle.ifBlank { "Música" },
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (post.musicArtist.isNotBlank()) {
                     Text(
                         text = post.musicArtist,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else if (musicUriString != null) {
+                    Text(
+                        text = if (post.musicAssetFile.isNotBlank()) "De la librería del APK" else "Audio del post",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                        maxLines = 1
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                     )
                 }
             }
-            if (musicUriString != null) {
+
+            if (isPreparingAsset) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else if (musicUriString != null) {
                 FilledTonalIconButton(
                     onClick = { isPlaying = !isPlaying },
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(40.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                         contentColor = if (isPlaying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
@@ -812,7 +892,7 @@ private fun PostMusicChip(post: PostData) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pausar" else "Reproducir",
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
