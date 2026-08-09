@@ -2,7 +2,6 @@ package com.vivid.app.presentation.profile
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,6 +27,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.BuildConfig
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
 import com.vivid.app.util.SettingsManager
+import com.vivid.app.util.composeEmail
+import com.vivid.app.util.launchExternalIntent
+import com.vivid.app.util.openUrl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -472,7 +474,7 @@ fun SettingsScreen(
                         subtitle = "Abrir la configuración nativa de Android",
                         icon = Icons.Outlined.Notifications,
                         onClick = {
-                            val opened = launchIntentSafely(
+                            val opened = launchExternalIntent(
                                 context,
                                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                                     putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
@@ -806,12 +808,11 @@ fun SettingsScreen(
                         subtitle = "Ver Vivid en GitHub",
                         icon = Icons.Outlined.OpenInBrowser,
                         onClick = {
-                            val opened = launchIntentSafely(
-                                context,
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santes210/Vivid"))
-                            )
+                            val opened = openUrl(context, "https://github.com/santes210/Vivid")
                             if (!opened) {
-                                scope.launch { snackbarHostState.showSnackbar("No se pudo abrir GitHub") }
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("No se pudo abrir GitHub. No hay navegador instalado.")
+                                }
                             }
                         }
                     )
@@ -891,15 +892,15 @@ fun SettingsScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    val opened = launchIntentSafely(
-                        context,
-                        Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:poncho2010santes@gmail.com")
-                            putExtra(Intent.EXTRA_SUBJECT, "Soporte Vivid App M3")
-                        }
+                    val opened = composeEmail(
+                        context = context,
+                        to = "poncho2010santes@gmail.com",
+                        subject = "Soporte Vivid App M3"
                     )
                     if (!opened) {
-                        scope.launch { snackbarHostState.showSnackbar("No se encontró una app de correo instalada.") }
+                        scope.launch {
+                            snackbarHostState.showSnackbar("No se encontró una app de correo instalada.")
+                        }
                     }
                     showHelpDialog = false
                 }) {
@@ -1038,13 +1039,6 @@ fun SettingsScreen(
             tonalElevation = 6.dp
         )
     }
-}
-
-private fun launchIntentSafely(context: Context, intent: Intent): Boolean {
-    val packageManager = context.packageManager
-    if (intent.resolveActivity(packageManager) == null) return false
-    context.startActivity(intent)
-    return true
 }
 
 @Composable

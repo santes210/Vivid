@@ -514,7 +514,7 @@ fun FeedScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        ReportHelper.sendPostReport(
+                        val opened = ReportHelper.sendPostReport(
                             context = context,
                             postId = reportPostId,
                             username = reportPostUser,
@@ -522,7 +522,12 @@ fun FeedScreen(
                             reason = reportReason
                         )
                         showReportDialog = false
-                        scope.launch { snackbarHostState.showSnackbar("Reporte enviado. Reviso tu correo.") }
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (opened) "Redactando reporte en tu correo."
+                                else "No se encontró una app de correo instalada."
+                            )
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Enviar reporte") }
