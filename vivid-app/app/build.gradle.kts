@@ -33,6 +33,7 @@ val vividVersionCode = configuredVersionCode?.let { rawValue ->
         ?.takeIf { it in 1..2_100_000_000 }
         ?: error("vividVersionCode debe ser un entero entre 1 y 2100000000 (recibido: '$rawValue')")
 } ?: 2
+logger.lifecycle("Vivid versionCode: $vividVersionCode")
 
 android {
     namespace = "com.vivid.app"
