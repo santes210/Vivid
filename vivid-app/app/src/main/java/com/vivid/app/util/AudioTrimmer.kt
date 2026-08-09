@@ -60,12 +60,11 @@ object AudioTrimmer {
         if (transformerResult != null) {
             val f = File(transformerResult)
             if (f.exists() && f.length() > 1024) {
-                // Validar que realmente es recorte de ~15s (tamaño debe ser mucho menor que original si original era largo)
                 return@withContext transformerResult
             }
         }
 
-        // Intento 2: Muxer (más compatible, sin re-encode, corta por timestamps)
+        // Intento 2: Muxer (para AAC, M4A, WAV)
         try {
             val muxerResult = trimWithMuxer(context, inputUri, outputFile, startMs, endMs)
             val f = File(muxerResult)
@@ -73,11 +72,22 @@ object AudioTrimmer {
                 return@withContext muxerResult
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Muxer falló", e)
+            Log.w(TAG, "Muxer falló, probando raw MP3: ${e.message}")
         }
 
-        // Si ambos fallan, NO devolver canción completa (para ahorrar B2), lanzar error para que UI muestre retry
-        throw IllegalStateException("No se pudo recortar el audio a 15s. Intenta con otro archivo.")
+        // Intento 3: Raw MP3 copy (más compatible con .mp3 del dispositivo)
+        try {
+            val rawResult = trimWithRawCopy(context, inputUri, outputFile, startMs, endMs)
+            val f = File(rawResult)
+            if (f.exists() && f.length() > 1024) {
+                return@withContext rawResult
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Raw MP3 trim falló", e)
+        }
+
+        // Si todos fallan, lanzar error (no subir canción completa)
+        throw IllegalStateException("No se pudo recortar el audio .mp3 a 15s. Prueba con otro archivo o formato m4a/wav.")
     }
 
     private suspend fun trimWithTransformer(
@@ -194,6 +204,71 @@ object AudioTrimmer {
         } finally {
             try { muxer.stop() } catch (_: Exception) {}
             try { muxer.release() } catch (_: Exception) {}
+            try { extractor.release() } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Trim raw para MP3 del dispositivo — copia directa de frames MP3 sin muxer.
+     * Más compatible con .mp3 que MediaMuxer (que espera AAC).
+     * Produce un archivo .mp3 válido con solo 15s.
+     */
+    private fun trimWithRawCopy(
+        context: Context,
+        inputUri: Uri,
+        outputFile: File,
+        startMs: Long,
+        endMs: Long
+    ): String {
+        val startUs = startMs * 1000
+        val endUs = endMs * 1000
+
+        val extractor = MediaExtractor()
+        val buffer = ByteBuffer.allocate(BUFFER_SIZE)
+
+        try {
+            val afd = context.contentResolver.openAssetFileDescriptor(inputUri, "r")
+                ?: throw IllegalArgumentException("No se pudo abrir URI: $inputUri")
+            afd.use {
+                extractor.setDataSource(it.fileDescriptor, it.startOffset, it.length)
+            }
+
+            var audioTrackIndex = -1
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    audioTrackIndex = i
+                    break
+                }
+            }
+            if (audioTrackIndex == -1) throw IllegalStateException("No audio track")
+
+            extractor.selectTrack(audioTrackIndex)
+            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+            // Para MP3, escribir raw bytes a FileOutputStream (sin MediaMuxer) crea MP3 válido
+            File(outputFile.absolutePath).outputStream().use { output ->
+                while (true) {
+                    val sampleSize = extractor.readSampleData(buffer, 0)
+                    if (sampleSize < 0) break
+                    val sampleTime = extractor.sampleTime
+                    if (sampleTime > endUs) break
+                    if (sampleTime < startUs) {
+                        extractor.advance()
+                        continue
+                    }
+                    // Escribir solo los bytes del sample
+                    val data = ByteArray(sampleSize)
+                    buffer.position(0)
+                    buffer.get(data, 0, sampleSize)
+                    output.write(data)
+                    extractor.advance()
+                }
+            }
+
+            return outputFile.absolutePath
+        } finally {
             try { extractor.release() } catch (_: Exception) {}
         }
     }
