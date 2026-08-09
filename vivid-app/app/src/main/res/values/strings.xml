@@ -18,5 +18,5 @@
       Mientras esté vacío, el botón de Google muestra un aviso claro en vez
       de crashear, y el login con email/contraseña funciona normal.
     -->
-    <string name="default_web_client_id" translatable="false"></string>
+    <string name="default_web_client_id" translatable="false">952899444057-btlfp4jfes67kotcemmbk3r0ubb688ho.apps.googleusercontent.com</string>
 </resources>
