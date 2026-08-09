@@ -207,7 +207,7 @@ fun CreateStoryScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
-                                    "24h • 15s auto • música APK + dispositivo",
+                                    "Las stories duran 24 horas",
                                     color = Color.White.copy(alpha = 0.7f),
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -335,7 +335,7 @@ fun CreateStoryScreen(
                                     color = if (selectedTrack != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}" else "Del dispositivo o librería APK",
+                                    if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}" else "Del dispositivo o de la app",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
