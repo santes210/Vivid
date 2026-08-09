@@ -89,18 +89,13 @@ fun StoryViewerRoute(
     var viewersCount by remember { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // ViewModel para limpieza con B2 (obtenido fuera del DisposableEffect, fix compilación)
+    val storyCleanupViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+
     DisposableEffect(initialStoryId, currentUserId) {
         var registration: ListenerRegistration? = null
-        // Limpieza con B2 si es posible (fix 2026-08-09)
-        try {
-            val storyVM = androidx.hilt.navigation.compose.hiltViewModel<CreateStoryViewModel>()
-            if (currentUserId.isNotBlank()) storyVM.cleanExpiredStories(currentUserId)
-        } catch (_: Exception) {
-            scope.launch {
-                if (currentUserId.isNotBlank()) {
-                    runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
-                }
-            }
+        if (currentUserId.isNotBlank()) {
+            storyCleanupViewModel.cleanExpiredStories(currentUserId)
         }
         registration = db.collection("stories")
             .whereGreaterThan("expiresAt", System.currentTimeMillis())
