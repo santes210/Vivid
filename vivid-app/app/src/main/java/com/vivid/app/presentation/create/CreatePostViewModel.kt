@@ -83,10 +83,32 @@ private fun extractHashtags(text: String): List<String> {
                 if (musicUri != null) {
                     try {
                         _state.value = CreatePostUiState.UploadingAudio(0)
-                        // Copiar Uri a archivo temporal para upload (contentResolver -> cache)
-                        val audioTempFile = File(context.cacheDir, "post_audio_${System.currentTimeMillis()}_${musicTitle.ifBlank { "audio" }}.mp3")
-                        context.contentResolver.openInputStream(musicUri)?.use { input ->
-                            audioTempFile.outputStream().use { output -> input.copyTo(output) }
+                        // Copiar Uri a archivo temporal para upload (robusto para content:// y file://)
+                        val audioTempFile = File(context.cacheDir, "post_audio_${System.currentTimeMillis()}_${musicTitle.ifBlank { "audio" }}.m4a")
+                        try {
+                            if (musicUri.scheme == "file") {
+                                val srcFile = File(musicUri.path ?: "")
+                                if (srcFile.exists()) srcFile.copyTo(audioTempFile, overwrite = true)
+                                else {
+                                    context.contentResolver.openInputStream(musicUri)?.use { input ->
+                                        audioTempFile.outputStream().use { output -> input.copyTo(output) }
+                                    }
+                                }
+                            } else {
+                                context.contentResolver.openInputStream(musicUri)?.use { input ->
+                                    audioTempFile.outputStream().use { output -> input.copyTo(output) }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "No se pudo copiar audio, intentando upload directo: ${e.message}")
+                            // Si falla el copy, intentar usar el archivo original si es file://
+                            if (musicUri.scheme == "file") {
+                                val srcPath = musicUri.path
+                                if (srcPath != null && File(srcPath).exists()) {
+                                    audioTempFile.delete()
+                                    File(srcPath).copyTo(audioTempFile, overwrite = true)
+                                }
+                            }
                         }
                         if (audioTempFile.exists() && audioTempFile.length() > 0) {
                             val ts = System.currentTimeMillis()

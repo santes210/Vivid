@@ -211,7 +211,8 @@ fun AudioTrimBottomSheet(
                             isTrimming = true
                             scope.launch {
                                 try {
-                                    val outFile = File(context.cacheDir, "trimmed_audio_${System.currentTimeMillis()}.mp3")
+                                    // Usar .m4a para compatibilidad con MediaMuxer (MP4 container)
+                                    val outFile = File(context.cacheDir, "trimmed_audio_${System.currentTimeMillis()}.m4a")
                                     val trimmedPath = AudioTrimmer.trimAudio(
                                         context = context,
                                         inputUri = audioUri,
@@ -219,10 +220,16 @@ fun AudioTrimBottomSheet(
                                         startMs = startMs,
                                         endMs = endMs
                                     )
-                                    val trimmedUri = Uri.fromFile(File(trimmedPath))
+                                    val trimmedFile = File(trimmedPath)
+                                    val trimmedUri = if (trimmedFile.exists() && trimmedFile.length() > 1024) {
+                                        Uri.fromFile(trimmedFile)
+                                    } else {
+                                        // Fallback: usar original pero con clip info
+                                        audioUri
+                                    }
                                     onTrimConfirmed(trimmedUri, startMs, endMs)
                                 } catch (e: Exception) {
-                                    // Fallback: devolver original con el rango seleccionado (ExoPlayer hará clip en reproducción final si es story)
+                                    // Fallback: devolver original con el rango seleccionado
                                     onTrimConfirmed(audioUri, startMs, endMs)
                                 } finally {
                                     isTrimming = false

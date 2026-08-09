@@ -25,48 +25,40 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
- * Marca de agua automática sobre los videos de Reels/Stories.
- *
- * Usa Media3 Transformer + BitmapOverlay para superponer el logo
- * "Vivid" en cada frame, sin alterar el audio.
- *
- * Por qué esto y no Canvas+MediaCodec manual:
- *   - MediaCodec puro requiere sincronizar manualmente surface, codec
- *     y muxer (~500 líneas propensas a bugs).
- *   - Media3 Transformer lo hace en hardware, queda a ~50 líneas.
- *
- * Resultado: video con "Vivid ✦" semitransparente en la esquina
- * inferior derecha.
+ * Marca de agua automática — FIX 2026-08-09: más robusto, no crashea.
  */
 @UnstableApi
 object VideoWatermarker {
 
     private const val TAG = "VideoWatermarker"
 
-    /**
-     * Aplica la marca de agua al video en `inputUri` y devuelve el path
-     * del archivo resultante. Si falla, devuelve el original.
-     */
     suspend fun applyWatermark(
         context: Context,
         inputUri: Uri,
         outputFile: File
     ): String = withContext(Dispatchers.IO) {
-        if (outputFile.exists()) outputFile.delete()
-
         try {
-            // 1. Genera el bitmap del logo
-            val logo = renderVividLogo(widthPx = 480, heightPx = 120)
+            outputFile.parentFile?.mkdirs()
+            if (outputFile.exists()) outputFile.delete()
 
-            // 2. Construye el overlay (esquina inferior derecha, 70% opacidad)
-            val bitmapOverlay = androidx.media3.effect.BitmapOverlay.createStaticBitmapOverlay(logo)
+            val logo = renderVividLogo(widthPx = 500, heightPx = 140)
+
+            val bitmapOverlay = try {
+                androidx.media3.effect.BitmapOverlay.createStaticBitmapOverlay(logo)
+            } catch (e: Exception) {
+                Log.w(TAG, "createStaticBitmapOverlay falló: ${e.message}")
+                null
+            }
+
+            if (bitmapOverlay == null) {
+                Log.w(TAG, "BitmapOverlay null, fallback")
+                return@withContext copyOriginal(context, inputUri, outputFile).absolutePath
+            }
 
             val overlayEffect = OverlayEffect(ImmutableList.of<TextureOverlay>(bitmapOverlay))
 
-            // 3. Composición con el overlay aplicado
             val mediaItem = MediaItem.fromUri(inputUri)
             val edited = EditedMediaItem.Builder(mediaItem)
                 .setEffects(
@@ -78,73 +70,95 @@ object VideoWatermarker {
                 .build()
             val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
 
-            // 4. Ejecuta el transformer y espera async
             val outputPath = suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {
-                    override fun onCompleted(
-                        composition: Composition,
-                        exportResult: ExportResult
-                    ) {
-                        Log.d(TAG, "Watermark aplicado: ${outputFile.length() / 1024} KB")
-                        if (cont.isActive) cont.resume(outputFile.absolutePath)
+                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        val size = outputFile.length()
+                        Log.d(TAG, "Watermark OK: ${size / 1024}KB")
+                        if (size > 1024) {
+                            if (cont.isActive) cont.resume(outputFile.absolutePath)
+                        } else {
+                            if (cont.isActive) cont.resume(copyOriginal(context, inputUri, outputFile).absolutePath)
+                        }
                     }
 
-                    override fun onError(
-                        composition: Composition,
-                        exportResult: ExportResult,
-                        exportException: ExportException
-                    ) {
-                        Log.e(TAG, "Error watermark", exportException)
-                        if (cont.isActive) cont.resumeWithException(exportException)
+                    override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                        Log.e(TAG, "Watermark error, fallback", exportException)
+                        if (cont.isActive) {
+                            cont.resume(copyOriginal(context, inputUri, outputFile).absolutePath)
+                        }
                     }
                 }
 
-                val transformer = Transformer.Builder(context)
-                    .addListener(listener)
-                    .setVideoMimeType(MimeTypes.VIDEO_H264)
-                    .setAudioMimeType(MimeTypes.AUDIO_AAC)
-                    .build()
+                val transformer = try {
+                    Transformer.Builder(context)
+                        .addListener(listener)
+                        .setVideoMimeType(MimeTypes.VIDEO_H264)
+                        .setAudioMimeType(MimeTypes.AUDIO_AAC)
+                        .build()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Builder falló: ${e.message}")
+                    if (cont.isActive) cont.resume(copyOriginal(context, inputUri, outputFile).absolutePath)
+                    return@suspendCancellableCoroutine
+                }
 
                 cont.invokeOnCancellation { transformer.cancel() }
-                transformer.start(composition, outputFile.absolutePath)
+                try {
+                    transformer.start(composition, outputFile.absolutePath)
+                } catch (e: Exception) {
+                    Log.e(TAG, "start falló: ${e.message}", e)
+                    if (cont.isActive) cont.resume(copyOriginal(context, inputUri, outputFile).absolutePath)
+                }
             }
 
-            if (File(outputPath).exists() && File(outputPath).length() > 0) {
-                outputPath
-            } else {
-                Log.w(TAG, "Watermark no produjo output, fallback")
-                copyOriginal(context, inputUri, outputFile).absolutePath
-            }
+            outputPath
         } catch (e: Exception) {
-            Log.e(TAG, "Watermark falló — fallback a original", e)
-            copyOriginal(context, inputUri, outputFile).absolutePath
+            Log.e(TAG, "Watermark falló — fallback", e)
+            try {
+                copyOriginal(context, inputUri, outputFile).absolutePath
+            } catch (e2: Exception) {
+                Log.e(TAG, "copyOriginal falló", e2)
+                inputUri.path ?: outputFile.absolutePath
+            }
         }
     }
 
-    /**
-     * Genera el Bitmap con el logo. En producción reemplaza por:
-     *   val bmp = BitmapFactory.decodeResource(context.resources, R.drawable.vivid_logo)
-     */
     private fun renderVividLogo(widthPx: Int, heightPx: Int): Bitmap {
         val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        canvas.drawColor(Color.TRANSPARENT)
+        val bgPaint = Paint().apply {
+            color = Color.argb(90, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(0f, 0f, widthPx.toFloat(), heightPx.toFloat(), 24f, 24f, bgPaint)
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 64f
+            textSize = 58f
             isFakeBoldText = true
-            setShadowLayer(6f, 0f, 2f, Color.argb(160, 0, 0, 0))
+            setShadowLayer(8f, 0f, 3f, Color.argb(180, 0, 0, 0))
         }
-        canvas.drawText("Vivid ✦", 16f, 80f, textPaint)
-
+        canvas.drawText("Vivid ✦", 24f, 88f, textPaint)
         return bmp
     }
 
     private fun copyOriginal(context: Context, src: Uri, dst: File): File {
-        context.contentResolver.openInputStream(src)?.use { input ->
-            dst.outputStream().use { output -> input.copyTo(output) }
+        return try {
+            dst.parentFile?.mkdirs()
+            if (src.scheme == "file") {
+                val srcFile = File(src.path ?: "")
+                if (srcFile.exists()) {
+                    srcFile.copyTo(dst, overwrite = true)
+                    return dst
+                }
+            }
+            context.contentResolver.openInputStream(src)?.use { input ->
+                dst.outputStream().use { output -> input.copyTo(output) }
+            }
+            dst
+        } catch (e: Exception) {
+            Log.e(TAG, "copyOriginal falló: ${e.message}", e)
+            dst
         }
-        return dst
     }
 }
