@@ -30,7 +30,7 @@ import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private const val APP_VERSION_NAME = "2.2.0_5 - Material You 3 Design"
+private const val APP_VERSION_NAME = "2.2.0_7 - Material You 3 Design"
 
 data class SettingsInfoDialog(
     val title: String,
@@ -192,7 +192,7 @@ fun SettingsScreen(
                                     appendLine()
                                     append(
                                         if (user?.isEmailVerified == true) {
-                                            "Tu correo ya está verificado exitosamente."
+                                            "Tu correo ya fué verificado."
                                         } else {
                                             "Tu correo todavía no está verificado."
                                         }
@@ -708,13 +708,13 @@ fun SettingsScreen(
                         subtitle = APP_VERSION_NAME,
                         icon = Icons.Outlined.Info,
                         onClick = {
-                            scope.launch { snackbarHostState.showSnackbar("Estás usando la última versión M3 de Vivid.") }
+                            scope.launch { snackbarHostState.showSnackbar("Estás en la ultima versión de la app.") }
                         }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
                         title = "Términos del Servicio",
-                        subtitle = "Normas de uso de la comunidad",
+                        subtitle = "Normas de uso en la comunidad",
                         icon = Icons.Outlined.Description,
                         onClick = {
                             infoDialog = SettingsInfoDialog(
@@ -731,7 +731,7 @@ fun SettingsScreen(
                         onClick = {
                             infoDialog = SettingsInfoDialog(
                                 title = "Política de Privacidad",
-                                message = "Tus datos personales, imágenes y mensajes están cifrados y protegidos. Nunca venderemos tu información personal a terceros sin tu consentimiento."
+                                message = "Tus datos personales, imágenes y mensajes están cifrados y protegidos. Nunca pondremos tu información sin cifrar, ni la venderemos."
                             )
                         }
                     )
@@ -826,7 +826,7 @@ fun SettingsScreen(
                         },
                         supportingContent = {
                             Text(
-                                "Salir de la cuenta actual @$username",
+                                "Salir de la cuenta: @$username",
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -1002,7 +1002,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
             title = { Text("¿Cerrar sesión?", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-            text = { Text("Tendrás que volver a ingresar tus credenciales para entrar a Vivid.") },
+            text = { Text("Tendrás que volver a iniciar sesión para entrar a Vivid.") },
             confirmButton = {
                 Button(
                     onClick = {
