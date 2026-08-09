@@ -782,8 +782,10 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
         val uri = musicUriString
         if (shouldPlay && uri != null) {
             try {
+                // Usar Uri.parse para manejar query params con Authorization correctamente
+                val parsedUri = android.net.Uri.parse(uri)
                 val p = ExoPlayer.Builder(context).build().apply {
-                    setMediaItem(MediaItem.fromUri(uri))
+                    setMediaItem(MediaItem.fromUri(parsedUri))
                     prepare()
                     playWhenReady = true
                     volume = 1.0f
