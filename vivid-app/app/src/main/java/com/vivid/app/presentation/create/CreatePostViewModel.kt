@@ -126,11 +126,11 @@ private fun extractHashtags(text: String): List<String> {
                                         endMs = 15_000
                                     )
                                     val f = File(trimmedPath)
-                                    if (f.exists() && f.length() > 1024) f else audioTempFile
+                                    if (f.exists() && f.length() > 1024) f else throw IllegalStateException("Trim vacío")
                                 } else audioTempFile
                             } catch (e: Exception) {
-                                Log.w(TAG, "No se pudo auto-recortar audio, subiendo original: ${e.message}")
-                                audioTempFile
+                                Log.e(TAG, "Auto-trim falló, no se subirá canción completa para ahorrar B2: ${e.message}")
+                                throw IllegalStateException("No se pudo recortar el audio a 15s. Elige una canción más corta o recórtala manualmente.")
                             }
 
                             val ts = System.currentTimeMillis()

@@ -104,7 +104,7 @@ class CreateStoryViewModel @Inject constructor(
                 // AHORRO B2: si el audio dura >15s, recortarlo a 15s antes de mezclar para no subir canción completa
                 if (audioUri != null) {
                     _state.value = CreateStoryUiState.MixingAudio(0)
-                    // Auto-trim del audio a 15s máx si es necesario
+                    // Auto-trim del audio a 15s máx si es necesario - NUNCA subir canción completa
                     val audioToMix = try {
                         val audioDur = com.vivid.app.util.AudioTrimmer.getDurationMs(context, audioUri)
                         if (audioDur > 15_000) {
@@ -118,11 +118,11 @@ class CreateStoryViewModel @Inject constructor(
                                 endMs = 15_000
                             )
                             val f = File(trimmedPath)
-                            if (f.exists() && f.length() > 1024) Uri.fromFile(f) else audioUri
+                            if (f.exists() && f.length() > 1024) Uri.fromFile(f) else throw IllegalStateException("Trim vacío")
                         } else audioUri
                     } catch (e: Exception) {
-                        android.util.Log.w("CreateStoryVM", "No se pudo auto-recortar audio, usando original: ${e.message}")
-                        audioUri
+                        android.util.Log.e("CreateStoryVM", "Auto-trim audio falló, no se subirá canción completa: ${e.message}")
+                        throw IllegalStateException("No se pudo recortar el audio a 15s para ahorrar espacio. Elige un recorte manual de 15s.")
                     }
 
                     val mixedFile = File(context.cacheDir, "story_audio_${ts}.mp4")

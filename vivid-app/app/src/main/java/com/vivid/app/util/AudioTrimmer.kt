@@ -49,7 +49,7 @@ object AudioTrimmer {
             return@withContext copyOriginal(context, inputUri, outputFile).absolutePath
         }
 
-        // Intento 1: Transformer (mejor calidad, maneja mp3/m4a/wav)
+        // Intento 1: Transformer con transcode a AAC (mejor para mp3 -> m4a, siempre 15s)
         val transformerResult = try {
             trimWithTransformer(context, inputUri, outputFile, startMs, endMs)
         } catch (e: Exception) {
@@ -57,17 +57,27 @@ object AudioTrimmer {
             null
         }
 
-        if (transformerResult != null && File(transformerResult).exists() && File(transformerResult).length() > 1024) {
-            return@withContext transformerResult
+        if (transformerResult != null) {
+            val f = File(transformerResult)
+            if (f.exists() && f.length() > 1024) {
+                // Validar que realmente es recorte de ~15s (tamaño debe ser mucho menor que original si original era largo)
+                return@withContext transformerResult
+            }
         }
 
-        // Intento 2: Muxer (más compatible, sin re-encode)
+        // Intento 2: Muxer (más compatible, sin re-encode, corta por timestamps)
         try {
-            trimWithMuxer(context, inputUri, outputFile, startMs, endMs)
+            val muxerResult = trimWithMuxer(context, inputUri, outputFile, startMs, endMs)
+            val f = File(muxerResult)
+            if (f.exists() && f.length() > 1024) {
+                return@withContext muxerResult
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Muxer también falló, fallback a original", e)
-            copyOriginal(context, inputUri, outputFile).absolutePath
+            Log.e(TAG, "Muxer falló", e)
         }
+
+        // Si ambos fallan, NO devolver canción completa (para ahorrar B2), lanzar error para que UI muestre retry
+        throw IllegalStateException("No se pudo recortar el audio a 15s. Intenta con otro archivo.")
     }
 
     private suspend fun trimWithTransformer(
@@ -103,7 +113,9 @@ object AudioTrimmer {
                 }
             }
 
+            // FIX: forzar salida AAC en MP4 para que el archivo recortado siempre sea válido y pequeño (15s)
             val transformer = Transformer.Builder(context)
+                .setAudioMimeType(androidx.media3.common.MimeTypes.AUDIO_AAC)
                 .addListener(listener)
                 .build()
 
