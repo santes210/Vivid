@@ -35,6 +35,20 @@ val vividVersionCode = configuredVersionCode?.let { rawValue ->
 } ?: 2
 logger.lifecycle("Vivid versionCode: $vividVersionCode")
 
+// La firma de release se inyecta desde GitHub Actions o desde variables locales.
+// Si no están presentes, Gradle aún puede compilar un release sin firmar; el workflow de
+// release valida las cuatro credenciales antes de empezar para no publicar un APK inválido.
+val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.vivid.app"
     compileSdk = 35
@@ -53,12 +67,24 @@ android {
         buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = requireNotNull(releaseKeystorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
