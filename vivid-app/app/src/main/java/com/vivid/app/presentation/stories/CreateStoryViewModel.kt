@@ -101,14 +101,36 @@ class CreateStoryViewModel @Inject constructor(
                 currentUri = Uri.fromFile(File(compressed))
 
                 // 2. Si hay audio seleccionado, mezclar/reemplazar
+                // AHORRO B2: si el audio dura >15s, recortarlo a 15s antes de mezclar para no subir canción completa
                 if (audioUri != null) {
                     _state.value = CreateStoryUiState.MixingAudio(0)
+                    // Auto-trim del audio a 15s máx si es necesario
+                    val audioToMix = try {
+                        val audioDur = com.vivid.app.util.AudioTrimmer.getDurationMs(context, audioUri)
+                        if (audioDur > 15_000) {
+                            android.util.Log.d("CreateStoryVM", "Audio dura ${audioDur}ms, recortando a 15s para ahorrar B2")
+                            val trimmedAudioFile = File(context.cacheDir, "story_audio_trimmed_${ts}.m4a")
+                            val trimmedPath = com.vivid.app.util.AudioTrimmer.trimAudio(
+                                context = context,
+                                inputUri = audioUri,
+                                outputFile = trimmedAudioFile,
+                                startMs = 0,
+                                endMs = 15_000
+                            )
+                            val f = File(trimmedPath)
+                            if (f.exists() && f.length() > 1024) Uri.fromFile(f) else audioUri
+                        } else audioUri
+                    } catch (e: Exception) {
+                        android.util.Log.w("CreateStoryVM", "No se pudo auto-recortar audio, usando original: ${e.message}")
+                        audioUri
+                    }
+
                     val mixedFile = File(context.cacheDir, "story_audio_${ts}.mp4")
                     val mixedPath = try {
                         com.vivid.app.util.AudioMixer.replaceAudio(
                             context = context,
                             videoUri = currentUri,
-                            musicUri = audioUri,
+                            musicUri = audioToMix,
                             outputFile = mixedFile
                         )
                     } catch (e: Exception) {

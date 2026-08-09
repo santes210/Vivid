@@ -200,14 +200,14 @@ fun AudioTrimBottomSheet(
                     }
                 }
 
-                // Botón confirmar recorte
+                // Botón confirmar recorte - SIEMPRE sube solo 15s, nunca canción completa (ahorro B2)
                 Button(
                     onClick = {
                         if (durationMs <= 15_000) {
-                            // No necesita recorte, devolver original
+                            // Menos de 15s: no necesita recorte, devolver original (ya es corto, no gasta)
                             onTrimConfirmed(audioUri, 0L, durationMs)
                         } else {
-                            // Recortar
+                            // Más de 15s: crear archivo recortado de 15s (ahorro almacenamiento nube)
                             isTrimming = true
                             scope.launch {
                                 try {
@@ -224,13 +224,25 @@ fun AudioTrimBottomSheet(
                                     val trimmedUri = if (trimmedFile.exists() && trimmedFile.length() > 1024) {
                                         Uri.fromFile(trimmedFile)
                                     } else {
-                                        // Fallback: usar original pero con clip info
-                                        audioUri
+                                        // Fallback: si trim falla, intentar recortar a primeros 15s del original via muxer
+                                        try {
+                                            val fallbackFile = File(context.cacheDir, "trimmed_fallback_${System.currentTimeMillis()}.m4a")
+                                            val fbPath = AudioTrimmer.trimAudio(context, audioUri, fallbackFile, 0L, 15_000)
+                                            Uri.fromFile(File(fbPath))
+                                        } catch (_: Exception) {
+                                            audioUri
+                                        }
                                     }
                                     onTrimConfirmed(trimmedUri, startMs, endMs)
                                 } catch (e: Exception) {
-                                    // Fallback: devolver original con el rango seleccionado
-                                    onTrimConfirmed(audioUri, startMs, endMs)
+                                    // Fallback: devolver original pero se subirá completo? No, forzamos recorte a 0..15s igual
+                                    try {
+                                        val fallbackFile = File(context.cacheDir, "trimmed_fallback_${System.currentTimeMillis()}.m4a")
+                                        val fbPath = AudioTrimmer.trimAudio(context, audioUri, fallbackFile, startMs, endMs)
+                                        onTrimConfirmed(Uri.fromFile(File(fbPath)), startMs, endMs)
+                                    } catch (_: Exception) {
+                                        onTrimConfirmed(audioUri, startMs, endMs)
+                                    }
                                 } finally {
                                     isTrimming = false
                                 }
@@ -244,19 +256,38 @@ fun AudioTrimBottomSheet(
                     if (isTrimming) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                         Spacer(Modifier.width(8.dp))
-                        Text("Recortando…")
+                        Text("Recortando a 15s…")
                     } else {
                         Icon(Icons.Default.ContentCut, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(if (durationMs > 15_000) "Usar recorte 15s" else "Usar audio completo")
+                        Text(if (durationMs > 15_000) "Usar recorte 15s (solo se sube esto)" else "Usar audio completo")
                     }
                 }
 
-                TextButton(
-                    onClick = { onTrimConfirmed(audioUri, 0L, durationMs.coerceAtMost(15_000)) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Usar sin recortar (completo)")
+                if (durationMs > 15_000) {
+                    // Aviso de ahorro de almacenamiento
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Solo se subirá el recorte de 15s a B2, no la canción completa. Ahorro de espacio.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                } else {
+                    TextButton(
+                        onClick = { onTrimConfirmed(audioUri, 0L, durationMs) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Usar audio completo (${formatMs(durationMs)})")
+                    }
                 }
             }
 

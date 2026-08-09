@@ -111,15 +111,37 @@ private fun extractHashtags(text: String): List<String> {
                             }
                         }
                         if (audioTempFile.exists() && audioTempFile.length() > 0) {
+                            // AHORRO B2: si el audio dura >15s, recortar automáticamente a 15s antes de subir
+                            // Así nunca se sube la canción completa, solo el recorte.
+                            val finalAudioFile = try {
+                                val dur = com.vivid.app.util.AudioTrimmer.getDurationMs(context, Uri.fromFile(audioTempFile))
+                                if (dur > 15_000) {
+                                    Log.d(TAG, "Audio dura ${dur}ms, recortando a 15s para ahorrar B2")
+                                    val trimmedFile = File(context.cacheDir, "post_audio_trimmed_${System.currentTimeMillis()}.m4a")
+                                    val trimmedPath = com.vivid.app.util.AudioTrimmer.trimAudio(
+                                        context = context,
+                                        inputUri = Uri.fromFile(audioTempFile),
+                                        outputFile = trimmedFile,
+                                        startMs = 0,
+                                        endMs = 15_000
+                                    )
+                                    val f = File(trimmedPath)
+                                    if (f.exists() && f.length() > 1024) f else audioTempFile
+                                } else audioTempFile
+                            } catch (e: Exception) {
+                                Log.w(TAG, "No se pudo auto-recortar audio, subiendo original: ${e.message}")
+                                audioTempFile
+                            }
+
                             val ts = System.currentTimeMillis()
                             // FIX: usar .m4a para que el Content-Type sea audio/mp4 y ExoPlayer lo reproduzca bien
                             musicStorageKey = "posts/${user.uid}/${ts}_audio.m4a"
-                            musicUrl = storage.uploadFile(audioTempFile.absolutePath, musicStorageKey) { pct ->
+                            musicUrl = storage.uploadFile(finalAudioFile.absolutePath, musicStorageKey) { pct ->
                                 _state.value = CreatePostUiState.UploadingAudio(pct)
                             }
                             // Si no vino track, usa nombre del archivo
                             if (musicTitle.isBlank()) {
-                                musicTitle = audioTempFile.nameWithoutExtension
+                                musicTitle = finalAudioFile.nameWithoutExtension
                                 musicArtist = "Tu dispositivo"
                             }
                         }
