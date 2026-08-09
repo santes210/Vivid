@@ -138,7 +138,7 @@ fun ExploreScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = { Text("Buscar personas o hashtags") },
+                label = { Text("Buscar personas") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -150,7 +150,7 @@ fun ExploreScreen(
                 // Resultado de búsqueda de personas (como IG)
                 when {
                     searchLoading.value -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    searchUsers.value.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No encontré personas.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    searchUsers.value.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No se encontraron usuarios.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(searchUsers.value, key = { it.uid }) { user ->
                             UserSearchItem(
