@@ -1,6 +1,13 @@
 package com.vivid.app.navigation
 
 import android.net.Uri
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -35,6 +42,7 @@ import com.vivid.app.presentation.explore.ExploreScreen
 import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 
 sealed class Screen(
     val route: String,
@@ -74,6 +82,7 @@ fun VividNavigation(
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val animationsEnabled = LocalVividAnimationsEnabled.current
 
     // ── Manejar deep links desde notificaciones push ──
     LaunchedEffect(deepLinkChatId) {
@@ -175,7 +184,29 @@ fun VividNavigation(
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                if (animationsEnabled) {
+                    fadeIn(tween(220)) +
+                        slideInHorizontally(tween(220)) { fullWidth -> fullWidth / 16 }
+                } else {
+                    EnterTransition.None
+                }
+            },
+            exitTransition = {
+                if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
+            },
+            popEnterTransition = {
+                if (animationsEnabled) fadeIn(tween(180)) else EnterTransition.None
+            },
+            popExitTransition = {
+                if (animationsEnabled) {
+                    fadeOut(tween(160)) +
+                        slideOutHorizontally(tween(160)) { fullWidth -> fullWidth / 16 }
+                } else {
+                    ExitTransition.None
+                }
+            }
         ) {
             composable(Screen.Auth.route) {
                 AuthScreen(onLoginSuccess = {

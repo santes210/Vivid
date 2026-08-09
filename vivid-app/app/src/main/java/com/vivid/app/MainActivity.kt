@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.navigation.VividNavigation
 import com.vivid.app.notifications.NotificationForegroundService
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividTheme
 import com.vivid.app.util.PushNotificationHelper
 import com.vivid.app.util.SettingsManager
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val selectedTheme = SettingsManager.selectedThemeOption
             val dynamicColor = SettingsManager.dynamicColorEnabled
+            val animationsEnabled = SettingsManager.smoothAnimationsEnabled
             val darkTheme = when (selectedTheme) {
                 "Oscuro" -> true
                 "Claro" -> false
@@ -71,16 +74,20 @@ class MainActivity : ComponentActivity() {
             val deepLinkPostId = remember { pendingPostId }
 
             VividTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                CompositionLocalProvider(
+                    LocalVividAnimationsEnabled provides animationsEnabled
                 ) {
-                    VividApp(
-                        deepLinkChatId = deepLinkChatId,
-                        deepLinkReelId = deepLinkReelId,
-                        deepLinkProfileUserId = deepLinkProfileUserId,
-                        deepLinkPostId = deepLinkPostId
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        VividApp(
+                            deepLinkChatId = deepLinkChatId,
+                            deepLinkReelId = deepLinkReelId,
+                            deepLinkProfileUserId = deepLinkProfileUserId,
+                            deepLinkPostId = deepLinkPostId
+                        )
+                    }
                 }
             }
         }

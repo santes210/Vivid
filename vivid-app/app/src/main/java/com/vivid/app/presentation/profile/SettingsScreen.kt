@@ -25,12 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.BuildConfig
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-
-private const val APP_VERSION_NAME = "2.2.0_7 - Material You 3 Design"
 
 data class SettingsInfoDialog(
     val title: String,
@@ -128,6 +127,16 @@ fun SettingsScreen(
     fun updateUserSetting(field: String, value: Boolean) {
         user?.uid?.let { uid ->
             firestore.collection("users").document(uid).update(field, value)
+        }
+    }
+
+    fun updateSmoothAnimations(enabled: Boolean) {
+        SettingsManager.setSmoothAnimations(context, enabled)
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                if (enabled) "Animaciones suaves activadas"
+                else "Movimiento reducido: las transiciones serán inmediatas"
+            )
         }
     }
 
@@ -312,16 +321,20 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     SettingsListItem(
-                        title = "Animaciones Fluidas M3",
-                        subtitle = "Habilita transiciones y físicas de navegación suaves",
+                        title = "Animaciones suaves",
+                        subtitle = if (smoothAnimationsEnabled) {
+                            "Transiciones y movimiento decorativo activados"
+                        } else {
+                            "Movimiento reducido; cambios inmediatos"
+                        },
                         icon = Icons.Outlined.Animation,
                         trailingContent = {
                             Switch(
                                 checked = smoothAnimationsEnabled,
-                                onCheckedChange = { checked -> SettingsManager.setSmoothAnimations(context, checked) }
+                                onCheckedChange = ::updateSmoothAnimations
                             )
                         },
-                        onClick = { SettingsManager.setSmoothAnimations(context, !smoothAnimationsEnabled) }
+                        onClick = { updateSmoothAnimations(!smoothAnimationsEnabled) }
                     )
                 }
             }
@@ -705,7 +718,7 @@ fun SettingsScreen(
                 SettingsCardGroup(title = "Acerca de y Legal") {
                     SettingsListItem(
                         title = "Versión de la aplicación",
-                        subtitle = APP_VERSION_NAME,
+                        subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · Material You 3",
                         icon = Icons.Outlined.Info,
                         onClick = {
                             scope.launch { snackbarHostState.showSnackbar("Estás en la ultima versión de la app.") }

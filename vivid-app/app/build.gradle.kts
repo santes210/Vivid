@@ -22,6 +22,18 @@ hilt {
 // StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
 val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
 
+// En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
+// Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
+val configuredVersionCode = providers.gradleProperty("vividVersionCode")
+    .orElse(providers.environmentVariable("VIVID_VERSION_CODE"))
+    .orElse(providers.environmentVariable("GITHUB_RUN_NUMBER"))
+    .orNull
+val vividVersionCode = configuredVersionCode?.let { rawValue ->
+    rawValue.toIntOrNull()
+        ?.takeIf { it in 1..2_100_000_000 }
+        ?: error("vividVersionCode debe ser un entero entre 1 y 2100000000 (recibido: '$rawValue')")
+} ?: 2
+
 android {
     namespace = "com.vivid.app"
     compileSdk = 35
@@ -30,7 +42,7 @@ android {
         applicationId = "com.vivid.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
+        versionCode = vividVersionCode
         versionName = "2.2.0-7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
