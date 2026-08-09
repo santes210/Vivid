@@ -39,12 +39,14 @@ fun StoriesTray(onStoryClick: (Story) -> Unit) {
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
+    // ViewModel para limpieza con borrado de B2 (fix 2026-08-09) - sin try-catch porque hiltViewModel es @Composable
+    val storyViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+
     DisposableEffect(currentUserId) {
         var registration: ListenerRegistration? = null
-        scope.launch {
-            if (currentUserId.isNotBlank()) {
-                runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
-            }
+        if (currentUserId.isNotBlank()) {
+            // Limpieza con B2 (borra Firestore + archivos de B2)
+            storyViewModel.cleanExpiredStories(currentUserId)
         }
         registration = db.collection("stories")
             .whereGreaterThan("expiresAt", System.currentTimeMillis())

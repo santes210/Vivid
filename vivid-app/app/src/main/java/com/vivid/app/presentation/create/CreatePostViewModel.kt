@@ -23,21 +23,20 @@ sealed interface CreatePostUiState {
     data object Idle : CreatePostUiState
     data class Compressing(val percent: Int) : CreatePostUiState
     data class Uploading(val percent: Int) : CreatePostUiState
+    data class UploadingAudio(val percent: Int) : CreatePostUiState
     data object SavingMetadata : CreatePostUiState
     data object Success : CreatePostUiState
     data class Error(val message: String) : CreatePostUiState
 }
 
 /**
- * Publicación de posts (fotos) con respaldo automático:
+ * Publicación de posts (fotos) con respaldo automático + música opcional:
  *
  *  1. Comprime la foto a JPEG local (máx 1280px, ~550 KB).
- *  2. Intenta subirla a Backblaze B2 → guarda SOLO la URL firmada en
+ *  2. Si hay música del dispositivo, la copia a cache y la sube a B2 (audio/mp3).
+ *  3. Intenta subir la foto a Backblaze B2 → guarda SOLO la URL firmada en
  *     Firestore (`imageUrl` + `storageKey`), sin base64.
- *  3. Si la subida a B2 falla (red, credenciales, bucket), cae al modo
- *     anterior: base64 comprimido dentro del documento de Firestore.
- *  4. Si el guardado de metadata falla tras subir a B2, borra el archivo
- *     del bucket (best-effort) y cae a base64.
+ *  4. Guarda metadata con música opcional (título, artista, asset o URL firmada).
  */
 @HiltViewModel
 class CreatePostViewModel @Inject constructor(
@@ -54,7 +53,13 @@ private fun extractHashtags(text: String): List<String> {
     val regex = Regex("#(\\w+)")
     return regex.findAll(text).map { it.groupValues[1].lowercase() }.distinct().toList()
 }
-    fun publishPost(context: Context, imageUri: Uri, caption: String) {
+    fun publishPost(
+        context: Context,
+        imageUri: Uri,
+        caption: String,
+        musicTrack: com.vivid.app.presentation.create.MusicTrack? = null,
+        musicUri: Uri? = null
+    ) {
         viewModelScope.launch {
             try {
                 val user = auth.currentUser
@@ -68,7 +73,86 @@ private fun extractHashtags(text: String): List<String> {
                 }
                 _state.value = CreatePostUiState.Compressing(100)
 
-                // 2. Intentar subir a Backblaze B2
+                // 1b. Si hay música del dispositivo, subirla a B2
+                var musicUrl = ""
+                var musicStorageKey = ""
+                var musicTitle = musicTrack?.title ?: ""
+                var musicArtist = musicTrack?.artist ?: ""
+                var musicAssetFile = musicTrack?.assetFile ?: ""
+
+                if (musicUri != null) {
+                    try {
+                        _state.value = CreatePostUiState.UploadingAudio(0)
+                        // Copiar Uri a archivo temporal para upload (robusto para content:// y file://)
+                        val audioTempFile = File(context.cacheDir, "post_audio_${System.currentTimeMillis()}_${musicTitle.ifBlank { "audio" }}.m4a")
+                        try {
+                            if (musicUri.scheme == "file") {
+                                val srcFile = File(musicUri.path ?: "")
+                                if (srcFile.exists()) srcFile.copyTo(audioTempFile, overwrite = true)
+                                else {
+                                    context.contentResolver.openInputStream(musicUri)?.use { input ->
+                                        audioTempFile.outputStream().use { output -> input.copyTo(output) }
+                                    }
+                                }
+                            } else {
+                                context.contentResolver.openInputStream(musicUri)?.use { input ->
+                                    audioTempFile.outputStream().use { output -> input.copyTo(output) }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "No se pudo copiar audio, intentando upload directo: ${e.message}")
+                            // Si falla el copy, intentar usar el archivo original si es file://
+                            if (musicUri.scheme == "file") {
+                                val srcPath = musicUri.path
+                                if (srcPath != null && File(srcPath).exists()) {
+                                    audioTempFile.delete()
+                                    File(srcPath).copyTo(audioTempFile, overwrite = true)
+                                }
+                            }
+                        }
+                        if (audioTempFile.exists() && audioTempFile.length() > 0) {
+                            // AHORRO B2: si el audio dura >15s, recortar automáticamente a 15s antes de subir
+                            // Así nunca se sube la canción completa, solo el recorte.
+                            val finalAudioFile = try {
+                                val dur = com.vivid.app.util.AudioTrimmer.getDurationMs(context, Uri.fromFile(audioTempFile))
+                                if (dur > 15_000) {
+                                    Log.d(TAG, "Audio dura ${dur}ms, recortando a 15s para ahorrar B2")
+                                    val trimmedFile = File(context.cacheDir, "post_audio_trimmed_${System.currentTimeMillis()}.m4a")
+                                    val trimmedPath = com.vivid.app.util.AudioTrimmer.trimAudio(
+                                        context = context,
+                                        inputUri = Uri.fromFile(audioTempFile),
+                                        outputFile = trimmedFile,
+                                        startMs = 0,
+                                        endMs = 15_000
+                                    )
+                                    val f = File(trimmedPath)
+                                    if (f.exists() && f.length() > 1024) f else throw IllegalStateException("Trim vacío")
+                                } else audioTempFile
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Auto-trim falló, no se subirá canción completa para ahorrar B2: ${e.message}")
+                                throw IllegalStateException("No se pudo recortar el audio a 15s. Elige una canción más corta o recórtala manualmente.")
+                            }
+
+                            val ts = System.currentTimeMillis()
+                            // FIX: usar .m4a para que el Content-Type sea audio/mp4 y ExoPlayer lo reproduzca bien
+                            musicStorageKey = "posts/${user.uid}/${ts}_audio.m4a"
+                            musicUrl = storage.uploadFile(finalAudioFile.absolutePath, musicStorageKey) { pct ->
+                                _state.value = CreatePostUiState.UploadingAudio(pct)
+                            }
+                            // Si no vino track, usa nombre del archivo
+                            if (musicTitle.isBlank()) {
+                                musicTitle = finalAudioFile.nameWithoutExtension
+                                musicArtist = "Tu dispositivo"
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Upload audio falló, continuará sin música: ${e.message}")
+                        musicUrl = ""
+                        musicStorageKey = ""
+                    }
+                }
+
+                // 2. Intentar subir foto a Backblaze B2
                 var uploaded = false
                 var publicUrl = ""
                 var storageKey = ""
@@ -95,10 +179,18 @@ private fun extractHashtags(text: String): List<String> {
                     ?: user.email?.substringBefore('@')
                     ?: "usuario"
 
+                val hashtags = extractHashtags(caption)
+                val baseMusicMap = mutableMapOf<String, Any>().apply {
+                    if (musicTitle.isNotBlank()) put("musicTitle", musicTitle)
+                    if (musicArtist.isNotBlank()) put("musicArtist", musicArtist)
+                    if (musicAssetFile.isNotBlank()) put("musicAssetFile", musicAssetFile)
+                    if (musicUrl.isNotBlank()) put("musicUrl", musicUrl)
+                    if (musicStorageKey.isNotBlank()) put("musicStorageKey", musicStorageKey)
+                }
+
                 if (uploaded) {
                     // Guardar SOLO la URL (sin base64, sin límite 1MB)
-                    val hashtags = extractHashtags(caption)
-                    val postData = mapOf(
+                    val postData = mutableMapOf<String, Any>(
                         "userId" to user.uid,
                         "username" to username,
                         "imageUrl" to publicUrl,
@@ -110,12 +202,14 @@ private fun extractHashtags(text: String): List<String> {
                         "timestamp" to System.currentTimeMillis(),
                         "hashtags" to hashtags
                     )
+                    postData.putAll(baseMusicMap)
                     try {
                         firestore.collection("posts").document(postId).set(postData).await()
                     } catch (e: Exception) {
                         // Si falla el guardado, no dejar huérfano el archivo en B2
                         Log.w(TAG, "Metadata falló, borrando de B2 y usando base64: ${e.message}")
                         runCatching { storage.deleteFile(storageKey) }
+                        if (musicStorageKey.isNotBlank()) runCatching { storage.deleteFile(musicStorageKey) }
                         uploaded = false
                     }
                 }
@@ -124,8 +218,7 @@ private fun extractHashtags(text: String): List<String> {
                     // Fallback: base64 comprimido (comportamiento original)
                     val compressedBase64 = ImageCompressor.compressToBase64(imageUri, context)
                         ?: throw IllegalStateException("No se pudo comprimir la imagen")
-                    val hashtags = extractHashtags(caption)
-                    val postData = mapOf(
+                    val postData = mutableMapOf<String, Any>(
                         "userId" to user.uid,
                         "username" to username,
                         "imageBase64" to compressedBase64,
@@ -135,6 +228,7 @@ private fun extractHashtags(text: String): List<String> {
                         "timestamp" to System.currentTimeMillis(),
                         "hashtags" to hashtags
                     )
+                    postData.putAll(baseMusicMap)
                     firestore.collection("posts").document(postId).set(postData).await()
                 }
 
@@ -151,7 +245,7 @@ private fun extractHashtags(text: String): List<String> {
                 }
 
                 _state.value = CreatePostUiState.Success
-                Log.d(TAG, "Post publicado OK (b2=$uploaded)")
+                Log.d(TAG, "Post publicado OK (b2=$uploaded, music=${musicTitle.isNotBlank()})")
             } catch (e: Exception) {
                 Log.e(TAG, "Error publicando post", e)
                 _state.value = CreatePostUiState.Error(e.message ?: "Error al publicar")

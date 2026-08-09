@@ -214,19 +214,32 @@ class BackblazeStorageProvider(
 
     /**
      * Genera (o renueva) una URL firmada para reproducir un archivo ya subido.
-     * Útil cuando la URL original de un reel expira (TTL 7 días).
-     *
+     * Útil cuando la URL original de un post/reel expira (TTL 7 días).
      * Funciona en buckets PRIVADOS.
+     *
+     * FIX 2026-08-09: si el authToken expiró (24h), re-autoriza una vez y reintenta.
      */
     override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
         withContext(Dispatchers.IO) {
-            val session = cachedSession ?: authorize().also { cachedSession = it }
-            authorizeDownloadUrl(session, remoteKey, ttlSec)
+            try {
+                val session = cachedSession ?: authorize().also { cachedSession = it }
+                authorizeDownloadUrl(session, remoteKey, ttlSec)
+            } catch (e: Exception) {
+                // Si falla por token expirado, limpia cache y reintenta una vez
+                Log.w(TAG, "signDownloadUrl falló, re-autorizando: ${e.message}")
+                cachedSession = null
+                val freshSession = authorize().also { cachedSession = it }
+                authorizeDownloadUrl(freshSession, remoteKey, ttlSec)
+            }
         }
 
     /**
      * Pide a B2 un token de descarga firmado (b2_get_download_authorization).
      * TTL válido entre 1 segundo y 7 días (604800s).
+     *
+     * FIX encoding: para la URL de descarga, B2 espera que el fileName en el path
+     * conserve los '/' pero codifique espacios y caracteres especiales.
+     * Usamos encodeFileNameForUrl que preserva '/' y codifica el resto.
      */
     private fun authorizeDownloadUrl(session: Session, fileName: String, ttlSec: Int): String {
         val validTtl = ttlSec.coerceIn(1, MAX_SIGNED_TTL_SEC)
@@ -244,10 +257,25 @@ class BackblazeStorageProvider(
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("b2_get_download_authorization falló (${resp.code}): $body")
+            if (!resp.isSuccessful) {
+                // Si es 401/403, la sesión expiró — el llamador reintentará con authorize()
+                error("b2_get_download_authorization falló (${resp.code}): $body")
+            }
             val obj = json.parseToJsonElement(body).jsonObject
             val token = obj["authorizationToken"]!!.jsonPrimitive.content
-            return "${session.downloadUrl}/file/$bucketName/$fileName?Authorization=$token"
+            val encodedFileName = encodeFileNameForUrl(fileName)
+            return "${session.downloadUrl}/file/$bucketName/$encodedFileName?Authorization=$token"
+        }
+    }
+
+    /**
+     * Codifica fileName para URL de descarga preservando '/'.
+     * Ej: posts/uid/123.jpg -> posts/uid/123.jpg (sin cambio)
+     * Si hay espacios: "my file.jpg" -> "my%20file.jpg"
+     */
+    private fun encodeFileNameForUrl(fileName: String): String {
+        return fileName.split("/").joinToString("/") { segment ->
+            URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
         }
     }
 
@@ -283,7 +311,13 @@ class BackblazeStorageProvider(
         key.endsWith(".png", true) -> "image/png"
         key.endsWith(".gif", true) -> "image/gif"
         key.endsWith(".webp", true) -> "image/webp"
-        else -> "video/mp4"
+        key.endsWith(".mp3", true) -> "audio/mpeg"
+        key.endsWith(".m4a", true) -> "audio/mp4"
+        key.endsWith(".aac", true) -> "audio/aac"
+        key.endsWith(".wav", true) -> "audio/wav"
+        key.endsWith(".ogg", true) -> "audio/ogg"
+        key.endsWith(".mp4", true) -> "video/mp4"
+        else -> "application/octet-stream"
     }
 
     private fun sha1Hex(file: File): String {

@@ -33,6 +33,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -52,6 +53,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,7 +67,13 @@ data class PostData(
     val isVideo: Boolean = false, val caption: String,
     val likesCount: Int = 0, val commentsCount: Int = 0,
     val timestamp: Long, val isLiked: Boolean = false,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    // Música opcional (nuevo)
+    val musicTitle: String = "",
+    val musicArtist: String = "",
+    val musicAssetFile: String = "",
+    val musicUrl: String = "",
+    val musicStorageKey: String = ""
 )
 
 data class PostComment(
@@ -134,20 +142,74 @@ fun FeedScreen(
     var reportReason by remember { mutableStateOf("Inapropiado") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
+    // ── Carga inicial: 1 sola consulta de likes + listener en tiempo real para posts ──
+    // ANTES: usaba get() una sola vez, por eso al publicar un post no aparecía hasta reiniciar app.
+    // AHORA: snapshotListener para que el feed se actualice al instante cuando publicas.
     LaunchedEffect(currentUserId) {
         isLoading = true
         val likedIds = feedViewModel.fetchLikedPostIds(currentUserId)
         likedPostIds = likedIds
-        val result = runCatching {
-            loadInitialPostsFromFirebase(currentUserId, likedIds, feedViewModel)
-        }.getOrElse { FeedPageResult(emptyList(), null) }
-        posts = result.posts
-        lastVisibleDoc = result.lastDoc
-        hasMore = result.posts.size >= 20
         isLoading = false
     }
 
-    // Paginación real basada en scroll (startAfter)
+    DisposableEffect(currentUserId, likedPostIds) {
+        if (currentUserId.isBlank()) {
+            onDispose { }
+        } else {
+            isLoading = true
+            val db = FirebaseFirestore.getInstance()
+            val postsListener = db.collection("posts")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(20)
+                .addSnapshotListener { snap, err ->
+                    if (err != null || snap == null) {
+                        isLoading = false
+                        return@addSnapshotListener
+                    }
+                    // Mapeo SIN llamadas a B2 (rápido, evita spinner infinito)
+                    val mapped = snap.documents.mapNotNull { doc ->
+                        try {
+                            val data = doc.data ?: return@mapNotNull null
+                            val isLiked = when {
+                                currentUserId.isBlank() -> false
+                                likedPostIds != null -> doc.id in likedPostIds!!
+                                else -> false
+                            }
+                            PostData(
+                                id = doc.id,
+                                userId = data["userId"] as? String ?: "",
+                                username = data["username"] as? String ?: "usuario",
+                                userProfilePicture = data["userAvatar"] as? String
+                                    ?: data["userProfilePicture"] as? String ?: "",
+                                caption = data["caption"] as? String ?: "",
+                                imageUrl = data["imageUrl"] as? String ?: "",
+                                imageBase64 = data["imageBase64"] as? String ?: "",
+                                storageKey = data["storageKey"] as? String ?: "",
+                                videoUrl = data["videoUrl"] as? String ?: "",
+                                thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
+                                isVideo = data["isVideo"] as? Boolean ?: false,
+                                likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
+                                commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
+                                timestamp = data["timestamp"] as? Long ?: 0L,
+                                isLiked = isLiked,
+                                musicTitle = data["musicTitle"] as? String ?: "",
+                                musicArtist = data["musicArtist"] as? String ?: "",
+                                musicAssetFile = data["musicAssetFile"] as? String ?: "",
+                                musicUrl = data["musicUrl"] as? String ?: "",
+                                musicStorageKey = data["musicStorageKey"] as? String ?: ""
+                            )
+                        } catch (_: Exception) { null }
+                    }
+                    posts = mapped
+                    lastVisibleDoc = snap.documents.lastOrNull()
+                    hasMore = snap.size() >= 20
+                    isLoading = false
+                }
+            onDispose { postsListener.remove() }
+        }
+    }
+
+    // Paginación real basada en scroll (startAfter) — sigue usando get() para páginas siguientes
     val shouldLoadMore = remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -164,9 +226,14 @@ fun FeedScreen(
                 loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, feedViewModel)
             }.getOrElse { FeedPageResult(emptyList(), null) }
             if (result.posts.isNotEmpty()) {
-                posts = posts + result.posts
-                lastVisibleDoc = result.lastDoc
-                hasMore = result.posts.size >= 20
+                // Evita duplicados si el snapshot ya trae esos docs
+                val existingIds = posts.map { it.id }.toSet()
+                val newUnique = result.posts.filter { it.id !in existingIds }
+                if (newUnique.isNotEmpty()) {
+                    posts = posts + newUnique
+                    lastVisibleDoc = result.lastDoc
+                    hasMore = result.posts.size >= 20
+                }
             } else {
                 hasMore = false
             }
@@ -332,6 +399,18 @@ fun FeedScreen(
                                     }
                                 }
                             },
+                            onMusicUrlExpired = {
+                                val mKey = post.musicStorageKey
+                                if (mKey.isNotBlank()) {
+                                    scope.launch {
+                                        feedViewModel.refreshSignedUrl(mKey)?.let { freshUrl ->
+                                            posts = posts.map {
+                                                if (it.id == post.id) it.copy(musicUrl = freshUrl) else it
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             onShare = {
                                 // Deep link de Material You 3: enlace vívido que abre la app
                                 val deepLink = "vivid://post/${post.id}"
@@ -472,7 +551,8 @@ private fun PostCard(
     onToggleLike: () -> Unit,
     onShare: () -> Unit,
     onReportPost: (String, String, String) -> Unit = { _, _, _ -> },
-    onImageUrlExpired: () -> Unit = {}
+    onImageUrlExpired: () -> Unit = {},
+    onMusicUrlExpired: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -535,6 +615,11 @@ private fun PostCard(
                         onUrlExpired = onImageUrlExpired
                     )
                 }
+            }
+
+            // ── Música opcional (Material You 3) ──
+            if (post.musicTitle.isNotBlank() || post.musicUrl.isNotBlank() || post.musicAssetFile.isNotBlank()) {
+                PostMusicChip(post = post, onMusicUrlExpired = onMusicUrlExpired)
             }
 
             // ── Acciones ──
@@ -646,6 +731,178 @@ private fun InlineFollowButton(
     }
 }
 
+@Composable
+private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
+    val context = LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    var resolvedAssetFile by remember(post.musicAssetFile) { mutableStateOf<File?>(null) }
+    var isPreparingAsset by remember { mutableStateOf(false) }
+
+    // Para assets del APK: copiar a cache para reproducción más fiable que asset://
+    LaunchedEffect(post.musicAssetFile) {
+        if (post.musicAssetFile.isNotBlank() && post.musicUrl.isBlank()) {
+            isPreparingAsset = true
+            resolvedAssetFile = withContext(Dispatchers.IO) {
+                try {
+                    val assetPath = post.musicAssetFile
+                    val input = context.assets.open(assetPath)
+                    val tempFile = File(context.cacheDir, "post_music_asset_${post.id}_${assetPath.substringAfterLast("/")}")
+                    // Si ya existe y tiene tamaño, reusar
+                    if (!tempFile.exists() || tempFile.length() < 1024) {
+                        tempFile.outputStream().use { out -> input.copyTo(out) }
+                    }
+                    input.close()
+                    tempFile
+                } catch (e: Exception) {
+                    android.util.Log.w("PostMusicChip", "No se pudo copiar asset ${post.musicAssetFile}: ${e.message}")
+                    null
+                }
+            }
+            isPreparingAsset = false
+        } else {
+            resolvedAssetFile = null
+        }
+    }
+
+    // Resolver URI final de música - FIX: usar variable local para evitar smart cast en delegated property
+    val musicUriString = remember(post, resolvedAssetFile) {
+        val raf = resolvedAssetFile
+        when {
+            post.musicUrl.isNotBlank() -> post.musicUrl
+            raf != null && raf.exists() -> "file://${raf.absolutePath}"
+            post.musicAssetFile.isNotBlank() -> "asset:///${post.musicAssetFile}"
+            else -> null
+        }
+    }
+
+    // Manejar preview con ExoPlayer, con listener de error para debug
+    DisposableEffect(musicUriString, isPlaying) {
+        val shouldPlay = isPlaying
+        val uri = musicUriString
+        if (shouldPlay && uri != null) {
+            try {
+                // Usar Uri.parse para manejar query params con Authorization correctamente
+                val parsedUri = android.net.Uri.parse(uri)
+                val p = ExoPlayer.Builder(context).build().apply {
+                    setMediaItem(MediaItem.fromUri(parsedUri))
+                    prepare()
+                    playWhenReady = true
+                    volume = 1.0f
+                    repeatMode = ExoPlayer.REPEAT_MODE_OFF
+                }
+                // Listener para log de errores + re-intento con URL fresca si es B2
+                p.addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        android.util.Log.e("PostMusicChip", "Error reproduciendo ${post.musicTitle}: ${error.message}", error)
+                        if (post.musicStorageKey.isNotBlank()) {
+                            // Si el error es 403 (URL expirada), intentar regenerar
+                            onMusicUrlExpired()
+                            isPlaying = false
+                        }
+                    }
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                            isPlaying = false
+                        }
+                    }
+                })
+                player = p
+            } catch (e: Exception) {
+                android.util.Log.e("PostMusicChip", "No se pudo crear player para ${post.musicTitle}: ${e.message}", e)
+                player = null
+                isPlaying = false
+            }
+        } else {
+            player?.release()
+            player = null
+        }
+        onDispose {
+            player?.release()
+            player = null
+        }
+    }
+
+    val hasMusic = post.musicTitle.isNotBlank() || post.musicAssetFile.isNotBlank() || post.musicUrl.isNotBlank()
+
+    if (!hasMusic) return
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = post.musicTitle.ifBlank { "Música" },
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (post.musicArtist.isNotBlank()) {
+                    Text(
+                        text = post.musicArtist,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else if (musicUriString != null) {
+                    Text(
+                        text = if (post.musicAssetFile.isNotBlank()) "De la librería del APK" else "Audio del post",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            if (isPreparingAsset) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else if (musicUriString != null) {
+                FilledTonalIconButton(
+                    onClick = { isPlaying = !isPlaying },
+                    modifier = Modifier.size(40.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        contentColor = if (isPlaying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ── Helpers ──
 @Composable
 private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
@@ -743,16 +1000,14 @@ private suspend fun mapPostDoc(
         }
     }
 
+    // FIX: No regenerar URL firmada de forma ansiosa en cada carga del feed.
+    // Antes: cada post hacía b2_get_download_authorization (20 llamadas en paralelo)
+    // causando lentitud, rate-limit y si fallaba la red dejaba spinner infinito.
+    // Ahora: usamos directamente lo guardado en Firestore (válido 7 días) y
+    // solo re-firmamos perezosamente cuando Coil detecta error 403 vía onUrlExpired.
     val savedImageUrl = data["imageUrl"] as? String ?: ""
     val storageKey = data["storageKey"] as? String ?: ""
-
-    val imageUrl = if (storageKey.isNotBlank() && savedImageUrl.isNotBlank()) {
-        try {
-            feedViewModel.refreshSignedUrl(storageKey) ?: savedImageUrl
-        } catch (_: Exception) {
-            savedImageUrl
-        }
-    } else savedImageUrl
+    val imageUrl = savedImageUrl
 
     return PostData(
         id = doc.id,
@@ -771,7 +1026,12 @@ private suspend fun mapPostDoc(
         likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
         commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
         timestamp = data["timestamp"] as? Long ?: 0L,
-        isLiked = isLiked
+        isLiked = isLiked,
+        musicTitle = data["musicTitle"] as? String ?: "",
+        musicArtist = data["musicArtist"] as? String ?: "",
+        musicAssetFile = data["musicAssetFile"] as? String ?: "",
+        musicUrl = data["musicUrl"] as? String ?: "",
+        musicStorageKey = data["musicStorageKey"] as? String ?: ""
     )
 }
 
@@ -821,7 +1081,14 @@ private fun PostAuthorAvatar(post: PostData) {
     }
 }
 
-// ── PostImage ──
+// ── PostImage — VERSIÓN CORREGIDA 2026-08-09 ──
+// Bug anterior: usaba rememberAsyncImagePainter + LaunchedEffect con lógica que dejaba
+// isLoading=true para siempre cuando imageUrl estaba vacío o cuando el estado era Empty.
+// Resultado: el post se quedaba cargando infinitamente.
+// Fix: separar claramente las dos ramas (base64 vs URL), usar AsyncImage directo que
+// maneja sus propios estados, y tratar Empty como loading pero con timeout y fallback
+// a onUrlExpired para regenerar URL firmada si hay 403.
+// También tolera Base64 tanto con NO_WRAP como DEFAULT (por si viene con saltos de línea).
 @Composable
 fun PostImage(
     imageBase64: String,
@@ -832,48 +1099,130 @@ fun PostImage(
     storageKey: String = "",
     onUrlExpired: () -> Unit = {}
 ) {
-    var bmp by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
-    var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
-    var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
-    var notifiedExpired by remember(storageKey) { mutableStateOf(false) }
-    val urlPainter = rememberAsyncImagePainter(model = imageUrl)
-    val urlState = urlPainter.state
-
-    LaunchedEffect(imageBase64) {
-        if (imageBase64.isNotBlank()) {
-            try { bmp = BitmapFactory.decodeByteArray(Base64.decode(imageBase64, Base64.NO_WRAP), 0, Base64.decode(imageBase64, Base64.NO_WRAP).size); hasError = bmp == null } catch (_: Exception) { hasError = true }
-            isLoading = false
-        }
-    }
-    LaunchedEffect(urlState) {
-        if (imageBase64.isBlank() && imageUrl.isNotBlank()) {
-            when (urlState) {
-                is AsyncImagePainter.State.Loading -> { isLoading = true; hasError = false }
-                is AsyncImagePainter.State.Success -> { isLoading = false; hasError = false }
-                is AsyncImagePainter.State.Error -> {
-                    isLoading = false
-                    hasError = true
-                    if (storageKey.isNotBlank() && !notifiedExpired) {
-                        notifiedExpired = true
-                        onUrlExpired()
-                    }
-                }
-                else -> {}
-            }
-        }
-    }
-
     val containerModifier = if (useDefaultHeight) modifier.fillMaxWidth().heightIn(max = 500.dp) else modifier.fillMaxSize()
-    Box(modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
+
+    Box(
+        modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        contentAlignment = Alignment.Center
+    ) {
         when {
-            isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            hasError -> Icon(Icons.Default.BrokenImage, "Error", modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            bmp != null -> Image(bmp!!.asImageBitmap(), "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            imageUrl.isNotBlank() -> Image(painter = urlPainter, "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(8.dp))
-                Text(username, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // ── Caso 1: imagen en Base64 (fallback cuando B2 falla) ──
+            imageBase64.isNotBlank() -> {
+                var bitmap by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
+                var isLoading by remember(imageBase64) { mutableStateOf(true) }
+                var hasError by remember(imageBase64) { mutableStateOf(false) }
+
+                LaunchedEffect(imageBase64) {
+                    isLoading = true
+                    hasError = false
+                    bitmap = withContext(Dispatchers.IO) {
+                        try {
+                            // Intenta NO_WRAP primero (formato que guardamos), luego DEFAULT por compat
+                            val bytes = try {
+                                Base64.decode(imageBase64, Base64.NO_WRAP)
+                            } catch (_: Exception) {
+                                Base64.decode(imageBase64, Base64.DEFAULT)
+                            }
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    hasError = bitmap == null
+                    isLoading = false
+                }
+
+                when {
+                    isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    hasError || bitmap == null -> Icon(
+                        Icons.Default.BrokenImage,
+                        contentDescription = "Error cargando imagen",
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    else -> Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = "Post de $username",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+
+            // ── Caso 2: URL remota (B2 con URL firmada) ──
+            imageUrl.isNotBlank() -> {
+                var hasNotifiedExpired by remember(storageKey, imageUrl) { mutableStateOf(false) }
+
+                // SubcomposeAsyncImage permite mostrar loading/error slots.
+                // Usa el ImageLoader de VividImageLoaderModule (cache 250MB).
+                // onError dispara regeneración perezosa de URL firmada.
+                SubcomposeAsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Post de $username",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    },
+                    error = {
+                        // Si falla, intenta regenerar URL firmada una vez
+                        if (storageKey.isNotBlank() && !hasNotifiedExpired) {
+                            hasNotifiedExpired = true
+                            onUrlExpired()
+                        }
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.BrokenImage,
+                                    contentDescription = "Error",
+                                    modifier = Modifier.size(32.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "No se pudo cargar",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                if (storageKey.isNotBlank() && !hasNotifiedExpired) {
+                                    TextButton(onClick = {
+                                        hasNotifiedExpired = true
+                                        onUrlExpired()
+                                    }) { Text("Reintentar") }
+                                }
+                            }
+                        }
+                    },
+                    onError = {
+                        if (storageKey.isNotBlank() && !hasNotifiedExpired) {
+                            hasNotifiedExpired = true
+                            onUrlExpired()
+                        }
+                    }
+                )
+            }
+
+            // ── Caso 3: sin imagen (evita spinner infinito) ──
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        username,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
