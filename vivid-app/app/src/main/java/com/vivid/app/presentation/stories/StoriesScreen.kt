@@ -39,11 +39,21 @@ fun StoriesTray(onStoryClick: (Story) -> Unit) {
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
+    // Usar ViewModel para limpieza con borrado de B2 (fix 2026-08-09)
+    val storyViewModel = try {
+        androidx.hilt.navigation.compose.hiltViewModel<CreateStoryViewModel>()
+    } catch (_: Exception) { null }
+
     DisposableEffect(currentUserId) {
         var registration: ListenerRegistration? = null
-        scope.launch {
-            if (currentUserId.isNotBlank()) {
-                runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
+        if (currentUserId.isNotBlank()) {
+            // Limpieza con B2 si hay ViewModel disponible, si no fallback sin B2
+            if (storyViewModel != null) {
+                storyViewModel.cleanExpiredStories(currentUserId)
+            } else {
+                scope.launch {
+                    runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
+                }
             }
         }
         registration = db.collection("stories")

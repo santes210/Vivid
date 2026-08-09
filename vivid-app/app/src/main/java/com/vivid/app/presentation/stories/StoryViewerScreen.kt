@@ -91,9 +91,15 @@ fun StoryViewerRoute(
 
     DisposableEffect(initialStoryId, currentUserId) {
         var registration: ListenerRegistration? = null
-        scope.launch {
-            if (currentUserId.isNotBlank()) {
-                runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
+        // Limpieza con B2 si es posible (fix 2026-08-09)
+        try {
+            val storyVM = androidx.hilt.navigation.compose.hiltViewModel<CreateStoryViewModel>()
+            if (currentUserId.isNotBlank()) storyVM.cleanExpiredStories(currentUserId)
+        } catch (_: Exception) {
+            scope.launch {
+                if (currentUserId.isNotBlank()) {
+                    runCatching { deleteExpiredStoriesForCurrentUser(db, currentUserId) }
+                }
             }
         }
         registration = db.collection("stories")

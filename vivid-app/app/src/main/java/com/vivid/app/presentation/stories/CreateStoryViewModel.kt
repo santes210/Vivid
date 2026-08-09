@@ -251,6 +251,30 @@ class CreateStoryViewModel @Inject constructor(
         firestore.collection("stories").add(data).await()
     }
 
+    /**
+     * Limpia stories expiradas (>24h) borrando tanto el documento de Firestore
+     * como los archivos de B2 (video + thumbnail) para no dejar huérfanos.
+     * FIX 2026-08-09: antes solo borraba Firestore, B2 se quedaba lleno.
+     */
+    fun cleanExpiredStories(currentUserId: String) {
+        if (currentUserId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val deleted = deleteExpiredStoriesForCurrentUser(
+                    firestore = firestore,
+                    currentUserId = currentUserId,
+                    now = System.currentTimeMillis(),
+                    storage = storage
+                )
+                if (deleted > 0) {
+                    android.util.Log.d("CreateStoryVM", "Limpieza: $deleted stories borradas de Firestore + B2")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("CreateStoryVM", "Limpieza falló: ${e.message}")
+            }
+        }
+    }
+
     fun reset() {
         _state.value = CreateStoryUiState.Idle
     }

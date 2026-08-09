@@ -177,7 +177,8 @@ suspend fun uploadStoryWithCompression(
 suspend fun deleteExpiredStoriesForCurrentUser(
     firestore: FirebaseFirestore,
     currentUserId: String,
-    now: Long = System.currentTimeMillis()
+    now: Long = System.currentTimeMillis(),
+    storage: com.vivid.app.data.storage.StorageProvider? = null
 ): Int = withContext(Dispatchers.IO) {
     if (currentUserId.isBlank()) return@withContext 0
 
@@ -186,6 +187,28 @@ suspend fun deleteExpiredStoriesForCurrentUser(
         .whereLessThanOrEqualTo("expiresAt", now)
         .get()
         .await()
+
+    // Si hay storage, borra primero los archivos de B2 (best-effort) antes de borrar el doc
+    // para no dejar huérfanos que consuman espacio.
+    if (storage != null) {
+        expiredStories.documents.forEach { doc ->
+            try {
+                val storageKey = doc.getString("storageKey").orEmpty()
+                if (storageKey.isNotBlank()) {
+                    runCatching { storage.deleteFile(storageKey) }
+                    // Intentar borrar thumbnail asociado (mismo nombre pero .jpg)
+                    val thumbKey = if (storageKey.endsWith(".mp4", true)) {
+                        storageKey.substringBeforeLast(".") + ".jpg"
+                    } else ""
+                    if (thumbKey.isNotBlank()) {
+                        runCatching { storage.deleteFile(thumbKey) }
+                    }
+                }
+            } catch (_: Exception) {
+                // best-effort: si falla el borrado de B2, igual borramos el doc de Firestore
+            }
+        }
+    }
 
     val batch = firestore.batch()
     expiredStories.documents.forEach { batch.delete(it.reference) }
