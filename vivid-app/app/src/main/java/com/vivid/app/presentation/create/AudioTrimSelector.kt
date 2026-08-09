@@ -150,7 +150,7 @@ fun AudioTrimBottomSheet(
 
                         if (durationMs > 15_000) {
                             Text(
-                                "Desliza para elegir desde qué segundo empieza el recorte. Se recortarán 15 segundos a partir de ahí, estilo IG.",
+                                "Desliza para elegir desde qué segundo empieza el recorte. Se recortaran solamente 15 segundos.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -184,7 +184,7 @@ fun AudioTrimBottomSheet(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text(if (isPlaying) "Pausar preview" else "Probar recorte")
+                                Text(if (isPlaying) "Pausar preview" else "Escuchar")
                             }
                             OutlinedButton(
                                 onClick = {
@@ -276,7 +276,7 @@ fun AudioTrimBottomSheet(
                             Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Solo se subirá el recorte de 15s a B2, no la canción completa. Ahorro de espacio.",
+                                "Solamente se subirán los 15 segundos de la canción que hayas seleccionado.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
