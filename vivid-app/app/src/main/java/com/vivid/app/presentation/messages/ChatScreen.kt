@@ -237,7 +237,7 @@ fun ChatScreen(
                                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Aún no hay mensajes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.height(8.dp))
-                                    Text("Envía el primer mensaje para empezar la conversación real.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                                    Text("Envía el primer mensaje para empezar la conversación.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                                 }
                             }
                         }
@@ -411,7 +411,7 @@ fun ChatScreen(
                     modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(32.dp))
                 ) {
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        listOf("❤️", "👍", "😂", "😮", "😢", "🙏", "🔥").forEach { emoji ->
+                        listOf("❤️", "🥰", "😂", "😮", "😢", "🫶", "🔥","🙃").forEach { emoji ->
                             Text(text = emoji, fontSize = 26.sp, modifier = Modifier.clickable {
                                 activeReactionMessageId?.let { msgId -> viewModel.reactToMessage(chatId, msgId, emoji) }
                                 activeReactionMessageId = null
