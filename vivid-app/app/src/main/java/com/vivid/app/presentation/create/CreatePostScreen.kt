@@ -216,7 +216,7 @@ fun CreatePostScreen(
                         Text("Crear Reel con video", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Elige o graba → ajusta el trim → agrega música del dispositivo o de la librería del APK → watermark → publica",
+                            "Elige o graba → ajusta el trim → agrega música del dispositivo o de la app → publica",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -252,7 +252,7 @@ fun CreatePostScreen(
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Las stories duran 24h, se recortan a 15s automáticamente y ahora soportan música del dispositivo y de la APK.",
+                            "Las stories duran 1 dia y puedes agregarle musica.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -317,7 +317,7 @@ fun CreatePostScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Luego podrás añadir música",
+                                "Luego puedes añadir música",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -395,7 +395,7 @@ fun CreatePostScreen(
                             color = if (selectedTrack != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}" else "Del dispositivo o de la librería del APK",
+                            if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}" else "Del dispositivo o de la app.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
@@ -422,7 +422,7 @@ fun CreatePostScreen(
                 value = caption,
                 onValueChange = { caption = it },
                 label = { Text("Caption") },
-                placeholder = { Text("Escribe algo bonito… #vivid") },
+                placeholder = { Text("Simplemente....  Escribe....") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
                 shape = RoundedCornerShape(20.dp),
