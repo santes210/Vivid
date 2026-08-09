@@ -6,13 +6,15 @@ import androidx.compose.ui.graphics.Color
  * Paleta de fallback (cuando el dispositivo NO soporta Material You dinámico,
  * es decir Android <12 o el usuario desactivó el color dinámico).
  *
- * Tokens Material 3:
+ * Tokens Material 3 Expressive (1.4.0):
  *   - primary / onPrimary / primaryContainer / onPrimaryContainer
  *   - secondary / tertiary / error (y sus containers)
- *   - surface (con sus variantes: surfaceVariant, surfaceTint, ...)
+ *   - surface con roles tonales expresivos: surface, surfaceContainer*,
+ *     surfaceVariant, surfaceTint — sin transparencias arbitrarias.
  *
  * Estos se usan solo si el sistema no provee dynamicColor.
- * En Android 12+ el theme toma los colores del wallpaper automáticamente.
+ * En Android 12+ el theme toma los colores del wallpaper automáticamente
+ * via dynamicLight/DarkColorScheme (que ya incluye surfaceContainer*).
  */
 internal object VividBrandColors {
     // Morado principal (Vivid) — inspirado en IG purple accent
@@ -39,7 +41,8 @@ internal object VividBrandColors {
     val ErrorContainer       = Color(0xFFF9DEDC)
     val OnErrorContainer     = Color(0xFF410E0B)
 
-    // Fondos y superficies
+    // Fondos y superficies — jerarquía tonal expresiva (M3 Expressive)
+    // Ver M3 spec: https://m3.material.io/styles/color/roles
     val Background           = Color(0xFFFFFBFE)
     val OnBackground         = Color(0xFF1C1B1F)
     val Surface              = Color(0xFFFFFBFE)
@@ -49,6 +52,23 @@ internal object VividBrandColors {
     val Outline              = Color(0xFF79747E)
     val OutlineVariant       = Color(0xFFCAC4D0)
     val SurfaceTint          = Primary
+
+    // Roles tonales de superficie — jerarquía expresiva
+    // surfaceContainerLowest  = fondo más claro, casi blanco (sutil)
+    // surfaceContainerLow     = tarjetas secundarias, chips no seleccionados
+    // surfaceContainer        = navegación, barras
+    // surfaceContainerHigh    = modales, bottom sheets
+    // surfaceContainerHighest = campos, controles activos
+    val SurfaceContainerLowest   = Color(0xFFFFFFFF)
+    val SurfaceContainerLow      = Color(0xFFF7F2FA)
+    val SurfaceContainer         = Color(0xFFF3EDF7)
+    val SurfaceContainerHigh     = Color(0xFFECE6F0)
+    val SurfaceContainerHighest  = Color(0xFFE6E0E9)
+
+    val InverseSurface       = Color(0xFF1C1B1F)
+    val InverseOnSurface     = Color(0xFFF4EFF4)
+    val InversePrimary       = Color(0xFFD0BCFF)
+    val Scrim                = Color(0xFF000000)
 }
 
 /** Variantes oscuras para los mismos tokens */
@@ -73,13 +93,25 @@ internal object VividBrandColorsDark {
     val ErrorContainer       = Color(0xFF8C1D18)
     val OnErrorContainer     = Color(0xFFF9DEDC)
 
-    val Background           = Color(0xFF1C1B1F)
-    val OnBackground         = Color(0xFFE6E1E5)
-    val Surface              = Color(0xFF1C1B1F)
-    val OnSurface            = Color(0xFFE6E1E5)
+    val Background           = Color(0xFF141218)
+    val OnBackground         = Color(0xFFE6E0E9)
+    val Surface              = Color(0xFF141218)
+    val OnSurface            = Color(0xFFE6E0E9)
     val SurfaceVariant       = Color(0xFF49454F)
     val OnSurfaceVariant     = Color(0xFFCAC4D0)
     val Outline              = Color(0xFF938F99)
     val OutlineVariant       = Color(0xFF49454F)
     val SurfaceTint          = Primary
+
+    // Roles tonales oscuros — escala inversa expresiva
+    val SurfaceContainerLowest   = Color(0xFF0F0D13)
+    val SurfaceContainerLow      = Color(0xFF1C1B1F)
+    val SurfaceContainer         = Color(0xFF211F26)
+    val SurfaceContainerHigh     = Color(0xFF2B2930)
+    val SurfaceContainerHighest  = Color(0xFF36343B)
+
+    val InverseSurface       = Color(0xFFE6E0E9)
+    val InverseOnSurface     = Color(0xFF322F35)
+    val InversePrimary       = Color(0xFF6750A4)
+    val Scrim                = Color(0xFF000000)
 }

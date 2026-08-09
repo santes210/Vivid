@@ -137,8 +137,8 @@ fun VividNavigation(
         bottomBar = {
             if (currentRoute != Screen.Auth.route) {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                    tonalElevation = 4.dp,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 0.dp,
                     windowInsets = WindowInsets.navigationBars
                 ) {
                     val items = listOf(

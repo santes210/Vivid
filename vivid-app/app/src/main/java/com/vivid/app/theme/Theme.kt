@@ -17,19 +17,25 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * Theme principal Vivid — Material You 3 completo.
+ * Theme principal Vivid — Material You 3 Expressive (M3 1.4.0 estable).
  *
  *   - dynamicColor: true → toma colores del wallpaper (Android 12+)
  *   - dynamicColor: false → usa la paleta de marca VividBrandColors
- *   - edge-to-edge: status/navigation bars transparentes
+ *   - edge-to-edge: status/navigation bars transparentes (WindowCompat)
  *
  * Además aplica:
  *   - VividTypography (escala completa M3)
- *   - VividShapes (esquinas expresivas)
+ *   - VividShapes (esquinas expresivas con propósito)
+ *   - surfaceContainer* hierarchy (sin transparencias arbitrarias)
  *   - systemBars contrast automático (iconos claros/oscuros según tema)
  *
  * Perf: el colorScheme se cachea con `remember(darkTheme, dynamicColor)` para no
  * regenerar la paleta dinámica en cada recomposición (importante en gama baja).
+ *
+ * Versiones (controlado, sin alpha):
+ *   - material3: 1.4.0 estable
+ *   - composeBom: 2025.04.01 compatible
+ *   - Kotlin/AGP sin cambios simultáneos
  */
 @Composable
 fun VividTheme(
@@ -44,59 +50,77 @@ fun VividTheme(
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             }
             darkTheme -> darkColorScheme(
-            primary = VividBrandColorsDark.Primary,
-            onPrimary = VividBrandColorsDark.OnPrimary,
-            primaryContainer = VividBrandColorsDark.PrimaryContainer,
-            onPrimaryContainer = VividBrandColorsDark.OnPrimaryContainer,
-            secondary = VividBrandColorsDark.Secondary,
-            onSecondary = VividBrandColorsDark.OnSecondary,
-            secondaryContainer = VividBrandColorsDark.SecondaryContainer,
-            onSecondaryContainer = VividBrandColorsDark.OnSecondaryContainer,
-            tertiary = VividBrandColorsDark.Tertiary,
-            onTertiary = VividBrandColorsDark.OnTertiary,
-            tertiaryContainer = VividBrandColorsDark.TertiaryContainer,
-            onTertiaryContainer = VividBrandColorsDark.OnTertiaryContainer,
-            error = VividBrandColorsDark.Error,
-            onError = VividBrandColorsDark.OnError,
-            errorContainer = VividBrandColorsDark.ErrorContainer,
-            onErrorContainer = VividBrandColorsDark.OnErrorContainer,
-            background = VividBrandColorsDark.Background,
-            onBackground = VividBrandColorsDark.OnBackground,
-            surface = VividBrandColorsDark.Surface,
-            onSurface = VividBrandColorsDark.OnSurface,
-            surfaceVariant = VividBrandColorsDark.SurfaceVariant,
-            onSurfaceVariant = VividBrandColorsDark.OnSurfaceVariant,
-            outline = VividBrandColorsDark.Outline,
-            outlineVariant = VividBrandColorsDark.OutlineVariant,
-            surfaceTint = VividBrandColorsDark.SurfaceTint
-        )
-        else -> lightColorScheme(
-            primary = VividBrandColors.Primary,
-            onPrimary = VividBrandColors.OnPrimary,
-            primaryContainer = VividBrandColors.PrimaryContainer,
-            onPrimaryContainer = VividBrandColors.OnPrimaryContainer,
-            secondary = VividBrandColors.Secondary,
-            onSecondary = VividBrandColors.OnSecondary,
-            secondaryContainer = VividBrandColors.SecondaryContainer,
-            onSecondaryContainer = VividBrandColors.OnSecondaryContainer,
-            tertiary = VividBrandColors.Tertiary,
-            onTertiary = VividBrandColors.OnTertiary,
-            tertiaryContainer = VividBrandColors.TertiaryContainer,
-            onTertiaryContainer = VividBrandColors.OnTertiaryContainer,
-            error = VividBrandColors.Error,
-            onError = VividBrandColors.OnError,
-            errorContainer = VividBrandColors.ErrorContainer,
-            onErrorContainer = VividBrandColors.OnErrorContainer,
-            background = VividBrandColors.Background,
-            onBackground = VividBrandColors.OnBackground,
-            surface = VividBrandColors.Surface,
-            onSurface = VividBrandColors.OnSurface,
-            surfaceVariant = VividBrandColors.SurfaceVariant,
-            onSurfaceVariant = VividBrandColors.OnSurfaceVariant,
-            outline = VividBrandColors.Outline,
-            outlineVariant = VividBrandColors.OutlineVariant,
-            surfaceTint = VividBrandColors.SurfaceTint
-        )
+                primary = VividBrandColorsDark.Primary,
+                onPrimary = VividBrandColorsDark.OnPrimary,
+                primaryContainer = VividBrandColorsDark.PrimaryContainer,
+                onPrimaryContainer = VividBrandColorsDark.OnPrimaryContainer,
+                secondary = VividBrandColorsDark.Secondary,
+                onSecondary = VividBrandColorsDark.OnSecondary,
+                secondaryContainer = VividBrandColorsDark.SecondaryContainer,
+                onSecondaryContainer = VividBrandColorsDark.OnSecondaryContainer,
+                tertiary = VividBrandColorsDark.Tertiary,
+                onTertiary = VividBrandColorsDark.OnTertiary,
+                tertiaryContainer = VividBrandColorsDark.TertiaryContainer,
+                onTertiaryContainer = VividBrandColorsDark.OnTertiaryContainer,
+                error = VividBrandColorsDark.Error,
+                onError = VividBrandColorsDark.OnError,
+                errorContainer = VividBrandColorsDark.ErrorContainer,
+                onErrorContainer = VividBrandColorsDark.OnErrorContainer,
+                background = VividBrandColorsDark.Background,
+                onBackground = VividBrandColorsDark.OnBackground,
+                surface = VividBrandColorsDark.Surface,
+                onSurface = VividBrandColorsDark.OnSurface,
+                surfaceVariant = VividBrandColorsDark.SurfaceVariant,
+                onSurfaceVariant = VividBrandColorsDark.OnSurfaceVariant,
+                surfaceTint = VividBrandColorsDark.SurfaceTint,
+                outline = VividBrandColorsDark.Outline,
+                outlineVariant = VividBrandColorsDark.OutlineVariant,
+                surfaceContainer = VividBrandColorsDark.SurfaceContainer,
+                surfaceContainerHigh = VividBrandColorsDark.SurfaceContainerHigh,
+                surfaceContainerHighest = VividBrandColorsDark.SurfaceContainerHighest,
+                surfaceContainerLow = VividBrandColorsDark.SurfaceContainerLow,
+                surfaceContainerLowest = VividBrandColorsDark.SurfaceContainerLowest,
+                inverseSurface = VividBrandColorsDark.InverseSurface,
+                inverseOnSurface = VividBrandColorsDark.InverseOnSurface,
+                inversePrimary = VividBrandColorsDark.InversePrimary,
+                scrim = VividBrandColorsDark.Scrim
+            )
+            else -> lightColorScheme(
+                primary = VividBrandColors.Primary,
+                onPrimary = VividBrandColors.OnPrimary,
+                primaryContainer = VividBrandColors.PrimaryContainer,
+                onPrimaryContainer = VividBrandColors.OnPrimaryContainer,
+                secondary = VividBrandColors.Secondary,
+                onSecondary = VividBrandColors.OnSecondary,
+                secondaryContainer = VividBrandColors.SecondaryContainer,
+                onSecondaryContainer = VividBrandColors.OnSecondaryContainer,
+                tertiary = VividBrandColors.Tertiary,
+                onTertiary = VividBrandColors.OnTertiary,
+                tertiaryContainer = VividBrandColors.TertiaryContainer,
+                onTertiaryContainer = VividBrandColors.OnTertiaryContainer,
+                error = VividBrandColors.Error,
+                onError = VividBrandColors.OnError,
+                errorContainer = VividBrandColors.ErrorContainer,
+                onErrorContainer = VividBrandColors.OnErrorContainer,
+                background = VividBrandColors.Background,
+                onBackground = VividBrandColors.OnBackground,
+                surface = VividBrandColors.Surface,
+                onSurface = VividBrandColors.OnSurface,
+                surfaceVariant = VividBrandColors.SurfaceVariant,
+                onSurfaceVariant = VividBrandColors.OnSurfaceVariant,
+                surfaceTint = VividBrandColors.SurfaceTint,
+                outline = VividBrandColors.Outline,
+                outlineVariant = VividBrandColors.OutlineVariant,
+                surfaceContainer = VividBrandColors.SurfaceContainer,
+                surfaceContainerHigh = VividBrandColors.SurfaceContainerHigh,
+                surfaceContainerHighest = VividBrandColors.SurfaceContainerHighest,
+                surfaceContainerLow = VividBrandColors.SurfaceContainerLow,
+                surfaceContainerLowest = VividBrandColors.SurfaceContainerLowest,
+                inverseSurface = VividBrandColors.InverseSurface,
+                inverseOnSurface = VividBrandColors.InverseOnSurface,
+                inversePrimary = VividBrandColors.InversePrimary,
+                scrim = VividBrandColors.Scrim
+            )
         }
     }
 
@@ -104,10 +128,13 @@ fun VividTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Edge-to-edge: status bar y navigation bar transparentes
-            window.statusBarColor = colorScheme.surface.toArgb()
-            window.navigationBarColor = colorScheme.surface.toArgb()
-            // Iconos claros si el fondo es oscuro
+            // Edge-to-edge expresivo: barras transparentes, contenido detrás del sistema
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isNavigationBarContrastEnforced = false
+            }
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !darkTheme
             insetsController.isAppearanceLightNavigationBars = !darkTheme

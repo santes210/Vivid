@@ -215,8 +215,8 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
                 ),
                 singleLine = true
             )
@@ -232,7 +232,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
             ) {
                 tabs.forEachIndexed { index, title ->
                     val isSelected = selectedTab == index
-                    val chipBgColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    val chipBgColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer
                     val chipTextColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
 
                     Box(
@@ -331,7 +331,7 @@ private fun EmptyMessagesState() {
     ) {
         Surface(
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.primaryContainer,
             modifier = Modifier.size(96.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -361,9 +361,9 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
     val unread = chat.unreadCount > 0
 
     val cardBg = if (unread) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        MaterialTheme.colorScheme.surfaceContainer
     }
 
     val cardBorder = if (unread) {

@@ -205,7 +205,7 @@ fun ChatScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         }
@@ -213,7 +213,7 @@ fun ChatScreen(
         val bgBrush = Brush.verticalGradient(
             colors = listOf(
                 MaterialTheme.colorScheme.background,
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                MaterialTheme.colorScheme.surfaceContainer
             )
         )
 
@@ -232,7 +232,7 @@ fun ChatScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                                color = MaterialTheme.colorScheme.errorContainer,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
                             ) {
                                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -246,7 +246,7 @@ fun ChatScreen(
 
                     messages.isEmpty() && imageUploads.none { it.phase != ImageUpload.Phase.DONE } && voiceUploads.isEmpty() && !isOtherTyping -> {
                         Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)) {
+                            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Aún no hay mensajes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.height(8.dp))
@@ -419,7 +419,7 @@ fun ChatScreen(
             ) {
                 Card(
                     shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                     modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(32.dp))
                 ) {
@@ -472,7 +472,7 @@ fun ChatScreen(
                 Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 4f); offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan } }, contentAlignment = Alignment.Center) {
                     AsyncImage(model = url, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxWidth().padding(16.dp).graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y), contentScale = ContentScale.Fit)
                 }
-                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 24.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f), tonalElevation = 6.dp) {
+                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 24.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(text = "Visor de Imagen", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))
@@ -544,7 +544,7 @@ private fun TypingIndicatorBubble() {
     val animationsEnabled = LocalVividAnimationsEnabled.current
     if (!animationsEnabled) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
-            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), tonalElevation = 1.dp, shadowElevation = 0.5.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 1.dp, shadowElevation = 0.5.dp, modifier = Modifier.widthIn(max = 120.dp)) {
                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     repeat(3) {
                         Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)))
@@ -559,7 +559,7 @@ private fun TypingIndicatorBubble() {
 
     val infinite = rememberInfiniteTransition(label = "typing")
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), tonalElevation = 1.dp, shadowElevation = 0.5.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 1.dp, shadowElevation = 0.5.dp, modifier = Modifier.widthIn(max = 120.dp)) {
             Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 repeat(3) { idx ->
                     val delayMs = idx * 200
@@ -577,7 +577,7 @@ private fun TypingIndicatorBubble() {
 @Composable
 private fun DateHeaderPill(timestamp: Long) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f), tonalElevation = 1.dp) {
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 1.dp) {
             Text(text = formatDateHeader(timestamp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
         }
     }
@@ -609,7 +609,7 @@ fun MessageBubble(
     } else {
         RoundedCornerShape(topStart = if (isGroupStart) 18.dp else 4.dp, topEnd = 18.dp, bottomStart = if (isGroupEnd) 18.dp else 4.dp, bottomEnd = 18.dp)
     }
-    val bubbleBackground = if (isMine) Brush.linearGradient(colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))) else Brush.linearGradient(colors = listOf(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)))
+    val bubbleBackground = if (isMine) Brush.linearGradient(colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))) else Brush.linearGradient(colors = listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerLow))
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp), contentAlignment = alignment) {
         Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
             Box(contentAlignment = Alignment.BottomEnd) {
@@ -689,7 +689,7 @@ private fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoice
 @Composable
 private fun StoryReplyContent(message: Message, isMine: Boolean) {
     Column {
-        Surface(shape = RoundedCornerShape(12.dp), color = if (isMine) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)) {
+        Surface(shape = RoundedCornerShape(12.dp), color = if (isMine) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.primaryContainer) {
             Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
@@ -725,7 +725,7 @@ private fun MessageMetaRow(message: Message, isMine: Boolean, showResignVoice: B
 @Composable
 private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(modifier = Modifier.widthIn(max = 260.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
@@ -734,7 +734,7 @@ private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: ()
                 }
                 when (upload.phase) {
                     ImageUpload.Phase.COMPRESSING -> { Spacer(Modifier.height(10.dp)); CircularProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp), strokeWidth = 4.dp, color = MaterialTheme.colorScheme.primary) }
-                    ImageUpload.Phase.UPLOADING -> { Spacer(Modifier.height(10.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) }
+                    ImageUpload.Phase.UPLOADING -> { Spacer(Modifier.height(10.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainer) }
                     ImageUpload.Phase.FAILED -> { Spacer(Modifier.height(4.dp)); Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onDismiss) { Text("Descartar") }; TextButton(onClick = onRetry) { Text("Reintentar", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) } } }
                     ImageUpload.Phase.DONE -> Unit
                 }
@@ -746,7 +746,7 @@ private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: ()
 @Composable
 private fun VoiceUploadBubble(upload: VoiceUpload, onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
             Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))

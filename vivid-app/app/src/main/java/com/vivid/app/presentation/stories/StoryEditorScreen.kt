@@ -411,7 +411,7 @@ private fun StickerPickerContent(onPick: (String) -> Unit) {
                         fontSize = 32.sp,
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                             .padding(12.dp)
                             .pointerInput(emoji) {
                                 detectTapGestures(onTap = { onPick(emoji) })

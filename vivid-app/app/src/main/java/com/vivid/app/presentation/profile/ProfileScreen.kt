@@ -350,7 +350,7 @@ fun ProfileScreen(
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 )
             )
         },
@@ -568,7 +568,7 @@ private fun ProfileHeader(
 private fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(
@@ -615,7 +615,7 @@ private fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
 private fun EmptyPostsPlaceholder() {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(
@@ -633,7 +633,7 @@ private fun EmptyPostsPlaceholder() {
 private fun EmptySavedPostsPlaceholder() {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(
@@ -697,7 +697,7 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
         bitmap = if (post.imageBase64.isNotBlank()) try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } else null
     }
     Box(
-        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceContainerLow),
         contentAlignment = Alignment.Center
     ) {
         when {

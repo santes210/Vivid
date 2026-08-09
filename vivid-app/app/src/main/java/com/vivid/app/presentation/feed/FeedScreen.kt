@@ -302,7 +302,7 @@ fun FeedScreen(
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ),
                 scrollBehavior = scrollBehavior
             )
@@ -689,7 +689,7 @@ private fun InlineFollowButton(
     onClick: () -> Unit
 ) {
     val containerColor = when {
-        isFollowing || hasPendingRequest -> MaterialTheme.colorScheme.surfaceVariant
+        isFollowing || hasPendingRequest -> MaterialTheme.colorScheme.surfaceContainerHighest
         else -> MaterialTheme.colorScheme.primaryContainer
     }
     val contentColor = when {
@@ -837,7 +837,7 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f),
+        color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         tonalElevation = 1.dp
     ) {
@@ -1107,7 +1107,7 @@ fun PostImage(
     val containerModifier = if (useDefaultHeight) modifier.fillMaxWidth().heightIn(max = 500.dp) else modifier.fillMaxSize()
 
     Box(
-        modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center
     ) {
         when {
