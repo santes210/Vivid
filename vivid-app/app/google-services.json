@@ -12,7 +12,20 @@
           "package_name": "com.vivid.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "952899444057-ug993h2eu1abbio4tsccahfd7fvnjepi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vivid.app",
+            "certificate_hash": "576e507fea0f03c6de5f6c86042ef18a2ed91a01"
+          }
+        },
+        {
+          "client_id": "952899444057-btlfp4jfes67kotcemmbk3r0ubb688ho.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCEC51d0IBQ_DdTKQgT4HFSL7gg7LuIU1o"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "952899444057-btlfp4jfes67kotcemmbk3r0ubb688ho.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
