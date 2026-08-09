@@ -192,7 +192,7 @@ fun VideoTrimmerScreen(
                     .fillMaxWidth()
                     .height(72.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 frameThumbs.forEachIndexed { idx, bmp ->
                     Box(
@@ -278,7 +278,7 @@ private fun TrimSlider(
                 .height(6.dp)
                 .align(Alignment.Center)
                 .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         )
 
         if (sizePx.width > 0 && durationMs > 0) {

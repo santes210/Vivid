@@ -159,7 +159,7 @@ fun SettingsScreen(
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
@@ -914,7 +914,7 @@ fun SettingsScreen(
                     Text("Cerrar")
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         )
     }
@@ -954,7 +954,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showThemeDialog = false }) { Text("Cerrar") }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         )
     }
@@ -994,7 +994,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showDownloadQualityDialog = false }) { Text("Cerrar") }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         )
     }
@@ -1007,7 +1007,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { infoDialog = null }) { Text("Entendido") }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         )
     }
@@ -1035,7 +1035,7 @@ fun SettingsScreen(
                     Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp
         )
     }
@@ -1058,7 +1058,7 @@ fun SettingsCardGroup(
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
             shape = RoundedCornerShape(24.dp)

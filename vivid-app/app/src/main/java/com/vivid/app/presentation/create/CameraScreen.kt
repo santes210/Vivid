@@ -198,7 +198,7 @@ fun CameraScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 32.dp, bottom = 48.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Icon(Icons.Default.Add, contentDescription = "Abrir galería")
         }
