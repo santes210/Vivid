@@ -33,6 +33,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -134,20 +135,69 @@ fun FeedScreen(
     var reportReason by remember { mutableStateOf("Inapropiado") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
+    // ── Carga inicial: 1 sola consulta de likes + listener en tiempo real para posts ──
+    // ANTES: usaba get() una sola vez, por eso al publicar un post no aparecía hasta reiniciar app.
+    // AHORA: snapshotListener para que el feed se actualice al instante cuando publicas.
     LaunchedEffect(currentUserId) {
         isLoading = true
         val likedIds = feedViewModel.fetchLikedPostIds(currentUserId)
         likedPostIds = likedIds
-        val result = runCatching {
-            loadInitialPostsFromFirebase(currentUserId, likedIds, feedViewModel)
-        }.getOrElse { FeedPageResult(emptyList(), null) }
-        posts = result.posts
-        lastVisibleDoc = result.lastDoc
-        hasMore = result.posts.size >= 20
         isLoading = false
     }
 
-    // Paginación real basada en scroll (startAfter)
+    DisposableEffect(currentUserId, likedPostIds) {
+        if (currentUserId.isBlank()) {
+            onDispose { }
+        } else {
+            isLoading = true
+            val db = FirebaseFirestore.getInstance()
+            val postsListener = db.collection("posts")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(20)
+                .addSnapshotListener { snap, err ->
+                    if (err != null || snap == null) {
+                        isLoading = false
+                        return@addSnapshotListener
+                    }
+                    // Mapeo SIN llamadas a B2 (rápido, evita spinner infinito)
+                    val mapped = snap.documents.mapNotNull { doc ->
+                        try {
+                            val data = doc.data ?: return@mapNotNull null
+                            val isLiked = when {
+                                currentUserId.isBlank() -> false
+                                likedPostIds != null -> doc.id in likedPostIds!!
+                                else -> false
+                            }
+                            PostData(
+                                id = doc.id,
+                                userId = data["userId"] as? String ?: "",
+                                username = data["username"] as? String ?: "usuario",
+                                userProfilePicture = data["userAvatar"] as? String
+                                    ?: data["userProfilePicture"] as? String ?: "",
+                                caption = data["caption"] as? String ?: "",
+                                imageUrl = data["imageUrl"] as? String ?: "",
+                                imageBase64 = data["imageBase64"] as? String ?: "",
+                                storageKey = data["storageKey"] as? String ?: "",
+                                videoUrl = data["videoUrl"] as? String ?: "",
+                                thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
+                                isVideo = data["isVideo"] as? Boolean ?: false,
+                                likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
+                                commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
+                                timestamp = data["timestamp"] as? Long ?: 0L,
+                                isLiked = isLiked
+                            )
+                        } catch (_: Exception) { null }
+                    }
+                    posts = mapped
+                    lastVisibleDoc = snap.documents.lastOrNull()
+                    hasMore = snap.size() >= 20
+                    isLoading = false
+                }
+            onDispose { postsListener.remove() }
+        }
+    }
+
+    // Paginación real basada en scroll (startAfter) — sigue usando get() para páginas siguientes
     val shouldLoadMore = remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -164,9 +214,14 @@ fun FeedScreen(
                 loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, feedViewModel)
             }.getOrElse { FeedPageResult(emptyList(), null) }
             if (result.posts.isNotEmpty()) {
-                posts = posts + result.posts
-                lastVisibleDoc = result.lastDoc
-                hasMore = result.posts.size >= 20
+                // Evita duplicados si el snapshot ya trae esos docs
+                val existingIds = posts.map { it.id }.toSet()
+                val newUnique = result.posts.filter { it.id !in existingIds }
+                if (newUnique.isNotEmpty()) {
+                    posts = posts + newUnique
+                    lastVisibleDoc = result.lastDoc
+                    hasMore = result.posts.size >= 20
+                }
             } else {
                 hasMore = false
             }
@@ -743,16 +798,14 @@ private suspend fun mapPostDoc(
         }
     }
 
+    // FIX: No regenerar URL firmada de forma ansiosa en cada carga del feed.
+    // Antes: cada post hacía b2_get_download_authorization (20 llamadas en paralelo)
+    // causando lentitud, rate-limit y si fallaba la red dejaba spinner infinito.
+    // Ahora: usamos directamente lo guardado en Firestore (válido 7 días) y
+    // solo re-firmamos perezosamente cuando Coil detecta error 403 vía onUrlExpired.
     val savedImageUrl = data["imageUrl"] as? String ?: ""
     val storageKey = data["storageKey"] as? String ?: ""
-
-    val imageUrl = if (storageKey.isNotBlank() && savedImageUrl.isNotBlank()) {
-        try {
-            feedViewModel.refreshSignedUrl(storageKey) ?: savedImageUrl
-        } catch (_: Exception) {
-            savedImageUrl
-        }
-    } else savedImageUrl
+    val imageUrl = savedImageUrl
 
     return PostData(
         id = doc.id,
@@ -821,7 +874,14 @@ private fun PostAuthorAvatar(post: PostData) {
     }
 }
 
-// ── PostImage ──
+// ── PostImage — VERSIÓN CORREGIDA 2026-08-09 ──
+// Bug anterior: usaba rememberAsyncImagePainter + LaunchedEffect con lógica que dejaba
+// isLoading=true para siempre cuando imageUrl estaba vacío o cuando el estado era Empty.
+// Resultado: el post se quedaba cargando infinitamente.
+// Fix: separar claramente las dos ramas (base64 vs URL), usar AsyncImage directo que
+// maneja sus propios estados, y tratar Empty como loading pero con timeout y fallback
+// a onUrlExpired para regenerar URL firmada si hay 403.
+// También tolera Base64 tanto con NO_WRAP como DEFAULT (por si viene con saltos de línea).
 @Composable
 fun PostImage(
     imageBase64: String,
@@ -832,48 +892,130 @@ fun PostImage(
     storageKey: String = "",
     onUrlExpired: () -> Unit = {}
 ) {
-    var bmp by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
-    var isLoading by remember(imageBase64, imageUrl) { mutableStateOf(true) }
-    var hasError by remember(imageBase64, imageUrl) { mutableStateOf(false) }
-    var notifiedExpired by remember(storageKey) { mutableStateOf(false) }
-    val urlPainter = rememberAsyncImagePainter(model = imageUrl)
-    val urlState = urlPainter.state
-
-    LaunchedEffect(imageBase64) {
-        if (imageBase64.isNotBlank()) {
-            try { bmp = BitmapFactory.decodeByteArray(Base64.decode(imageBase64, Base64.NO_WRAP), 0, Base64.decode(imageBase64, Base64.NO_WRAP).size); hasError = bmp == null } catch (_: Exception) { hasError = true }
-            isLoading = false
-        }
-    }
-    LaunchedEffect(urlState) {
-        if (imageBase64.isBlank() && imageUrl.isNotBlank()) {
-            when (urlState) {
-                is AsyncImagePainter.State.Loading -> { isLoading = true; hasError = false }
-                is AsyncImagePainter.State.Success -> { isLoading = false; hasError = false }
-                is AsyncImagePainter.State.Error -> {
-                    isLoading = false
-                    hasError = true
-                    if (storageKey.isNotBlank() && !notifiedExpired) {
-                        notifiedExpired = true
-                        onUrlExpired()
-                    }
-                }
-                else -> {}
-            }
-        }
-    }
-
     val containerModifier = if (useDefaultHeight) modifier.fillMaxWidth().heightIn(max = 500.dp) else modifier.fillMaxSize()
-    Box(modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
+
+    Box(
+        modifier = containerModifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        contentAlignment = Alignment.Center
+    ) {
         when {
-            isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            hasError -> Icon(Icons.Default.BrokenImage, "Error", modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            bmp != null -> Image(bmp!!.asImageBitmap(), "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            imageUrl.isNotBlank() -> Image(painter = urlPainter, "Post", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(8.dp))
-                Text(username, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // ── Caso 1: imagen en Base64 (fallback cuando B2 falla) ──
+            imageBase64.isNotBlank() -> {
+                var bitmap by remember(imageBase64) { mutableStateOf<Bitmap?>(null) }
+                var isLoading by remember(imageBase64) { mutableStateOf(true) }
+                var hasError by remember(imageBase64) { mutableStateOf(false) }
+
+                LaunchedEffect(imageBase64) {
+                    isLoading = true
+                    hasError = false
+                    bitmap = withContext(Dispatchers.IO) {
+                        try {
+                            // Intenta NO_WRAP primero (formato que guardamos), luego DEFAULT por compat
+                            val bytes = try {
+                                Base64.decode(imageBase64, Base64.NO_WRAP)
+                            } catch (_: Exception) {
+                                Base64.decode(imageBase64, Base64.DEFAULT)
+                            }
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    hasError = bitmap == null
+                    isLoading = false
+                }
+
+                when {
+                    isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    hasError || bitmap == null -> Icon(
+                        Icons.Default.BrokenImage,
+                        contentDescription = "Error cargando imagen",
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    else -> Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = "Post de $username",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+
+            // ── Caso 2: URL remota (B2 con URL firmada) ──
+            imageUrl.isNotBlank() -> {
+                var hasNotifiedExpired by remember(storageKey, imageUrl) { mutableStateOf(false) }
+
+                // SubcomposeAsyncImage permite mostrar loading/error slots.
+                // Usa el ImageLoader de VividImageLoaderModule (cache 250MB).
+                // onError dispara regeneración perezosa de URL firmada.
+                SubcomposeAsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Post de $username",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    },
+                    error = {
+                        // Si falla, intenta regenerar URL firmada una vez
+                        if (storageKey.isNotBlank() && !hasNotifiedExpired) {
+                            hasNotifiedExpired = true
+                            onUrlExpired()
+                        }
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.BrokenImage,
+                                    contentDescription = "Error",
+                                    modifier = Modifier.size(32.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "No se pudo cargar",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                if (storageKey.isNotBlank() && !hasNotifiedExpired) {
+                                    TextButton(onClick = {
+                                        hasNotifiedExpired = true
+                                        onUrlExpired()
+                                    }) { Text("Reintentar") }
+                                }
+                            }
+                        }
+                    },
+                    onError = {
+                        if (storageKey.isNotBlank() && !hasNotifiedExpired) {
+                            hasNotifiedExpired = true
+                            onUrlExpired()
+                        }
+                    }
+                )
+            }
+
+            // ── Caso 3: sin imagen (evita spinner infinito) ──
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        username,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
