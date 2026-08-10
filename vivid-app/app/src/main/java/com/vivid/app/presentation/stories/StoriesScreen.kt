@@ -113,6 +113,7 @@ fun StoriesRow(
 
 @Composable
 private fun CreateStoryItem(onClick: () -> Unit) {
+    val ringColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
@@ -125,7 +126,7 @@ private fun CreateStoryItem(onClick: () -> Unit) {
             Canvas(modifier = Modifier.size(64.dp)) {
                 val strokeWidth = 2.dp.toPx()
                 drawCircle(
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                    color = ringColor,
                     radius = size.minDimension / 2 - strokeWidth,
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                 )
