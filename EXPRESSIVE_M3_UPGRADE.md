@@ -1,7 +1,15 @@
 # Vivid → Material 3 Expressive (upgrade 1.5.0-alpha23)
 
 Fecha: 2026-08-10
-Estado: **código aplicado — falta validar el build en CI/local** (este entorno no tiene JDK ni Android SDK).
+Estado: **código aplicado — compilación en CI pendiente de confirmar (PR #21)**
+
+> **Actualización (fix del build):** el PR #21 probó `material3 1.5.0-alpha23` en CI y falló
+> en `checkDebugAarMetadata`: esa alpha (y Compose 1.12 que arrastra) exige **compileSdk 37 +
+> AGP 9.1.0**, incompatible con el toolchain de la app (compileSdk 35 + AGP 8.7.3). Se corrigió
+> a **`material3 1.5.0-alpha14`**, que conserva los APIs Expressive (MotionScheme, tipografía
+> Emphasized) pero usa **Compose 1.8/1.9 → compatible con compileSdk 35 + AGP 8.7.3**. Las
+> alphas ≥ 15 requieren el salto grande a AGP 9.x/compileSdk 37 (no se tomó).
+
 
 > Antes: la app estaba en **Material 3 1.4.0 estable** y, aunque el tema se llamaba
 > "Expressive", **no usaba los APIs Expressive reales**. Eso cambió en este upgrade.
@@ -32,9 +40,9 @@ todo el toolchain (Kotlin → KSP → Room/Hilt). Por eso el upgrade es coordina
 
 | Artefacto | Antes | Ahora | Por qué |
 |---|---|---|---|
-| `material3` | `1.4.0` | `1.5.0-alpha23` | Es donde viven los APIs Expressive. Elegí **alpha23** (la que mencionaste): ya gradúa listas y top bars expresivas a no-experimental. La alpha más reciente es **alpha25**. |
-| Compose `ui`/`ui-graphics`/`ui-tooling`/`ui-tooling-preview`/`ui-test-*` | BOM `2025.04.01` (Compose 1.8) | `1.12.0-alpha03` (explicita) | Requisito de material3 `1.5.0-alpha23` (lo confirman los POM). |
-| `kotlin` (y plugin Compose) | `2.0.21` | `2.1.20` | stdlib que exige material3 `1.5.0-alpha23`. |
+| `material3` | `1.4.0` | `1.5.0-alpha14` | Es donde viven los APIs Expressive. **`alpha14`** es la alpha más reciente compatible con el toolchain actual (Compose 1.8/1.9). `alpha23`+ arrastra Compose 1.11/1.12, que exigen compileSdk 37 + AGP 9.x (descartado). |
+| Compose `ui`/`ui-graphics`/`ui-tooling`/`ui-tooling-preview`/`ui-test-*` | BOM `2025.04.01` (Compose 1.8) | BOM `2025.04.01` (Gradle resuelve a 1.8.2/1.9.0 que trae alpha14) | Mantener el BOM; material3-alpha14 sube las deps de Compose a su mínimo compatible. |
+| `kotlin` (y plugin Compose) | `2.0.21` | `2.1.20` | stdlib que exige material3 `1.5.0-alpha14`. |
 | `ksp` | `2.0.21-1.0.25` | `2.1.20-1.0.32` | **KSP1** para Kotlin 2.1.20 → mantiene compatibilidad con **Room 2.6.1** y **Hilt 2.51.1**. No usé KSP2 (`2.1.20-2.0.x`) a propósito: Room 2.6.1 no soporta KSP2. |
 | `agp` | `8.7.3` | `8.7.3` | Sin cambio (compatible con Gradle 8.9 + Kotlin 2.1.20). |
 | `composeOptions.kotlinCompilerExtensionVersion` | `1.5.15` | **eliminado** | Con el plugin `org.jetbrains.kotlin.plugin.compose`, el compilador queda ligado a la versión de Kotlin (2.1.20). Dejar `1.5.15` rompería el build. |
@@ -76,10 +84,11 @@ Puntos a revisar si algo falla:
 1. **Room 2.6.1 + KSP 2.1.20**: uso KSP1 (`2.1.20-1.0.32`) para mantenerlo. Si Room diera error de KSP,
    la solución es subir `room` a `2.7.x` (cambia mínimamente las APIs de `@Database`/DAO en casos raros).
 2. **Hilt 2.51.1**: debería funcionar con KSP1 2.1.20. Si fallara, subir `hilt` a `2.56+`.
-3. **Mezcla de versiones Compose**: material3 `1.5.0-alpha23` trae foundation/ui/runtime `1.12.0-alpha03`;
+3. **Mezcla de versiones Compose**: material3 `1.5.0-alpha14` trae foundation/ui 1.8.x y runtime 1.9.0;
    `material-icons-extended` sigue en `1.7.8` (del BOM) — es normal y compila (los icons solo aportan datos).
-4. Si querías la **alpha más nueva (alpha25)**: cambia `material3 = "1.5.0-alpha25"` en el toml.
-   Solo añade correcciones y un par de renombres (`FilledTonalToggleButton`, `shapesFor`) que esta app **no usa**, así que es seguro a posteriori.
+4. **No subir más allá de alpha14 en este toolchain**: `alpha15`+ arrastra Compose 1.11/1.12, que
+   exigen compileSdk 37 + AGP 9.x. Si algún día se quiere la alpha más nueva, hay que subir
+   `agp` a 9.x, `compileSdk` a 37 y Gradle en paralelo (upgrade grande, fuera de este PR).
 
 ---
 
