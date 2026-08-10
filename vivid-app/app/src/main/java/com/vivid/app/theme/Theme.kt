@@ -128,12 +128,14 @@ fun VividTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Edge-to-edge expresivo: barras transparentes, contenido detrás del sistema
-            WindowCompat.setDecorFitsSystemWindows(window, false)
+            // Edge-to-edge real: barras 100% transparentes, contenido detrás cuando es seguro.
+            // MainActivity.enableEdgeToEdge() ya hace setDecorFitsSystemWindows(false);
+            // aquí solo aseguramos transparencia + contraste automático de iconos.
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isNavigationBarContrastEnforced = false
+                window.isStatusBarContrastEnforced = false
             }
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !darkTheme

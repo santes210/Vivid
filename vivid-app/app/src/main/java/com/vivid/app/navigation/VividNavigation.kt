@@ -76,6 +76,14 @@ sealed class Screen(
     object CloseFriends : Screen("close_friends", "Mejores amigos")
     object BlockedUsers : Screen("blocked_users", "Bloqueados")
     object Settings : Screen("settings", "Ajustes")
+    object SettingsAccount : Screen("settings/account", "Cuenta")
+    object SettingsPrivacy : Screen("settings/privacy", "Privacidad")
+    object SettingsAppearance : Screen("settings/appearance", "Apariencia")
+    object SettingsContent : Screen("settings/content", "Contenido")
+    object SettingsNotifications : Screen("settings/notifications", "Notificaciones")
+    object SettingsStorage : Screen("settings/storage", "Almacenamiento")
+    object SettingsHelp : Screen("settings/help", "Ayuda")
+    object SettingsAbout : Screen("settings/about", "Acerca")
     object CameraVideo : Screen("camera_video", "Grabar")
     object VideoTrimmer : Screen("video_trimmer", "Trim")
 }
@@ -156,9 +164,20 @@ fun VividNavigation(
         }
     }
 
+    // Edge-to-edge: oculta bottomBar en pantallas inmersivas (Reels, Chat, story)
+    val isImmersive = remember(currentRoute) {
+        currentRoute?.startsWith("reels") == true ||
+            currentRoute?.startsWith("chat/") == true ||
+            currentRoute?.startsWith("story_viewer") == true ||
+            currentRoute?.startsWith("camera") == true ||
+            currentRoute?.startsWith("camera_video") == true
+    }
+    val showBottomBar = !isTablet && currentRoute != Screen.Auth.route && !isImmersive
+    val showRail = isTablet && currentRoute != Screen.Auth.route && !isImmersive
+
     Scaffold(
         bottomBar = {
-            if (!isTablet && currentRoute != Screen.Auth.route) {
+            if (showBottomBar) {
                 VividBottomBar(
                     currentRoute = currentRoute,
                     destinations = primaryDestinations,
@@ -174,10 +193,11 @@ fun VividNavigation(
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = if (isImmersive) WindowInsets(0, 0, 0, 0) else WindowInsets.navigationBars
     ) { innerPadding ->
         Row(Modifier.fillMaxSize()) {
-            if (isTablet && currentRoute != Screen.Auth.route) {
+            if (showRail) {
                 VividNavigationRail(
                     currentRoute = currentRoute,
                     destinations = primaryDestinations,
@@ -197,7 +217,7 @@ fun VividNavigation(
                 startDestination = startDestination,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(innerPadding),
+                    .then(if (isImmersive) Modifier.fillMaxSize() else Modifier.padding(innerPadding)),
                 enterTransition = {
                     if (animationsEnabled) {
                         fadeIn(tween(220)) +
@@ -332,10 +352,72 @@ fun VividNavigation(
                 )
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(
+                val snackbarHostState = remember { SnackbarHostState() }
+                val scope = rememberCoroutineScope()
+                // Hub M3: lista tonal con 8 categorías
+                com.vivid.app.presentation.settings.SettingsHubScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigateCuenta = { navController.navigate(Screen.SettingsAccount.route) },
+                    onNavigatePrivacidad = { navController.navigate(Screen.SettingsPrivacy.route) },
+                    onNavigateApariencia = { navController.navigate(Screen.SettingsAppearance.route) },
+                    onNavigateContenido = { navController.navigate(Screen.SettingsContent.route) },
+                    onNavigateNotificaciones = { navController.navigate(Screen.SettingsNotifications.route) },
+                    onNavigateAlmacenamiento = { navController.navigate(Screen.SettingsStorage.route) },
+                    onNavigateAyuda = { navController.navigate(Screen.SettingsHelp.route) },
+                    onNavigateAcerca = { navController.navigate(Screen.SettingsAbout.route) },
+                    appearanceValue = com.vivid.app.util.SettingsManager.selectedThemeOption,
+                    storageValue = String.format("%.1f MB", com.vivid.app.util.SettingsManager.simulatedCacheSizeMB)
+                )
+            }
+            composable(Screen.SettingsAccount.route) {
+                val scope = rememberCoroutineScope()
+                com.vivid.app.presentation.settings.CuentaSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onShowSnackbar = { msg -> scope.launch { /* handled via internal snackbar inside screen if needed */ } }
+                )
+            }
+            composable(Screen.SettingsPrivacy.route) {
+                val scope = rememberCoroutineScope()
+                com.vivid.app.presentation.settings.PrivacidadSettingsScreen(
                     onBack = { navController.popBackStack() },
                     onOpenCloseFriends = { navController.navigate(Screen.CloseFriends.route) },
-                    onOpenBlockedUsers = { navController.navigate(Screen.BlockedUsers.route) }
+                    onOpenBlocked = { navController.navigate(Screen.BlockedUsers.route) },
+                    onShowSnackbar = { }
+                )
+            }
+            composable(Screen.SettingsAppearance.route) {
+                com.vivid.app.presentation.settings.AparienciaSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onShowSnackbar = { }
+                )
+            }
+            composable(Screen.SettingsContent.route) {
+                com.vivid.app.presentation.settings.ContenidoSettingsScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.SettingsNotifications.route) {
+                com.vivid.app.presentation.settings.NotificacionesSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onShowSnackbar = { }
+                )
+            }
+            composable(Screen.SettingsStorage.route) {
+                com.vivid.app.presentation.settings.AlmacenamientoSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onShowSnackbar = { }
+                )
+            }
+            composable(Screen.SettingsHelp.route) {
+                com.vivid.app.presentation.settings.AyudaSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onShowSnackbar = { }
+                )
+            }
+            composable(Screen.SettingsAbout.route) {
+                com.vivid.app.presentation.settings.AcercaSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onShowSnackbar = { }
                 )
             }
             composable("edit_profile") {
