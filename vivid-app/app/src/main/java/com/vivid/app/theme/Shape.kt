@@ -1,7 +1,7 @@
 package com.vivid.app.theme
 
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.PillShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
@@ -24,12 +24,15 @@ import androidx.compose.ui.unit.dp
  *  - Avatares y contenido: circulares / squircles.
  */
 
+// El tema (MaterialTheme.shapes) exige CornerBasedShape, por eso aquí se usan
+// RoundedCornerShape. Los squircles/estrellas/etc. (Shape genérico) viven en
+// VividExpressiveShapes y se aplican pantalla por pantalla (Surface/clip/Button).
 val VividShapes = Shapes(
-    extraSmall = SquircleShape(4f),      // chips, badges
-    small      = SquircleShape(4f),      // multimedia, controls pequeños
-    medium     = SquircleShape(4f),      // tarjetas secundarias, campos reposo
-    large      = SquircleShape(4f),      // botones primarios, cards secundarias
-    extraLarge = SquircleShape(3.5f)     // hero cards, FABs, bottom sheets
+    extraSmall = RoundedCornerShape(4.dp),   // chips, badges
+    small      = RoundedCornerShape(12.dp),  // multimedia, controls pequeños
+    medium     = RoundedCornerShape(16.dp),  // tarjetas secundarias, campos reposo
+    large      = RoundedCornerShape(20.dp),  // botones primarios, cards secundarias
+    extraLarge = RoundedCornerShape(28.dp)   // hero cards, FABs, bottom sheets
 )
 
 /**
@@ -87,9 +90,9 @@ object VividExpressiveShapes {
     val IconPressed: Shape = SquircleShape(4f)
 
     // ---------- Píldoras ----------
-    val Pill: Shape = PillShape                       // stadium
-    val PillSmall: Shape = PillShape
-    val TabPill: Shape = PillShape
+    val Pill: Shape = RoundedCornerShape(50)          // píldora (percent 50% = stadium)
+    val PillSmall: Shape = RoundedCornerShape(50)
+    val TabPill: Shape = RoundedCornerShape(50)
 
     // ---------- Estrellas ----------
     val Star: Shape = StarShape(5, 0.42f)
