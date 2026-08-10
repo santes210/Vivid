@@ -47,6 +47,7 @@ import androidx.media3.ui.PlayerView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.vivid.app.presentation.report.ReportHelper
 import com.vivid.app.presentation.stories.StoriesTray
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -565,16 +566,22 @@ fun FeedScreen(
 // ── Skeleton de carga (M3) ──
 @Composable
 private fun FeedSkeleton() {
-    val transition = rememberInfiniteTransition(label = "skeleton")
-    val alpha by transition.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(700),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "skeletonAlpha"
-    )
+    val animationsEnabled = LocalVividAnimationsEnabled.current
+    val alpha = if (animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "skeleton")
+        val animatedAlpha by transition.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(700),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "skeletonAlpha"
+        )
+        animatedAlpha
+    } else {
+        0.65f
+    }
     val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
     fun Modifier.skeleton(): Modifier = this
@@ -1565,7 +1572,7 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { replyingTo = null }, modifier = Modifier.size(20.dp)) {
+                            IconButton(onClick = { replyingTo = null }, modifier = Modifier.size(48.dp)) {
                                 Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(14.dp))
                             }
                         }

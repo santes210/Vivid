@@ -145,9 +145,19 @@ fun VividOfflineBanner(modifier: Modifier = Modifier, message: String = "Sin con
 @Composable
 fun VividSkeleton(modifier: Modifier = Modifier) {
     val animationsEnabled = LocalVividAnimationsEnabled.current
-    val t = rememberInfiniteTransition(label = "vividSkeleton")
-    val alpha by t.animateFloat(0.35f, 0.75f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "alpha")
-    val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (animationsEnabled) alpha else 0.45f)
+    val alpha = if (animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "vividSkeleton")
+        val animatedAlpha by transition.animateFloat(
+            0.35f,
+            0.75f,
+            infiniteRepeatable(tween(650), RepeatMode.Reverse),
+            label = "alpha"
+        )
+        animatedAlpha
+    } else {
+        0.45f
+    }
+    val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)
     Box(modifier = modifier.clip(VividShapes.medium).background(blockColor))
 }
 

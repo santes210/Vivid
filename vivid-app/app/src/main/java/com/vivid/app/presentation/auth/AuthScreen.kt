@@ -13,7 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -50,12 +50,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -64,7 +65,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -519,7 +519,9 @@ fun AuthScreen(
                 exit = if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
             ) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = LiveRegionMode.Polite },
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
@@ -542,7 +544,7 @@ fun AuthScreen(
                         )
                         IconButton(
                             onClick = { viewModel.clearInfo() },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 Icons.Filled.Close,
@@ -565,7 +567,9 @@ fun AuthScreen(
                 exit = if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
             ) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = LiveRegionMode.Assertive },
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.errorContainer
                 ) {
@@ -588,7 +592,7 @@ fun AuthScreen(
                         )
                         IconButton(
                             onClick = { viewModel.clearError() },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 Icons.Filled.Close,
@@ -608,7 +612,7 @@ fun AuthScreen(
                 onClick = { submit() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .heightIn(min = 52.dp),
                 enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank()
             ) {
                 if (uiState.isLoading) {
@@ -679,7 +683,7 @@ fun AuthScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .heightIn(min = 52.dp),
                 enabled = !uiState.isLoading
             ) {
                 GoogleLogo()
@@ -783,31 +787,12 @@ fun AuthScreen(
     }
 }
 
-/**
- * Logo "G" de Google dibujado con Canvas: 4 arcos (azul, rojo, amarillo, verde)
- * + la "G" blanca encima. Cero recursos, cero red, ligero en cualquier teléfono.
- */
+/** Logo oficial multicolor de Google. Es decorativo: el botón ya anuncia su acción completa. */
 @Composable
 private fun GoogleLogo(modifier: Modifier = Modifier.size(20.dp)) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = size.minDimension * 0.22f
-            val radius = size.minDimension / 2f - strokeWidth / 2f
-            val topLeft = Offset(center.x - radius, center.y - radius)
-            val arcSize = Size(radius * 2f, radius * 2f)
-            val style = Stroke(width = strokeWidth)
-            // Orden de cuadrantes (sentido horario desde arriba):
-            // azul → rojo → amarillo → verde. Pequeños huecos de 2° en las diagonales.
-            drawArc(Color(0xFF4285F4), startAngle = 92f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
-            drawArc(Color(0xFFEA4335), startAngle = 2f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
-            drawArc(Color(0xFFFBBC05), startAngle = 272f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
-            drawArc(Color(0xFF34A853), startAngle = 182f, sweepAngle = 86f, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
-        }
-        Text(
-            text = "G",
-            color = Color.White,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Black
-        )
-    }
+    Image(
+        painter = painterResource(R.drawable.ic_google_g),
+        contentDescription = null,
+        modifier = modifier
+    )
 }

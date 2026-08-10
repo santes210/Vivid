@@ -511,7 +511,7 @@ private fun StoryViewerOverlay(
             }
             Spacer(Modifier.weight(1f))
             if (isOwner) {
-                FilledTonalIconButton(onClick = onViewersClick, modifier = Modifier.size(36.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color.White.copy(alpha = 0.18f), contentColor = Color.White)) {
+                FilledTonalIconButton(onClick = onViewersClick, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color.White.copy(alpha = 0.18f), contentColor = Color.White)) {
                     Icon(Icons.Filled.Visibility, contentDescription = "Vistas", modifier = Modifier.size(18.dp))
                 }
                 Spacer(Modifier.width(6.dp))

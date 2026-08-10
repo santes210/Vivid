@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,7 +12,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,6 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
@@ -57,6 +63,7 @@ import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.icons.VividIcons
 
 sealed class Screen(
     val route: String,
@@ -66,7 +73,7 @@ sealed class Screen(
     object Auth : Screen("auth", "Auth")
     object Feed : Screen("feed", "Inicio", Icons.Default.Home)
     object Search : Screen("search", "Explorar", Icons.Default.Search)
-    object Create : Screen("create", "Crear", Icons.Default.Add)
+    object Create : Screen("create", "Crear", VividIcons.Create)
     object CreateReel : Screen("create_reel", "Reel", Icons.Default.MovieCreation)
     object CreateStory : Screen("create_story", "Story", Icons.Default.AutoAwesome)
     object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow)
@@ -112,7 +119,7 @@ fun VividNavigation(
     val primaryDestinations = listOf(
         VividDestination(Screen.Feed, Icons.Filled.Home, Icons.Outlined.Home),
         VividDestination(Screen.Search, Icons.Filled.Search, Icons.Outlined.Search),
-        VividDestination(Screen.Create, Icons.Filled.Add, Icons.Outlined.Add),
+        VividDestination(Screen.Create, VividIcons.Create, VividIcons.Create),
         VividDestination(Screen.Reels, Icons.Filled.PlayArrow, Icons.Outlined.PlayArrow),
         VividDestination(Screen.Profile, Icons.Filled.Person, Icons.Outlined.Person)
     )
@@ -510,6 +517,7 @@ private fun VividBottomBar(
     destinations: List<VividDestination>,
     onNavigate: (Screen) -> Unit
 ) {
+    val animationsEnabled = LocalVividAnimationsEnabled.current
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp
@@ -528,7 +536,7 @@ private fun VividBottomBar(
             val targetOffset = itemWidth * safeIndex + (itemWidth - pillWidthPx) / 2f
             val animatedOffset by animateFloatAsState(
                 targetValue = targetOffset,
-                animationSpec = tween(durationMillis = 320),
+                animationSpec = if (animationsEnabled) tween(durationMillis = 320) else snap(),
                 label = "navPillOffset"
             )
 
@@ -545,7 +553,7 @@ private fun VividBottomBar(
                 )
             }
 
-            Row(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().focusGroup()) {
                 destinations.forEachIndexed { index, dest ->
                     val isSelected = currentRoute == dest.screen.route
                     Box(
@@ -567,7 +575,7 @@ private fun VividBottomBar(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        Icons.Filled.Add,
+                                        VividIcons.Create,
                                         contentDescription = dest.screen.title,
                                         modifier = Modifier.size(30.dp)
                                     )
@@ -580,11 +588,18 @@ private fun VividBottomBar(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clip(RoundedCornerShape(20.dp))
-                                    .clickable { onNavigate(dest.screen) }
+                                    .selectable(
+                                        selected = isSelected,
+                                        role = Role.Tab,
+                                        onClick = { onNavigate(dest.screen) }
+                                    )
+                                    .semantics(mergeDescendants = true) {
+                                        stateDescription = if (isSelected) "Seleccionado" else "No seleccionado"
+                                    }
                             ) {
                                 Icon(
                                     imageVector = if (isSelected) dest.activeIcon else dest.inactiveIcon,
-                                    contentDescription = dest.screen.title,
+                                    contentDescription = null,
                                     tint = if (isSelected) {
                                         MaterialTheme.colorScheme.onPrimaryContainer
                                     } else {
@@ -624,6 +639,7 @@ private fun VividNavigationRail(
     onNavigate: (Screen) -> Unit
 ) {
     NavigationRail(
+        modifier = Modifier.focusGroup(),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
@@ -639,7 +655,7 @@ private fun VividNavigationRail(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = dest.screen.title)
+                    Icon(VividIcons.Create, contentDescription = dest.screen.title)
                 }
                 Spacer(Modifier.height(8.dp))
             } else {
@@ -649,7 +665,7 @@ private fun VividNavigationRail(
                     icon = {
                         Icon(
                             imageVector = if (isSelected) dest.activeIcon else dest.inactiveIcon,
-                            contentDescription = dest.screen.title
+                            contentDescription = null
                         )
                     },
                     label = {

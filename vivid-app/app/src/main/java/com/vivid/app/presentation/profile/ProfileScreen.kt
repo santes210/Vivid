@@ -669,18 +669,22 @@ private fun ProfileHeader(
 @Composable
 private fun ProfileHeaderSkeleton() {
     val animationsEnabled = LocalVividAnimationsEnabled.current
-    val transition = rememberInfiniteTransition(label = "profileSkeleton")
-    val alpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 650),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-    val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest
-        .copy(alpha = if (animationsEnabled) alpha else 0.45f)
+    val alpha = if (animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "profileSkeleton")
+        val animatedAlpha by transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 0.75f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 650),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "alpha"
+        )
+        animatedAlpha
+    } else {
+        0.45f
+    }
+    val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)
 
     Column(
         modifier = Modifier
