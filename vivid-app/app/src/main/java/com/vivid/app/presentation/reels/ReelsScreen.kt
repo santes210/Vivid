@@ -7,6 +7,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -103,23 +105,24 @@ fun ReelsScreen(
             }
         }
 
-        // Header "Reels" flotante
+        // Header "Reels" flotante — píldora compacta con contenedor translúcido consistente
         Surface(
-            color = Color.Black.copy(alpha = 0.25f),
-            shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
+            color = Color.Black.copy(alpha = 0.35f),
+            shape = RoundedCornerShape(16.dp),
+            shadowElevation = 0.dp,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 12.dp)
-                .fillMaxWidth(0.5f)
+                .statusBarsPadding()
+                .padding(top = 10.dp)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Reels", color = Color.White, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Reels", color = Color.White, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
             }
         }
 
@@ -295,7 +298,7 @@ private fun ReelPage(
     }
 
     if (showComments) {
-        ReelCommentsDialog(
+        ReelCommentsSheet(
             reel = reel,
             onDismiss = { showComments = false },
             onCommentAdded = { commentCount++ }
@@ -376,10 +379,11 @@ private fun ReelPage(
                 Icons.Default.Favorite,
                 contentDescription = "Like",
                 tint = Color.Red.copy(alpha = 0.85f),
-                modifier = Modifier.size(100.dp)
+                modifier = Modifier.size(84.dp)
             )
         }
 
+        // Indicador de pausa — compacto y centrado (sin saturar la pantalla)
         AnimatedVisibility(
             visible = isPausedByUser,
             enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
@@ -387,14 +391,15 @@ private fun ReelPage(
             modifier = Modifier.align(Alignment.Center)
         ) {
             Surface(
-                color = Color.Black.copy(alpha = 0.45f),
-                shape = CircleShape
+                color = Color.Black.copy(alpha = 0.5f),
+                shape = CircleShape,
+                shadowElevation = 0.dp
             ) {
                 Icon(
                     Icons.Default.PlayArrow,
                     contentDescription = "Reproducir",
                     tint = Color.White,
-                    modifier = Modifier.padding(20.dp).size(52.dp)
+                    modifier = Modifier.padding(12.dp).size(24.dp)
                 )
             }
         }
@@ -403,34 +408,136 @@ private fun ReelPage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
+                .height(240.dp)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
                     )
                 )
         )
 
-        // Info usuario + caption (abajo izquierda)
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 24.dp, end = 80.dp)
+        // Información del creador + caption agrupadas (abajo izquierda).
+        // Se ocultan al pausar para no acumular texto e íconos flotantes a la vez.
+        AnimatedVisibility(
+            visible = !isPausedByUser,
+            enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
+            exit = if (animationsEnabled) fadeOut() else ExitTransition.None,
+            modifier = Modifier.align(Alignment.BottomStart)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            ReelCreatorCard(
+                reel = reel,
+                currentUserId = currentUserId,
+                relationshipState = relationshipState,
+                isFollowLoading = isFollowLoading,
+                onFollow = {
+                    scope.launch {
+                        isFollowLoading = true
+                        runCatching { followRepository.toggleFollow(reel.userId) }
+                        relationshipState = runCatching {
+                            followRepository.getRelationshipState(reel.userId)
+                        }.getOrDefault(relationshipState)
+                        isFollowLoading = false
+                    }
+                },
+                modifier = Modifier.padding(start = 14.dp, end = 96.dp, bottom = 20.dp)
+            )
+        }
+
+        // Acciones derecha (like, comment, share, mute) — contenedores negros translúcidos consistentes
+        AnimatedVisibility(
+            visible = !isPausedByUser,
+            enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
+            exit = if (animationsEnabled) fadeOut() else ExitTransition.None,
+            modifier = Modifier.align(Alignment.BottomEnd)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(end = 10.dp, bottom = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ReelActionButton(
+                    icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Like",
+                    tint = if (isLiked) Color.Red else Color.White,
+                    count = if (SettingsManager.hideLikesCount) "—" else likeCount.toString(),
+                    onClick = {
+                        val newLiked = !isLiked
+                        isLiked = newLiked
+                        likeCount = (likeCount + if (newLiked) 1 else -1).coerceAtLeast(0)
+                        if (newLiked) showHeartAnimation = true
+                        scope.launch {
+                            runCatching { setReelLike(reel.id, currentUserId, newLiked) }
+                                .onFailure {
+                                    isLiked = !newLiked
+                                    likeCount = (likeCount + if (newLiked) -1 else 1).coerceAtLeast(0)
+                                }
+                        }
+                    }
+                )
+                ReelActionButton(
+                    icon = Icons.Default.ChatBubbleOutline,
+                    contentDescription = "Comentarios",
+                    tint = Color.White,
+                    count = commentCount.toString(),
+                    onClick = { showComments = true }
+                )
+                ReelActionButton(
+                    icon = Icons.Default.Share,
+                    contentDescription = "Compartir",
+                    tint = Color.White,
+                    onClick = { shareReel(context = context, reel = reel) }
+                )
+                ReelActionButton(
+                    icon = if (isMuted) Icons.Default.VolumeOff else Icons.Default.MusicNote,
+                    contentDescription = if (isMuted) "Activar audio" else "Silenciar",
+                    tint = Color.White,
+                    onClick = { isMuted = !isMuted }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReelCreatorCard(
+    reel: Reel,
+    currentUserId: String,
+    relationshipState: FollowRelationshipState,
+    isFollowLoading: Boolean,
+    onFollow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color.Black.copy(alpha = 0.32f),
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = 0.dp,
+        modifier = modifier.widthIn(max = 330.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Avatar con anillo blanco — información del creador agrupada
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, Color.White.copy(alpha = 0.95f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
                 if (reel.userAvatar.isNotBlank()) {
                     AsyncImage(
                         model = reel.userAvatar,
                         contentDescription = null,
-                        modifier = Modifier.size(42.dp).clip(CircleShape),
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
+                            .fillMaxSize()
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
@@ -441,136 +548,103 @@ private fun ReelPage(
                         )
                     }
                 }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    reel.username,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Spacer(Modifier.width(12.dp))
-
-                if (reel.userId.isNotBlank() && reel.userId != currentUserId) {
-                    Surface(
-                        color = if (relationshipState.isFollowing || relationshipState.hasPendingRequest) {
-                            Color.White.copy(alpha = 0.18f)
-                        } else {
-                            Color.White
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.clickable(enabled = !isFollowLoading) {
-                            scope.launch {
-                                isFollowLoading = true
-                                runCatching { followRepository.toggleFollow(reel.userId) }
-                                relationshipState = runCatching {
-                                    followRepository.getRelationshipState(reel.userId)
-                                }.getOrDefault(relationshipState)
-                                isFollowLoading = false
-                            }
-                        }
-                    ) {
-                        Text(
-                            when {
-                                isFollowLoading -> "..."
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        reel.username,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (reel.userId.isNotBlank() && reel.userId != currentUserId) {
+                        Spacer(Modifier.width(8.dp))
+                        ReelFollowPill(
+                            label = when {
+                                isFollowLoading -> "…"
                                 relationshipState.isFollowing -> "Siguiendo"
                                 relationshipState.hasPendingRequest -> "Solicitado"
                                 else -> "Seguir"
                             },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = if (relationshipState.isFollowing || relationshipState.hasPendingRequest) Color.White else Color.Black
+                            isActive = relationshipState.isFollowing || relationshipState.hasPendingRequest,
+                            enabled = !isFollowLoading,
+                            onClick = onFollow
                         )
                     }
                 }
+                if (reel.caption.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        reel.caption,
+                        color = Color.White.copy(alpha = 0.92f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                reel.caption.ifBlank { "Sin descripción" },
-                color = Color.White.copy(alpha = 0.9f),
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
         }
+    }
+}
 
-        // Acciones derecha (like, comment, share, mute)
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+@Composable
+private fun ReelFollowPill(
+    label: String,
+    isActive: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (isActive) Color.White.copy(alpha = 0.22f) else Color.White,
+        shape = RoundedCornerShape(10.dp),
+        shadowElevation = 0.dp,
+        modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            color = if (isActive) Color.White else Color.Black
+        )
+    }
+}
+
+@Composable
+private fun ReelActionButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    tint: Color,
+    count: String? = null,
+    onClick: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            color = Color.Black.copy(alpha = 0.32f),
+            shape = CircleShape,
+            shadowElevation = 0.dp,
+            modifier = Modifier.size(46.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = {
-                    val newLiked = !isLiked
-                    isLiked = newLiked
-                    likeCount = (likeCount + if (newLiked) 1 else -1).coerceAtLeast(0)
-                    if (newLiked) showHeartAnimation = true
-                    scope.launch {
-                        runCatching { setReelLike(reel.id, currentUserId, newLiked) }
-                            .onFailure {
-                                isLiked = !newLiked
-                                likeCount = (likeCount + if (newLiked) -1 else 1).coerceAtLeast(0)
-                            }
-                    }
-                }) {
-                    Icon(
-                        if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Like",
-                        tint = if (isLiked) Color.Red else Color.White,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-                Text(
-                    if (SettingsManager.hideLikesCount) "—" else likeCount.toString(),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                )
+            IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+                Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(24.dp))
             }
-
-            Spacer(Modifier.height(6.dp))
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = { showComments = true }) {
-                    Icon(
-                        Icons.Default.ChatBubbleOutline,
-                        contentDescription = "Comentarios",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-                Text(commentCount.toString(), color = Color.White, style = MaterialTheme.typography.labelMedium)
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            IconButton(onClick = { shareReel(context = context, reel = reel) }) {
-                Icon(
-                    Icons.Default.Share,
-                    contentDescription = "Compartir",
-                    tint = Color.White,
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            IconButton(onClick = { isMuted = !isMuted }) {
-                Icon(
-                    if (isMuted) Icons.Default.VolumeOff else Icons.Default.MusicNote,
-                    contentDescription = if (isMuted) "Activar audio" else "Silenciar",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
+        }
+        if (count != null) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                count,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReelCommentsDialog(
+private fun ReelCommentsSheet(
     reel: Reel,
     onDismiss: () -> Unit,
     onCommentAdded: () -> Unit
@@ -578,6 +652,7 @@ private fun ReelCommentsDialog(
     val firestore = FirebaseFirestore.getInstance()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var comments by remember(reel.id) { mutableStateOf<List<ReelComment>>(emptyList()) }
     var commentText by remember(reel.id) { mutableStateOf("") }
@@ -603,75 +678,121 @@ private fun ReelCommentsDialog(
         onDispose { registration.remove() }
     }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("Comentarios", fontWeight = FontWeight.Bold) },
-        text = {
-            Column {
-                if (comments.isEmpty()) {
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 580.dp)
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text("Comentarios", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "En el reel de @${reel.username}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+
+            if (comments.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text("No hay comentarios todavía.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        modifier = Modifier.heightIn(max = 300.dp)
-                    ) {
-                        items(comments, key = { it.id }) { comment ->
-                            ReelCommentRow(comment)
-                            Spacer(Modifier.height(10.dp))
-                        }
+                }
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false).heightIn(max = 380.dp)
+                ) {
+                    items(comments, key = { it.id }) { comment ->
+                        ReelCommentRow(comment)
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = commentText,
-                        onValueChange = { commentText = it },
-                        placeholder = { Text("Escribe un comentario...") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(
-                        onClick = {
-                            if (commentText.isBlank()) return@FilledTonalButton
-                            isSending = true
-                            errorMsg = null
-                            scope.launch {
-                                runCatching {
-                                    val userDoc = firestore.collection("users").document(currentUserId).get().await()
-                                    firestore.collection("reels").document(reel.id).collection("comments").add(
-                                        mapOf(
-                                            "userId" to currentUserId,
-                                            "username" to (userDoc.getString("username") ?: "yo"),
-                                            "text" to commentText.trim(),
-                                            "timestamp" to System.currentTimeMillis(),
-                                            "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""),
-                                            "avatarBase64" to (userDoc.getString("avatarBase64") ?: "")
-                                        )
-                                    ).await()
-                                    firestore.collection("reels").document(reel.id)
-                                        .update("comments", FieldValue.increment(1))
-                                        .await()
-                                }.onSuccess {
-                                    commentText = ""
-                                    onCommentAdded()
-                                }.onFailure {
-                                    errorMsg = it.message
-                                }
-                                isSending = false
-                            }
-                        },
-                        enabled = !isSending,
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Text(if (isSending) "..." else "Enviar", fontWeight = FontWeight.Bold)
-                    }
-                }
-                errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
-    )
+
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    placeholder = { Text("Escribe un comentario…") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                    )
+                )
+                Spacer(Modifier.width(10.dp))
+                FilledIconButton(
+                    onClick = {
+                        if (commentText.isBlank()) return@FilledIconButton
+                        isSending = true
+                        errorMsg = null
+                        scope.launch {
+                            runCatching {
+                                val userDoc = firestore.collection("users").document(currentUserId).get().await()
+                                firestore.collection("reels").document(reel.id).collection("comments").add(
+                                    mapOf(
+                                        "userId" to currentUserId,
+                                        "username" to (userDoc.getString("username") ?: "yo"),
+                                        "text" to commentText.trim(),
+                                        "timestamp" to System.currentTimeMillis(),
+                                        "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""),
+                                        "avatarBase64" to (userDoc.getString("avatarBase64") ?: "")
+                                    )
+                                ).await()
+                                firestore.collection("reels").document(reel.id)
+                                    .update("comments", FieldValue.increment(1))
+                                    .await()
+                            }.onSuccess {
+                                commentText = ""
+                                onCommentAdded()
+                            }.onFailure {
+                                errorMsg = it.message
+                            }
+                            isSending = false
+                        }
+                    },
+                    enabled = !isSending && commentText.isNotBlank(),
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    if (isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(Icons.Default.Send, contentDescription = "Enviar")
+                    }
+                }
+            }
+            errorMsg?.let {
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
 }
 
 private data class ReelComment(
