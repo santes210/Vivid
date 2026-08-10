@@ -1,5 +1,6 @@
 package com.vivid.app
 
+import android.animation.ValueAnimator
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -64,7 +65,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val selectedTheme = SettingsManager.selectedThemeOption
             val dynamicColor = SettingsManager.dynamicColorEnabled
-            val animationsEnabled = SettingsManager.smoothAnimationsEnabled
+            // Respeta tanto la preferencia de Vivid como "Quitar animaciones" del sistema.
+            // ValueAnimator también devuelve false cuando la escala de animación es 0.
+            val animationsEnabled = SettingsManager.smoothAnimationsEnabled &&
+                ValueAnimator.areAnimatorsEnabled()
             val darkTheme = when (selectedTheme) {
                 "Oscuro" -> true
                 "Claro" -> false

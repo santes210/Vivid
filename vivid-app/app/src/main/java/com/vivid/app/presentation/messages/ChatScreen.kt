@@ -545,7 +545,7 @@ fun ChatScreen(
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(text = "Visor de Imagen", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { viewerImageUrl = null }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+                        IconButton(onClick = { viewerImageUrl = null }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
                     }
                 }
             }
@@ -568,8 +568,8 @@ private fun RecordingBar(durationMs: Long, onCancel: () -> Unit, onSend: () -> U
             Text(formatVoiceDuration(durationMs), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onErrorContainer)
             Spacer(Modifier.width(12.dp))
             RecordingWaveform(modifier = Modifier.weight(1f))
-            IconButton(onClick = onCancel, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = MaterialTheme.colorScheme.onErrorContainer) }
-            FilledIconButton(onClick = onSend, modifier = Modifier.size(46.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
+            IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = MaterialTheme.colorScheme.onErrorContainer) }
+            FilledIconButton(onClick = onSend, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
                 Icon(Icons.Default.Send, contentDescription = "Enviar voz", modifier = Modifier.size(20.dp))
             }
         }

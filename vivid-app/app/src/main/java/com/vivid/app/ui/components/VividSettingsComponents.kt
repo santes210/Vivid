@@ -3,6 +3,7 @@ package com.vivid.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -14,6 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivid.app.theme.VividExpressiveShapes
@@ -111,8 +116,7 @@ fun VividSettingsItem(
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                        maxLines = 2
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -187,8 +191,13 @@ fun VividSettingsItem(
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 48.dp)
                 .clip(VividShapes.medium) // ripple recortado a 16dp squircle
-                .clickable(enabled = onClick != null) { onClick?.invoke() },
+                .clickable(
+                    enabled = onClick != null,
+                    role = Role.Button,
+                    onClick = { onClick?.invoke() }
+                ),
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
         // Divisor solo cuando aporta claridad — grosor mínimo y alpha bajo
@@ -216,7 +225,7 @@ fun VividSettingsSwitchItem(
                 Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
             },
             supportingContent = subtitle?.let {
-                { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)) }
+                { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             },
             leadingContent = icon?.let {
                 {
@@ -232,12 +241,25 @@ fun VividSettingsSwitchItem(
                 }
             },
             trailingContent = {
-                Switch(checked = checked, onCheckedChange = onCheckedChange)
+                // La fila completa es el único control para evitar dos focos de TalkBack.
+                Switch(
+                    checked = checked,
+                    onCheckedChange = null,
+                    modifier = Modifier.clearAndSetSemantics { }
+                )
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 48.dp)
                 .clip(VividShapes.medium)
-                .clickable { onCheckedChange(!checked) },
+                .toggleable(
+                    value = checked,
+                    role = Role.Switch,
+                    onValueChange = onCheckedChange
+                )
+                .semantics(mergeDescendants = true) {
+                    stateDescription = if (checked) "Activado" else "Desactivado"
+                },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
         if (showDivider) {
