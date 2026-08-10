@@ -1,5 +1,22 @@
 #!/bin/sh
 
+# Temporary CI diagnostic wrapper: GitHub's raw log storage can occasionally be
+# unavailable, so surface compiler lines as check annotations. The guard avoids
+# recursion and has no effect on local builds.
+if [ "${GITHUB_ACTIONS:-}" = "true" ] && [ "${VIVID_GRADLE_CAPTURE:-}" != "1" ]; then
+    VIVID_GRADLE_CAPTURE=1 "$0" "$@" > "${RUNNER_TEMP:-/tmp}/vivid-gradle.log" 2>&1
+    vivid_status=$?
+    cat "${RUNNER_TEMP:-/tmp}/vivid-gradle.log"
+    if [ "$vivid_status" -ne 0 ]; then
+        grep -E '(^e: | error: |^FAILURE:|What went wrong|Compilation error)' "${RUNNER_TEMP:-/tmp}/vivid-gradle.log" \
+            | tail -30 \
+            | while IFS= read -r vivid_line; do
+                echo "::error title=Gradle build::$vivid_line"
+            done
+    fi
+    exit "$vivid_status"
+fi
+
 #
 # Copyright © 2015-2021 the original authors.
 #
