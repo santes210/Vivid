@@ -1,14 +1,17 @@
 # Vivid → Material 3 Expressive (upgrade 1.5.0-alpha23)
 
 Fecha: 2026-08-10
-Estado: **código aplicado — compilación en CI pendiente de confirmar (PR #21)**
+Estado: **✅ COMPILA y el PR #21 está en verde (CI "Build Debug APK: SUCCESS")**
 
-> **Actualización (fix del build):** el PR #21 probó `material3 1.5.0-alpha23` en CI y falló
-> en `checkDebugAarMetadata`: esa alpha (y Compose 1.12 que arrastra) exige **compileSdk 37 +
-> AGP 9.1.0**, incompatible con el toolchain de la app (compileSdk 35 + AGP 8.7.3). Se corrigió
-> a **`material3 1.5.0-alpha14`**, que conserva los APIs Expressive (MotionScheme, tipografía
-> Emphasized) pero usa **Compose 1.8/1.9 → compatible con compileSdk 35 + AGP 8.7.3**. Las
-> alphas ≥ 15 requieren el salto grande a AGP 9.x/compileSdk 37 (no se tomó).
+> **Desenlace del build (PR #21):**
+> 1. `material3 1.5.0-alpha23` falló en CI (`checkDebugAarMetadata`): exige compileSdk 37 +
+>    AGP 9.1 (incompatible con compileSdk 35 + AGP 8.7.3). → Se bajó a **`alpha14`**.
+> 2. En `alpha14` pasó `checkDebugAarMetadata`, pero falló `compileDebugKotlin` por 2 errores:
+>    - `PillShape` no existe en Compose foundation 1.8 → se reemplazó por `RoundedCornerShape(50)`.
+>    - `MaterialTheme.shapes` exige `CornerBasedShape`, no `Shape` genérico → `VividShapes` volvió
+>      a `RoundedCornerShape`; los squircles/estrellas/etc. quedan en `VividExpressiveShapes`.
+> 3. Resultado: **Build Debug APK SUCCESS + APK subido**. PR mergeable.
+
 
 
 > Antes: la app estaba en **Material 3 1.4.0 estable** y, aunque el tema se llamaba
