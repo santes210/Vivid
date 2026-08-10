@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -102,7 +105,8 @@ fun FeedScreen(
     onOpenMessages: () -> Unit,
     onOpenRequests: () -> Unit = {},
     onOpenProfile: () -> Unit,
-    onOpenStoryViewer: (storyId: String) -> Unit = {}
+    onOpenStoryViewer: (storyId: String) -> Unit = {},
+    onCreateStory: () -> Unit = {}
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val context = LocalContext.current
@@ -112,6 +116,9 @@ fun FeedScreen(
 
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isError by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var retryKey by remember { mutableStateOf(0) }
     var lastVisibleDoc by remember { mutableStateOf<com.google.firebase.firestore.DocumentSnapshot?>(null) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
@@ -152,11 +159,12 @@ fun FeedScreen(
         isLoading = false
     }
 
-    DisposableEffect(currentUserId, likedPostIds) {
+    DisposableEffect(currentUserId, likedPostIds, retryKey) {
         if (currentUserId.isBlank()) {
             onDispose { }
         } else {
             isLoading = true
+            isError = false
             val db = FirebaseFirestore.getInstance()
             val postsListener = db.collection("posts")
                 .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
@@ -164,6 +172,7 @@ fun FeedScreen(
                 .addSnapshotListener { snap, err ->
                     if (err != null || snap == null) {
                         isLoading = false
+                        isError = true
                         return@addSnapshotListener
                     }
                     // Mapeo SIN llamadas a B2 (rápido, evita spinner infinito)
@@ -277,11 +286,11 @@ fun FeedScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         "Vivid",
-                        style = MaterialTheme.typography.headlineLarge.copy(
+                        style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -300,7 +309,7 @@ fun FeedScreen(
                         Icon(Icons.Default.Email, "Mensajes", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ),
@@ -310,34 +319,49 @@ fun FeedScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            StoriesTray(onStoryClick = { onOpenStoryViewer(it.id) })
-            Spacer(Modifier.height(8.dp))
-
-            if (isLoading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            } else if (posts.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.PhotoLibrary, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.size(64.dp))
-                        Spacer(Modifier.height(16.dp))
-                        Text("No hay publicaciones aún", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("¡Crea la primera!", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+            // ── Feed: pull-to-refresh M3, skeletons, estados vacío/error ──
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    scope.launch {
+                        isRefreshing = true
+                        // Re-sincroniza likes; el snapshot listener re-publica los posts
+                        likedPostIds = feedViewModel.fetchLikedPostIds(currentUserId)
+                        delay(650)
+                        isRefreshing = false
                     }
-                }
-            } else {
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
-                        val isFollowingAuthor = post.userId in followingUserIds
-                        val hasPendingRequestToAuthor = post.userId in pendingFollowUserIds
-                        val isSaved = post.id in savedPostIds
+                    item(key = "stories") {
+                        StoriesTray(
+                            onStoryClick = { onOpenStoryViewer(it.id) },
+                            onCreateStory = onCreateStory
+                        )
+                    }
 
-                        PostCard(
+                    when {
+                        isLoading -> {
+                            items(3) { FeedSkeleton() }
+                        }
+                        isError -> {
+                            item(key = "error") { FeedErrorState(onRetry = { retryKey++ }) }
+                        }
+                        posts.isEmpty() -> {
+                            item(key = "empty") { FeedEmptyState() }
+                        }
+                        else -> {
+                            itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
+                                val isFollowingAuthor = post.userId in followingUserIds
+                                val hasPendingRequestToAuthor = post.userId in pendingFollowUserIds
+                                val isSaved = post.id in savedPostIds
+
+                                PostCard(
                             post = post.copy(isSaved = isSaved),
                             currentUserId = currentUserId,
                             isFollowingAuthor = isFollowingAuthor,
@@ -432,19 +456,18 @@ fun FeedScreen(
                             }
                         )
                     }
-
-                    if (isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(32.dp),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                            if (isLoadingMore) {
+                                item {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(32.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -539,6 +562,138 @@ fun FeedScreen(
     }
 }
 
+// ── Skeleton de carga (M3) ──
+@Composable
+private fun FeedSkeleton() {
+    val transition = rememberInfiniteTransition(label = "skeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "skeletonAlpha"
+    )
+    val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest
+
+    fun Modifier.skeleton(): Modifier = this
+        .height(14.dp)
+        .clip(RoundedCornerShape(8.dp))
+        .background(blockColor.copy(alpha = alpha))
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Header falso
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(blockColor.copy(alpha = alpha))
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.width(110.dp).skeleton())
+                Box(Modifier.width(60.dp).skeleton())
+            }
+        }
+        // Media falsa
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(blockColor.copy(alpha = alpha))
+        )
+        // Acciones falsas
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(blockColor.copy(alpha = alpha)))
+            Box(Modifier.size(22.dp).clip(CircleShape).background(blockColor.copy(alpha = alpha)))
+            Box(Modifier.size(22.dp).clip(CircleShape).background(blockColor.copy(alpha = alpha)))
+        }
+        Box(Modifier.width(200.dp).skeleton())
+        Box(Modifier.width(260.dp).skeleton())
+    }
+}
+
+// ── Estado de error con reintento ──
+@Composable
+private fun FeedErrorState(onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.CloudOff,
+                null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(56.dp)
+            )
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "No se pudo cargar el feed",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Comprueba tu conexión e inténtalo de nuevo.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onRetry) {
+                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Reintentar")
+            }
+        }
+    }
+}
+
+// ── Estado vacío real ──
+@Composable
+private fun FeedEmptyState() {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 56.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(96.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.PhotoLibrary,
+                        null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Tu feed está en blanco",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Sigue a personas y crea tu primera publicación para ver contenido aquí.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+        }
+    }
+}
+
 // ── PostCard (Material You 3 Card) ──
 @Composable
 private fun PostCard(
@@ -559,13 +714,8 @@ private fun PostCard(
     onImageUrlExpired: () -> Unit = {},
     onMusicUrlExpired: () -> Unit = {}
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column {
+    // Sin tarjeta elevada: el contenido vive sobre la superficie con separación tonal.
+    Column(modifier = Modifier.fillMaxWidth()) {
             // ── Header ──
             Row(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -677,9 +827,10 @@ private fun PostCard(
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(Modifier.height(12.dp))
         }
-    }
 }
 
 @Composable
