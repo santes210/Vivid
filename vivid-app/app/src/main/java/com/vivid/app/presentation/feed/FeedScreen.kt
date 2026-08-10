@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -61,6 +60,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.vivid.app.theme.SquircleShape
 
 data class PostData(
     val id: String, val userId: String, val username: String,
@@ -586,7 +586,7 @@ private fun FeedSkeleton() {
 
     fun Modifier.skeleton(): Modifier = this
         .height(14.dp)
-        .clip(RoundedCornerShape(8.dp))
+        .clip(SquircleShape())
         .background(blockColor.copy(alpha = alpha))
 
     Column(
@@ -611,7 +611,7 @@ private fun FeedSkeleton() {
             Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(SquircleShape())
                 .background(blockColor.copy(alpha = alpha))
         )
         // Acciones falsas
@@ -862,7 +862,7 @@ private fun InlineFollowButton(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = SquircleShape(),
         color = containerColor,
         contentColor = contentColor,
         modifier = Modifier.padding(start = 6.dp)
@@ -994,7 +994,7 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = SquircleShape(),
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         tonalElevation = 1.dp
@@ -1555,7 +1555,7 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
                 replyingTo?.let { replyTarget ->
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = SquircleShape(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 6.dp)
@@ -1587,7 +1587,7 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
                         placeholder = { Text(if (replyingTo != null) "Escribe tu respuesta..." else "Escribe un comentario...") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        shape = RoundedCornerShape(20.dp)
+                        shape = SquircleShape()
                     )
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(
@@ -1636,7 +1636,7 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
                             }
                         },
                         enabled = !isSending,
-                        shape = RoundedCornerShape(20.dp)
+                        shape = SquircleShape()
                     ) {
                         Text(if (isSending) "..." else "Enviar", fontWeight = FontWeight.Bold)
                     }
@@ -1660,7 +1660,7 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = false,
                     maxLines = 3,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = SquircleShape()
                 )
             },
             confirmButton = {
@@ -1823,7 +1823,7 @@ private fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss
     if (initialIndex !in posts.indices) { onDismiss(); return }
     val post = posts[initialIndex]
     Dialog(onDismissRequest = onDismiss) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = SquircleShape()) {
             Column(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(post.username, fontWeight = FontWeight.Bold)

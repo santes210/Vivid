@@ -17,25 +17,26 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * Theme principal Vivid — Material You 3 Expressive (M3 1.4.0 estable).
+ * Theme principal Vivid — Material You 3 Expressive (M3 1.5.0-alpha23).
  *
  *   - dynamicColor: true → toma colores del wallpaper (Android 12+)
  *   - dynamicColor: false → usa la paleta de marca VividBrandColors
  *   - edge-to-edge: status/navigation bars transparentes (WindowCompat)
  *
  * Además aplica:
- *   - VividTypography (escala completa M3)
+ *   - VividTypography (escala completa M3 + variantes Emphasized)
  *   - VividShapes (esquinas expresivas con propósito)
+ *   - VividMotionScheme → MotionScheme.expressive() (físicas de muelle / rebote)
  *   - surfaceContainer* hierarchy (sin transparencias arbitrarias)
  *   - systemBars contrast automático (iconos claros/oscuros según tema)
  *
  * Perf: el colorScheme se cachea con `remember(darkTheme, dynamicColor)` para no
  * regenerar la paleta dinámica en cada recomposición (importante en gama baja).
  *
- * Versiones (controlado, sin alpha):
- *   - material3: 1.4.0 estable
- *   - composeBom: 2025.04.01 compatible
- *   - Kotlin/AGP sin cambios simultáneos
+ * Versiones (upgrade coordinado — ver EXPRESSIVE_M3_UPGRADE.md):
+ *   - material3: 1.5.0-alpha23 (Expressive APIs; no existen en 1.4.0 estable)
+ *   - compose:   1.12.0-alpha03 (requisito de material3 1.5.0-alpha23)
+ *   - kotlin:    2.1.20 (+ KSP 2.1.20-1.0.32)
  */
 @Composable
 fun VividTheme(
@@ -147,8 +148,12 @@ fun VividTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = VividTypography,
         shapes = VividShapes,
+        typography = VividTypography,
+        // Material 3 Expressive: físicas de muelle (springs con rebote) en todos los
+        // componentes que respetan MaterialTheme.motionScheme (bottom sheets,
+        // expansiones, indicadores, morphing de formas, etc.).
+        motionScheme = VividMotionScheme,
         content = content
     )
 }

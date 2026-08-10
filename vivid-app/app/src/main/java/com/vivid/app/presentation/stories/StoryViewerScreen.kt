@@ -44,6 +44,7 @@ import com.vivid.app.domain.repository.ChatRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.SquircleShape
 
 // Viewer model for screen
 private data class ViewerStory(
@@ -266,7 +267,7 @@ fun StoryViewerRoute(
                                 onClick = { showViewersSheet = true },
                                 modifier = Modifier.align(Alignment.Center),
                                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = Color.White),
-                                shape = RoundedCornerShape(24.dp)
+                                shape = SquircleShape()
                             ) {
                                 Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
@@ -280,7 +281,7 @@ fun StoryViewerRoute(
                         // Viewer: reply bar
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(28.dp),
+                            shape = SquircleShape(),
                             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.14f)),
                             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                         ) {
@@ -292,7 +293,7 @@ fun StoryViewerRoute(
                                     placeholder = { Text("Responder a ${currentStory.username}…", color = Color.White.copy(alpha = 0.7f)) },
                                     maxLines = 1,
                                     singleLine = true,
-                                    shape = RoundedCornerShape(24.dp),
+                                    shape = SquircleShape(),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedContainerColor = Color.Black.copy(alpha = 0.35f),
                                         unfocusedContainerColor = Color.Black.copy(alpha = 0.25f),
@@ -392,7 +393,7 @@ private fun ViewersBottomSheet(viewers: List<StoryViewer>, viewersCount: Int, on
     ) {
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.outlineVariant))
+                Box(modifier = Modifier.width(36.dp).height(4.dp).clip(SquircleShape()).background(MaterialTheme.colorScheme.outlineVariant))
             }
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -437,7 +438,7 @@ private fun ViewersBottomSheet(viewers: List<StoryViewer>, viewersCount: Int, on
 
 @Composable
 private fun ViewersRow(v: StoryViewer) {
-    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {}.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.fillMaxWidth().clip(SquircleShape()).clickable {}.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         // Avatar
         if (v.avatarBase64.isNotBlank()) {
             val bmp = remember(v.avatarBase64) { decodeBase64Bitmap(v.avatarBase64) }
@@ -520,7 +521,7 @@ private fun StoryViewerOverlay(
         }
         if (story.caption.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
-            Surface(shape = RoundedCornerShape(12.dp), color = Color.Black.copy(alpha = 0.35f)) {
+            Surface(shape = SquircleShape(), color = Color.Black.copy(alpha = 0.35f)) {
                 Text(story.caption, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             }
         }

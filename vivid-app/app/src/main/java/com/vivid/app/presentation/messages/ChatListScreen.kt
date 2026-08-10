@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
@@ -39,6 +38,7 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.vivid.app.theme.SquircleShape
 
 data class ChatPreview(
     val chatId: String,
@@ -211,7 +211,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = SquircleShape(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
@@ -238,7 +238,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                     Box(
                         modifier = Modifier
                             .padding(end = 8.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(SquircleShape())
                             .background(chipBgColor)
                             .clickable { selectedTab = index }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -376,7 +376,7 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
+        shape = SquircleShape(),
         colors = CardDefaults.cardColors(containerColor = cardBg),
         border = cardBorder
     ) {

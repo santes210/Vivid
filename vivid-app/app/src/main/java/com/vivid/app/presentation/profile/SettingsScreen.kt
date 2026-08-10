@@ -6,7 +6,6 @@ import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -32,6 +31,7 @@ import com.vivid.app.util.launchExternalIntent
 import com.vivid.app.util.openUrl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.SquircleShape
 
 data class SettingsInfoDialog(
     val title: String,
@@ -828,7 +828,7 @@ fun SettingsScreen(
                         containerColor = MaterialTheme.colorScheme.errorContainer
                     ),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = SquircleShape()
                 ) {
                     ListItem(
                         headlineContent = {
@@ -1061,7 +1061,7 @@ fun SettingsCardGroup(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
-            shape = RoundedCornerShape(24.dp)
+            shape = SquircleShape()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 content()

@@ -7,7 +7,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -36,6 +35,7 @@ import androidx.navigation.NavController
 import com.vivid.app.presentation.create.MusicSelectorBottomSheet
 import com.vivid.app.presentation.create.MusicTrack
 import kotlinx.coroutines.delay
+import com.vivid.app.theme.SquircleShape
 
 /**
  * Crear Story — Material You 3 + Música APK + Dispositivo + Auto-trim 15s
@@ -172,7 +172,7 @@ fun CreateStoryScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = SquircleShape(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Black)
             ) {
@@ -180,14 +180,14 @@ fun CreateStoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(9f / 16f)
-                        .clip(RoundedCornerShape(24.dp)),
+                        .clip(SquircleShape()),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
                         mediaUri == null -> {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                                 Surface(
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = SquircleShape(),
                                     color = MaterialTheme.colorScheme.secondaryContainer,
                                     modifier = Modifier.size(80.dp)
                                 ) {
@@ -225,7 +225,7 @@ fun CreateStoryScreen(
                     if (mediaType == MediaKind.VIDEO && mediaUri != null) {
                         Surface(
                             color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = SquircleShape(),
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(12.dp)
@@ -268,7 +268,7 @@ fun CreateStoryScreen(
                             } catch (_: Exception) { fallbackVideoLauncher.launch("video/*") }
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = SquircleShape(),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -285,7 +285,7 @@ fun CreateStoryScreen(
                             } catch (_: Exception) { fallbackImageLauncher.launch("image/*") }
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = SquircleShape()
                     ) {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -296,7 +296,7 @@ fun CreateStoryScreen(
                 Button(
                     onClick = { navController.navigate("camera_video") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = SquircleShape()
                 ) {
                     Icon(Icons.Default.Videocam, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
@@ -307,7 +307,7 @@ fun CreateStoryScreen(
                 if (mediaType == MediaKind.VIDEO) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
+                        shape = SquircleShape(),
                         colors = CardDefaults.cardColors(
                             containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainerLow
@@ -319,7 +319,7 @@ fun CreateStoryScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = SquircleShape(),
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(44.dp)
                             ) {
@@ -348,7 +348,7 @@ fun CreateStoryScreen(
                             }
                             FilledTonalButton(
                                 onClick = { showMusicSheet = true },
-                                shape = RoundedCornerShape(12.dp)
+                                shape = SquircleShape()
                             ) {
                                 Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                             }
@@ -358,7 +358,7 @@ fun CreateStoryScreen(
                 } else {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = SquircleShape(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -385,7 +385,7 @@ fun CreateStoryScreen(
                             viewModel.reset()
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = SquircleShape()
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -395,7 +395,7 @@ fun CreateStoryScreen(
                         Button(
                             onClick = { showMusicSheet = true },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = SquircleShape()
                         ) {
                             Icon(Icons.Default.MusicNote, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
@@ -414,7 +414,7 @@ fun CreateStoryScreen(
                 placeholder = { Text("Escribe algo…") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 2,
-                shape = RoundedCornerShape(20.dp),
+                shape = SquircleShape(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
@@ -461,7 +461,7 @@ fun CreateStoryScreen(
                 },
                 enabled = mediaUri != null && !isBusy,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(20.dp)
+                shape = SquircleShape()
             ) {
                 if (isBusy) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
@@ -484,7 +484,7 @@ fun CreateStoryScreen(
 
             (state as? CreateStoryUiState.Error)?.let { err ->
                 Spacer(Modifier.height(12.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), shape = SquircleShape(), modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
                         Spacer(Modifier.width(8.dp))

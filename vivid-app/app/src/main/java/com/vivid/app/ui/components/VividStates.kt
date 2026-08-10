@@ -4,7 +4,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -13,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,11 +37,30 @@ fun VividLoadingState(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp),
-                strokeWidth = 3.dp
-            )
+            // Contenedor squircle que "respira" con el pulso del loader
+            val animationsEnabled = LocalVividAnimationsEnabled.current
+            val scale = if (animationsEnabled) {
+                val transition = rememberInfiniteTransition(label = "loadingPulse")
+                val s by transition.animateFloat(
+                    1f, 1.08f,
+                    infiniteRepeatable(tween(900), RepeatMode.Reverse),
+                    label = "scale"
+                )
+                s
+            } else 1f
+            Surface(
+                shape = VividExpressiveShapes.SquircleHero,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(64.dp).scale(scale)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp
+                    )
+                }
+            }
             if (showMessage) {
                 Spacer(Modifier.height(16.dp))
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -66,14 +85,29 @@ fun VividEmptyState(
 ) {
     Box(modifier = modifier.fillMaxWidth().padding(vertical = 56.dp, horizontal = 24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Squircle expresivo 32dp hero + tonal primaryContainer
-            Surface(
-                shape = VividExpressiveShapes.HeroCardLarge, // 32dp
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(96.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(44.dp))
+            // Squircle hero + acento de estrella (vocabulario Expressive)
+            Box {
+                Surface(
+                    shape = VividExpressiveShapes.HeroCardLarge, // squircle 3.5
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(96.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(44.dp))
+                    }
+                }
+                // Chispa decorativa en la esquina superior derecha
+                Surface(
+                    shape = VividExpressiveShapes.Sparkle, // estrella de 4 puntas
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 8.dp, y = (-8).dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(14.dp))
+                    }
                 }
             }
             Spacer(Modifier.height(20.dp))

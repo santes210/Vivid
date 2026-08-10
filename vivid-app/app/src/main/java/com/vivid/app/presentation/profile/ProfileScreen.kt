@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -48,6 +47,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.SquircleShape
 
 data class ProfileUiState(
     val uid: String = "",
@@ -572,7 +572,7 @@ private fun ProfileHeader(
             Spacer(Modifier.height(8.dp))
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(12.dp)
+                shape = SquircleShape()
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -591,7 +591,7 @@ private fun ProfileHeader(
 
         // ── Estadísticas en un grupo coherente (contenedor tonal) ──
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = SquircleShape(),
             color = MaterialTheme.colorScheme.surfaceContainer,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -625,7 +625,7 @@ private fun ProfileHeader(
             FilledTonalButton(
                 onClick = onEditProfile,
                 modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = SquircleShape()
             ) {
                 Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -636,7 +636,7 @@ private fun ProfileHeader(
                 onClick = onToggleFollow,
                 modifier = Modifier.fillMaxWidth().height(44.dp),
                 enabled = !isFollowActionLoading,
-                shape = RoundedCornerShape(16.dp),
+                shape = SquircleShape(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
                         MaterialTheme.colorScheme.secondaryContainer
@@ -696,14 +696,14 @@ private fun ProfileHeaderSkeleton() {
         Box(Modifier.size(116.dp).clip(CircleShape).background(blockColor))
         Spacer(Modifier.height(16.dp))
         // Nombre
-        Box(Modifier.width(190.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(blockColor))
+        Box(Modifier.width(190.dp).height(22.dp).clip(SquircleShape()).background(blockColor))
         Spacer(Modifier.height(8.dp))
         // @usuario
-        Box(Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).background(blockColor))
+        Box(Modifier.width(130.dp).height(14.dp).clip(SquircleShape()).background(blockColor))
         Spacer(Modifier.height(20.dp))
         // Grupo de estadísticas
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = SquircleShape(),
             color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Row(
@@ -718,16 +718,16 @@ private fun ProfileHeaderSkeleton() {
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Box(Modifier.width(48.dp).height(18.dp).clip(RoundedCornerShape(9.dp)).background(blockColor))
+                        Box(Modifier.width(48.dp).height(18.dp).clip(SquircleShape()).background(blockColor))
                         Spacer(Modifier.height(6.dp))
-                        Box(Modifier.width(70.dp).height(11.dp).clip(RoundedCornerShape(5.dp)).background(blockColor))
+                        Box(Modifier.width(70.dp).height(11.dp).clip(SquircleShape()).background(blockColor))
                     }
                 }
             }
         }
         Spacer(Modifier.height(16.dp))
         // Botón de acción
-        Box(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(16.dp)).background(blockColor))
+        Box(Modifier.fillMaxWidth().height(44.dp).clip(SquircleShape()).background(blockColor))
     }
 }
 
@@ -736,7 +736,7 @@ private fun ProfileGridSkeletonCell() {
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(SquircleShape())
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f))
     )
 }
@@ -746,7 +746,7 @@ private fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(24.dp)
+        shape = SquircleShape()
     ) {
         Column(
             modifier = Modifier.padding(40.dp),
@@ -774,7 +774,7 @@ private fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = SquircleShape()
                 ) {
                     Text(
                         "Solicitud enviada",
@@ -793,7 +793,7 @@ private fun EmptyPostsPlaceholder() {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(24.dp)
+        shape = SquircleShape()
     ) {
         Column(
             modifier = Modifier.padding(32.dp),
@@ -811,7 +811,7 @@ private fun EmptySavedPostsPlaceholder() {
     Card(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(24.dp)
+        shape = SquircleShape()
     ) {
         Column(
             modifier = Modifier.padding(32.dp),
@@ -874,7 +874,7 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
         bitmap = if (post.imageBase64.isNotBlank()) try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } else null
     }
     Box(
-        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(6.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.aspectRatio(1f).clip(SquircleShape()).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceContainerLow),
         contentAlignment = Alignment.Center
     ) {
         when {
@@ -898,7 +898,7 @@ private fun ProfilePostViewerDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = SquircleShape()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     Modifier.fillMaxWidth().padding(12.dp),

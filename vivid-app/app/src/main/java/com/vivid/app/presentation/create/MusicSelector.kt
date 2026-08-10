@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import com.vivid.app.theme.SquircleShape
 
 // ─────────────────────────────────────────────────────────────
 // Model
@@ -128,7 +129,7 @@ fun MusicSelectorBottomSheet(
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             // Handle + header
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.outlineVariant))
+                Box(modifier = Modifier.width(36.dp).height(4.dp).clip(SquircleShape()).background(MaterialTheme.colorScheme.outlineVariant))
             }
             Spacer(Modifier.height(14.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -160,7 +161,7 @@ fun MusicSelectorBottomSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 trailingIcon = { if (search.isNotBlank()) IconButton(onClick = { search = "" }) { Icon(Icons.Default.Close, contentDescription = null) } },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                shape = SquircleShape(),
                 colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
             )
 
@@ -179,7 +180,7 @@ fun MusicSelectorBottomSheet(
             }
 
             Spacer(Modifier.height(10.dp))
-            FilledTonalButton(onClick = { devicePicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(16.dp)) {
+            FilledTonalButton(onClick = { devicePicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = SquircleShape()) {
                 Icon(Icons.Filled.LibraryMusic, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Elegir audio del dispositivo")
@@ -221,7 +222,7 @@ fun MusicSelectorBottomSheet(
             // Volume controls when a track is selected
             if (selected != null) {
                 Spacer(Modifier.height(12.dp))
-                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = SquircleShape(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Mezcla de audio", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -243,12 +244,12 @@ fun MusicSelectorBottomSheet(
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = onRemove, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
+                    OutlinedButton(onClick = onRemove, modifier = Modifier.weight(1f), shape = SquircleShape()) {
                         Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Quitar")
                     }
-                    Button(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
+                    Button(onClick = onDismiss, modifier = Modifier.weight(1f), shape = SquircleShape()) {
                         Icon(Icons.Default.Check, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("Usar canción")
@@ -263,7 +264,7 @@ fun MusicSelectorBottomSheet(
 
 @Composable
 private fun SelectedMusicHeader(track: MusicTrack, onRemove: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = SquircleShape(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White)
@@ -319,12 +320,12 @@ private fun MusicTrackRow(track: MusicTrack, isSelected: Boolean, onSelect: () -
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onSelect() },
-        shape = RoundedCornerShape(18.dp),
+        shape = SquircleShape(),
         colors = CardDefaults.cardColors(containerColor = container),
         border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(48.dp).clip(SquircleShape()).background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)), contentAlignment = Alignment.Center) {
                 Icon(if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.width(12.dp))

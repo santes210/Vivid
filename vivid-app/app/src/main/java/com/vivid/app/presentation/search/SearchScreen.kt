@@ -98,6 +98,7 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
+            shape = com.vivid.app.theme.VividExpressiveShapes.SearchBar,
             singleLine = true
         )
 

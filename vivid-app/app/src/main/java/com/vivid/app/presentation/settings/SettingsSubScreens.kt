@@ -5,7 +5,6 @@ import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -33,6 +32,7 @@ import com.vivid.app.util.launchExternalIntent
 import com.vivid.app.util.openUrl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.SquircleShape
 
 // ─────────────────────────────────────────────────────────────
 // Cuenta
@@ -157,7 +157,7 @@ fun CuentaSettingsScreen(
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = SquircleShape()
                 ) {
                     ListItem(
                         headlineContent = { Text("Cerrar sesión", color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },

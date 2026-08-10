@@ -36,6 +36,7 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.vivid.app.theme.SquircleShape
 
 /**
  * Pantalla de trim de video (estilo Instagram Reels editor).
@@ -141,7 +142,7 @@ fun VideoTrimmerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(380.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(SquircleShape())
                     .background(Color.Black)
             ) {
                 AndroidView(
@@ -155,7 +156,7 @@ fun VideoTrimmerScreen(
                 )
                 Surface(
                     color = Color.Black.copy(alpha = 0.45f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = SquircleShape(),
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(12.dp)
@@ -191,7 +192,7 @@ fun VideoTrimmerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(72.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(SquircleShape())
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 frameThumbs.forEachIndexed { idx, bmp ->
@@ -236,7 +237,7 @@ fun VideoTrimmerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = SquircleShape()
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))

@@ -6,7 +6,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.AsyncImage
+import com.vivid.app.theme.SquircleShape
 
 private enum class CreateContentType {
     POST,
@@ -189,7 +189,7 @@ fun CreatePostScreen(
             if (selectedContentType == CreateContentType.REEL) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = SquircleShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                 ) {
                     Column(
@@ -199,7 +199,7 @@ fun CreatePostScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
+                            shape = SquircleShape(),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(80.dp)
                         ) {
@@ -227,7 +227,7 @@ fun CreatePostScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = SquircleShape()
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
@@ -241,7 +241,7 @@ fun CreatePostScreen(
             if (selectedContentType == CreateContentType.STORY) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = SquircleShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -260,7 +260,7 @@ fun CreatePostScreen(
                         FilledTonalButton(
                             onClick = { navController.navigate("create_story") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = SquircleShape()
                         ) {
                             Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
@@ -274,7 +274,7 @@ fun CreatePostScreen(
             // Preview grande con Material You 3 Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = SquircleShape(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
@@ -297,7 +297,7 @@ fun CreatePostScreen(
                             modifier = Modifier.padding(24.dp)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(24.dp),
+                                shape = SquircleShape(),
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 modifier = Modifier.size(100.dp)
                             ) {
@@ -336,7 +336,7 @@ fun CreatePostScreen(
                 FilledTonalButton(
                     onClick = { imagePickerLauncher.launch("image/*") },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = SquircleShape(),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -349,7 +349,7 @@ fun CreatePostScreen(
                 Button(
                     onClick = { navController.navigate("camera") },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = SquircleShape()
                 ) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -362,7 +362,7 @@ fun CreatePostScreen(
             // ── Selector de música (Material You 3) ──
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                shape = SquircleShape(),
                 colors = CardDefaults.cardColors(
                     containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer
                     else MaterialTheme.colorScheme.surfaceContainerLow
@@ -379,7 +379,7 @@ fun CreatePostScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = SquircleShape(),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(44.dp)
                     ) {
@@ -408,7 +408,7 @@ fun CreatePostScreen(
                     }
                     FilledTonalButton(
                         onClick = { showMusicSheet = true },
-                        shape = RoundedCornerShape(12.dp)
+                        shape = SquircleShape()
                     ) {
                         Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                     }
@@ -425,7 +425,7 @@ fun CreatePostScreen(
                 placeholder = { Text("Simplemente....  Escribe....") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
-                shape = RoundedCornerShape(20.dp),
+                shape = SquircleShape(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
@@ -454,7 +454,7 @@ fun CreatePostScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = SquircleShape(),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
             ) {
                 if (isUploading) {
@@ -476,7 +476,7 @@ fun CreatePostScreen(
                 Spacer(Modifier.height(12.dp))
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = SquircleShape(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -101,6 +101,9 @@ android {
         jvmTarget = "17"
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            // Material 3 Expressive (1.5.0-alpha23): MotionScheme, shape morphing,
+            // LoadingIndicator, listas/topbars expresivas, tipografía Emphasized.
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
             "-opt-in=androidx.media3.common.util.UnstableApi"
         )
     }
@@ -109,9 +112,10 @@ android {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
+    // composeOptions { kotlinCompilerExtensionVersion = ... } se ELIMINA:
+    // con el plugin org.jetbrains.kotlin.plugin.compose (Kotlin 2.1.20) el compilador
+    // de Compose queda ligado a la versión de Kotlin; fijar aquí una versión antigua
+    // (1.5.15) rompería el build tras el upgrade a Kotlin 2.1.20 + Compose 1.12.
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

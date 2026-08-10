@@ -20,6 +20,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.vivid.app.util.AudioTrimmer
 import kotlinx.coroutines.launch
 import java.io.File
+import com.vivid.app.theme.SquircleShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,14 +102,14 @@ fun AudioTrimBottomSheet(
                     modifier = Modifier
                         .width(36.dp)
                         .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(SquircleShape())
                         .background(MaterialTheme.colorScheme.outlineVariant)
                 )
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = SquircleShape(),
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(44.dp)
                 ) {
@@ -134,7 +135,7 @@ fun AudioTrimBottomSheet(
                 }
             } else {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = SquircleShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -176,7 +177,7 @@ fun AudioTrimBottomSheet(
                             FilledTonalButton(
                                 onClick = { isPlaying = !isPlaying },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = SquircleShape()
                             ) {
                                 Icon(
                                     if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -191,7 +192,7 @@ fun AudioTrimBottomSheet(
                                     startMs = 0L
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = SquircleShape()
                             ) {
                                 Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -237,7 +238,7 @@ fun AudioTrimBottomSheet(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = SquircleShape(),
                     enabled = !isTrimming
                 ) {
                     if (isTrimming) {
@@ -254,7 +255,7 @@ fun AudioTrimBottomSheet(
                 trimError?.let { err ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = SquircleShape(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -268,7 +269,7 @@ fun AudioTrimBottomSheet(
                 if (durationMs > 15_000) {
                     // Aviso de ahorro de almacenamiento
                     Card(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = SquircleShape(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                         modifier = Modifier.fillMaxWidth()
                     ) {

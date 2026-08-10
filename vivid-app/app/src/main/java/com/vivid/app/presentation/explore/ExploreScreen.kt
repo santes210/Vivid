@@ -143,6 +143,7 @@ fun ExploreScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
+                shape = com.vivid.app.theme.VividExpressiveShapes.SearchBar,
                 singleLine = true
             )
 

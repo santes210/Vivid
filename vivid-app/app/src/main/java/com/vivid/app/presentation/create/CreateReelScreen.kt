@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,6 +27,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
+import com.vivid.app.theme.SquircleShape
 
 /**
  * Pantalla "Crear Reel" — Material You 3 + Música
@@ -136,7 +136,7 @@ fun CreateReelScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(380.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(SquircleShape())
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
@@ -219,7 +219,7 @@ fun CreateReelScreen(
             if (selectedUri != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = SquircleShape(),
                     colors = CardDefaults.cardColors(containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow),
                     border = if (selectedTrack != null) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null
                 ) {
@@ -227,7 +227,7 @@ fun CreateReelScreen(
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp)) {
+                        Surface(shape = SquircleShape(), color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp)) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                             }
@@ -251,7 +251,7 @@ fun CreateReelScreen(
                                 Icon(Icons.Default.Close, contentDescription = "Quitar música")
                             }
                         }
-                        FilledTonalButton(onClick = { showMusicSheet = true }, shape = RoundedCornerShape(12.dp)) {
+                        FilledTonalButton(onClick = { showMusicSheet = true }, shape = SquircleShape()) {
                             Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                         }
                     }
@@ -283,7 +283,7 @@ fun CreateReelScreen(
                 placeholder = { Text("Escribe algo…") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
-                shape = RoundedCornerShape(16.dp)
+                shape = SquircleShape()
             )
 
             Spacer(Modifier.height(16.dp))
@@ -309,7 +309,7 @@ fun CreateReelScreen(
                 },
                 enabled = selectedUri != null && !isBusy,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = SquircleShape()
             ) {
                 if (isBusy) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)

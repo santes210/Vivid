@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,6 +42,7 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.vivid.app.theme.SquircleShape
 
 /**
  * Editor de Story estilo Instagram.
@@ -190,7 +190,7 @@ fun StoryEditorScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(9f / 16f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(SquircleShape())
             ) {
                 if (isVideo && videoPlayer != null) {
                     AndroidView(
@@ -314,7 +314,7 @@ private fun OverlayItem(
             .padding(8.dp)
             .background(
                 color = if (isSelected) Color.White.copy(alpha = 0.2f) else Color.Transparent,
-                shape = RoundedCornerShape(4.dp)
+                shape = SquircleShape()
             )
     ) {
         when (overlay) {
@@ -351,7 +351,7 @@ private fun EditorToolButton(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(SquircleShape())
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onClick() })
             }

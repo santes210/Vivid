@@ -15,7 +15,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -63,6 +62,7 @@ import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.SquircleShape
 import com.vivid.app.ui.icons.VividIcons
 
 sealed class Screen(
@@ -548,7 +548,7 @@ private fun VividBottomBar(
                         .padding(vertical = 10.dp)
                         .width(CREATE_PILL_WIDTH)
                         .height(38.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(SquircleShape())
                         .background(MaterialTheme.colorScheme.primaryContainer)
                 )
             }
@@ -566,7 +566,7 @@ private fun VividBottomBar(
                             // Acción principal: botón "Crear" de mayor énfasis
                             Surface(
                                 onClick = { onNavigate(dest.screen) },
-                                shape = RoundedCornerShape(20.dp),
+                                shape = SquircleShape(),
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 tonalElevation = 4.dp,
@@ -587,7 +587,7 @@ private fun VividBottomBar(
                                 verticalArrangement = Arrangement.Center,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(SquircleShape())
                                     .selectable(
                                         selected = isSelected,
                                         role = Role.Tab,

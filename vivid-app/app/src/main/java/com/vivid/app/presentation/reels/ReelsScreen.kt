@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -48,6 +47,7 @@ import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.SquircleShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,7 +108,7 @@ fun ReelsScreen(
         // Header "Reels" flotante — píldora compacta con contenedor translúcido consistente
         Surface(
             color = Color.Black.copy(alpha = 0.35f),
-            shape = RoundedCornerShape(16.dp),
+            shape = SquircleShape(),
             shadowElevation = 0.dp,
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -141,7 +141,7 @@ fun ReelsScreen(
                             .padding(vertical = 2.dp)
                             .width(3.dp)
                             .height(if (index == pagerState.currentPage) 24.dp else 12.dp)
-                            .clip(RoundedCornerShape(2.dp))
+                            .clip(SquircleShape())
                             .background(
                                 if (index == pagerState.currentPage) Color.White
                                 else Color.White.copy(alpha = 0.4f)
@@ -174,7 +174,7 @@ fun ReelsScreen(
                 .padding(20.dp),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = RoundedCornerShape(28.dp)
+            shape = SquircleShape()
         ) {
             Icon(Icons.Default.Add, contentDescription = "Crear Reel", modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
@@ -203,7 +203,7 @@ private fun EmptyReelsState(onCreateReel: () -> Unit) {
             Spacer(Modifier.height(28.dp))
             FilledTonalButton(
                 onClick = onCreateReel,
-                shape = RoundedCornerShape(28.dp),
+                shape = SquircleShape(),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -511,7 +511,7 @@ private fun ReelCreatorCard(
 ) {
     Surface(
         color = Color.Black.copy(alpha = 0.32f),
-        shape = RoundedCornerShape(18.dp),
+        shape = SquircleShape(),
         shadowElevation = 0.dp,
         modifier = modifier.widthIn(max = 330.dp)
     ) {
@@ -599,7 +599,7 @@ private fun ReelFollowPill(
 ) {
     Surface(
         color = if (isActive) Color.White.copy(alpha = 0.22f) else Color.White,
-        shape = RoundedCornerShape(10.dp),
+        shape = SquircleShape(),
         shadowElevation = 0.dp,
         modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
     ) {
@@ -727,7 +727,7 @@ private fun ReelCommentsSheet(
                     placeholder = { Text("Escribe un comentario…") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
+                    shape = SquircleShape(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest

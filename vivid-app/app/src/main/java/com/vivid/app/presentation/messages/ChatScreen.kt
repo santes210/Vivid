@@ -62,6 +62,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.compose.runtime.DisposableEffect
+import com.vivid.app.theme.SquircleShape
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -231,7 +232,7 @@ fun ChatScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(24.dp),
+                                shape = SquircleShape(),
                                 color = MaterialTheme.colorScheme.errorContainer,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
                             ) {
@@ -246,7 +247,7 @@ fun ChatScreen(
 
                     messages.isEmpty() && imageUploads.none { it.phase != ImageUpload.Phase.DONE } && voiceUploads.isEmpty() && !isOtherTyping -> {
                         Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                            Surface(shape = SquircleShape(), color = MaterialTheme.colorScheme.surfaceContainer) {
                                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Aún no hay mensajes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.height(8.dp))
@@ -373,7 +374,7 @@ fun ChatScreen(
                                     modifier = Modifier.weight(1f),
                                     placeholder = { Text("Escribe un mensaje…") },
                                     maxLines = 4,
-                                    shape = RoundedCornerShape(24.dp),
+                                    shape = SquircleShape(),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color.Transparent,
                                         unfocusedBorderColor = Color.Transparent,
@@ -424,7 +425,7 @@ fun ChatScreen(
             ) {
                 // Menú de reacciones expresivo: superficie tonal plana, sin sombras ni bordes
                 Surface(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = SquircleShape(),
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     shadowElevation = 0.dp,
                     tonalElevation = 0.dp
@@ -462,18 +463,18 @@ fun ChatScreen(
                 Text("Opciones del Mensaje", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), modifier = Modifier.padding(bottom = 8.dp))
                 when (message.type) {
                     "image" -> {
-                        ListItem(headlineContent = { Text("Ver imagen") }, supportingContent = { Text("Imagen adjunta", maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { viewerImageUrl = message.imageUrl; selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                        ListItem(headlineContent = { Text("Ver imagen") }, supportingContent = { Text("Imagen adjunta", maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(SquircleShape()).clickable { viewerImageUrl = message.imageUrl; selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                     "voice" -> {
-                        ListItem(headlineContent = { Text("Nota de voz") }, supportingContent = { Text(formatVoiceDuration(message.voiceDurationMs), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)), colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                        ListItem(headlineContent = { Text("Nota de voz") }, supportingContent = { Text(formatVoiceDuration(message.voiceDurationMs), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(SquircleShape()), colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                     else -> {
-                        ListItem(headlineContent = { Text("Copiar texto") }, supportingContent = { Text(message.text.take(80), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { clipboardManager.setText(AnnotatedString(message.text)); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                        ListItem(headlineContent = { Text("Copiar texto") }, supportingContent = { Text(message.text.take(80), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(SquircleShape()).clickable { clipboardManager.setText(AnnotatedString(message.text)); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                 }
                 if (message.senderId == currentUserId) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                    ListItem(headlineContent = { Text("Eliminar mensaje", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)) }, supportingContent = { Text(when(message.type){ "image" -> "Se borrará la imagen también del servidor."; "voice" -> "Se borrará el audio también."; else -> "Se borrará esta burbuja permanentemente." }) }, leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { viewModel.deleteMessage(chatId, message); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                    ListItem(headlineContent = { Text("Eliminar mensaje", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)) }, supportingContent = { Text(when(message.type){ "image" -> "Se borrará la imagen también del servidor."; "voice" -> "Se borrará el audio también."; else -> "Se borrará esta burbuja permanentemente." }) }, leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, modifier = Modifier.clip(SquircleShape()).clickable { viewModel.deleteMessage(chatId, message); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -503,7 +504,7 @@ fun ChatScreen(
                     headlineContent = { Text("Enviar foto") },
                     supportingContent = { Text("Desde tu galería") },
                     leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    modifier = Modifier.clip(SquircleShape()).clickable {
                         showAttachMenu = false
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     },
@@ -513,7 +514,7 @@ fun ChatScreen(
                     headlineContent = { Text("Ver perfil") },
                     supportingContent = { Text("@$otherUserName") },
                     leadingContent = { Icon(Icons.Filled.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    modifier = Modifier.clip(SquircleShape()).clickable {
                         showAttachMenu = false
                         if (receiverId.isNotBlank()) onOpenProfile(receiverId)
                     },
@@ -523,7 +524,7 @@ fun ChatScreen(
                     headlineContent = { Text("Copiar chat ID") },
                     supportingContent = { Text("Para soporte o depuración") },
                     leadingContent = { Icon(Icons.Filled.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    modifier = Modifier.clip(SquircleShape()).clickable {
                         clipboardManager.setText(AnnotatedString(chatId))
                         showAttachMenu = false
                     },
@@ -541,7 +542,7 @@ fun ChatScreen(
                 Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 4f); offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan } }, contentAlignment = Alignment.Center) {
                     AsyncImage(model = url, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxWidth().padding(16.dp).graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y), contentScale = ContentScale.Fit)
                 }
-                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 24.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
+                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 24.dp, vertical = 12.dp), shape = SquircleShape(), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(text = "Visor de Imagen", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))
@@ -592,7 +593,7 @@ private fun RecordingWaveform(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(3.dp)
                         .height(20.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(SquircleShape())
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
                 )
             }
@@ -604,7 +605,7 @@ private fun RecordingWaveform(modifier: Modifier = Modifier) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
         repeat(bars) { i ->
             val anim by infinite.animateFloat(initialValue = 0.3f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(420 + i * 35, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "bar$i")
-            Box(modifier = Modifier.width(3.dp).height((10 + 16 * anim).dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)))
+            Box(modifier = Modifier.width(3.dp).height((10 + 16 * anim).dp).clip(SquircleShape()).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)))
         }
     }
 }
@@ -614,7 +615,7 @@ private fun TypingIndicatorBubble() {
     val animationsEnabled = LocalVividAnimationsEnabled.current
     if (!animationsEnabled) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
-            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+            Surface(shape = SquircleShape(), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     repeat(3) {
                         Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)))
@@ -629,7 +630,7 @@ private fun TypingIndicatorBubble() {
 
     val infinite = rememberInfiniteTransition(label = "typing")
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+        Surface(shape = SquircleShape(), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
             Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 repeat(3) { idx ->
                     val delayMs = idx * 200
@@ -720,7 +721,7 @@ fun MessageBubble(
 private fun ImageMessageContent(message: Message, isMine: Boolean, onImageClick: (String) -> Unit, onResignImage: (Message) -> Unit, onLongPress: () -> Unit = {}, onDoubleTap: () -> Unit = {}) {
     var resignAttempted by remember(message.id) { mutableStateOf(false) }
     Column {
-        Box(modifier = Modifier.defaultMinSize(minWidth = 160.dp, minHeight = 160.dp).sizeIn(maxWidth = 240.dp, maxHeight = 320.dp).clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = { onImageClick(message.imageUrl) }, onLongClick = { onLongPress() }, onDoubleClick = { onDoubleTap() })) {
+        Box(modifier = Modifier.defaultMinSize(minWidth = 160.dp, minHeight = 160.dp).sizeIn(maxWidth = 240.dp, maxHeight = 320.dp).clip(SquircleShape()).combinedClickable(onClick = { onImageClick(message.imageUrl) }, onLongClick = { onLongPress() }, onDoubleClick = { onDoubleTap() })) {
             AsyncImage(model = message.imageUrl, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, onError = { if (message.imageKey.isNotBlank() && !resignAttempted) { resignAttempted = true; onResignImage(message) } })
         }
         Spacer(Modifier.height(3.dp))
@@ -815,7 +816,7 @@ private fun VoiceWaveform(progress: Float, isMine: Boolean) {
                 modifier = Modifier
                     .width(3.dp)
                     .height(h.dp)
-                    .clip(RoundedCornerShape(1.5.dp))
+                    .clip(SquircleShape())
                     .background(if (played) activeColor else idleColor)
             )
         }
@@ -827,7 +828,7 @@ private fun StoryReplyContent(message: Message, isMine: Boolean) {
     val contentColor = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     Column {
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = SquircleShape(),
             color = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f) else MaterialTheme.colorScheme.primaryContainer
         ) {
             Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -871,7 +872,7 @@ private fun MessageMetaRow(message: Message, isMine: Boolean, showResignVoice: B
 @Composable
 private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Surface(shape = SquircleShape(), color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(modifier = Modifier.widthIn(max = 260.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
@@ -880,7 +881,7 @@ private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: ()
                 }
                 when (upload.phase) {
                     ImageUpload.Phase.COMPRESSING -> { Spacer(Modifier.height(10.dp)); CircularProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp), strokeWidth = 4.dp, color = MaterialTheme.colorScheme.primary) }
-                    ImageUpload.Phase.UPLOADING -> { Spacer(Modifier.height(10.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainer) }
+                    ImageUpload.Phase.UPLOADING -> { Spacer(Modifier.height(10.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(SquircleShape()), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainer) }
                     ImageUpload.Phase.FAILED -> { Spacer(Modifier.height(4.dp)); Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onDismiss) { Text("Descartar") }; TextButton(onClick = onRetry) { Text("Reintentar", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) } } }
                     ImageUpload.Phase.DONE -> Unit
                 }
@@ -892,13 +893,13 @@ private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: ()
 @Composable
 private fun VoiceUploadBubble(upload: VoiceUpload, onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+        Surface(shape = SquircleShape(), color = MaterialTheme.colorScheme.primaryContainer) {
             Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(text = if (upload.phase == ImageUpload.Phase.FAILED) "No se pudo enviar la voz" else "Subiendo nota de voz… ${upload.progress}%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (upload.phase == ImageUpload.Phase.UPLOADING) { Spacer(Modifier.height(6.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.width(160.dp).height(6.dp).clip(RoundedCornerShape(3.dp))) }
+                    if (upload.phase == ImageUpload.Phase.UPLOADING) { Spacer(Modifier.height(6.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.width(160.dp).height(6.dp).clip(SquircleShape())) }
                     if (upload.phase == ImageUpload.Phase.FAILED) { TextButton(onClick = onDismiss) { Text("Descartar") } }
                 }
             }
