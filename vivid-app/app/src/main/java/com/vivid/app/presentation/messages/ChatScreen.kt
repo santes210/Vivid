@@ -295,6 +295,8 @@ fun ChatScreen(
                                         val isSameAsPrev = prevMsg?.senderId == message.senderId
                                         val isSameAsNext = nextMsg?.senderId == message.senderId
                                         val showDateHeader = prevMsg == null || !isSameDay(message.timestamp, prevMsg.timestamp)
+                                        val isGroupStart = isSameAsPrev != true
+                                        val isGroupEnd = isSameAsNext != true
 
                                         Column(
                                             modifier = Modifier
@@ -305,8 +307,8 @@ fun ChatScreen(
                                             MessageBubble(
                                                 message = message,
                                                 isMine = isMine,
-                                                isGroupStart = isSameAsPrev != true,
-                                                isGroupEnd = isSameAsNext != true,
+                                                isGroupStart = isGroupStart,
+                                                isGroupEnd = isGroupEnd,
                                                 onLongPress = {
                                                     activeReactionMessageId = message.id
                                                     selectedMessageForOptions = message
