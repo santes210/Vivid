@@ -554,7 +554,7 @@ fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Un
             item {
                 VividSettingsGroup {
                     VividSettingsItem(title = "Centro de ayuda y soporte", subtitle = "Contactar al desarrollador", icon = Icons.Outlined.HelpOutline, onClick = { showHelp = true }, showDivider = true)
-                    VividSettingsItem(title = "Reportar un problema", subtitle = "Envía detalles por correo", icon = Icons.Outlined.BugReport, onClick = { showHelp = true }, showDivider = true)
+                    VividSettingsItem(title = "Reportar un problema", subtitle = "Envía detalles por correo", icon = Icons.Default.BugReport, onClick = { showHelp = true }, showDivider = true)
                     VividSettingsItem(title = "Abrir repositorio", subtitle = "Ver Vivid en GitHub", icon = Icons.Outlined.OpenInBrowser, onClick = {
                         val ok = openUrl(context, "https://github.com/santes210/Vivid")
                         if (!ok) scope.launch { onShowSnackbar("No se pudo abrir GitHub") }

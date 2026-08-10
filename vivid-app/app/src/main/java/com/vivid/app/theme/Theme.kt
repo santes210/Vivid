@@ -135,6 +135,8 @@ fun VividTheme(
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isNavigationBarContrastEnforced = false
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.isStatusBarContrastEnforced = false
             }
             val insetsController = WindowCompat.getInsetsController(window, view)
