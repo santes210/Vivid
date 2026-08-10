@@ -3,22 +3,34 @@ package com.vivid.app.navigation
 import android.net.Uri
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -84,6 +96,17 @@ fun VividNavigation(
     val currentRoute = navBackStackEntry?.destination?.route
     val animationsEnabled = LocalVividAnimationsEnabled.current
 
+    // Tabletas → NavigationRail automáticamente (>=600dp de ancho)
+    val isTablet = LocalConfiguration.current.screenWidthDp >= 600
+
+    val primaryDestinations = listOf(
+        VividDestination(Screen.Feed, Icons.Filled.Home, Icons.Outlined.Home),
+        VividDestination(Screen.Search, Icons.Filled.Search, Icons.Outlined.Search),
+        VividDestination(Screen.Create, Icons.Filled.Add, Icons.Outlined.Add),
+        VividDestination(Screen.Reels, Icons.Filled.PlayArrow, Icons.Outlined.PlayArrow),
+        VividDestination(Screen.Profile, Icons.Filled.Person, Icons.Outlined.Person)
+    )
+
     // ── Manejar deep links desde notificaciones push ──
     LaunchedEffect(deepLinkChatId) {
         if (!deepLinkChatId.isNullOrBlank()) {
@@ -135,79 +158,69 @@ fun VividNavigation(
 
     Scaffold(
         bottomBar = {
-            if (currentRoute != Screen.Auth.route) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets.navigationBars
-                ) {
-                    val items = listOf(
-                        Screen.Feed, Screen.Search, Screen.Create,
-                        Screen.Reels, Screen.Profile
-                    )
-                    items.forEach { screen ->
-                        val isSelected = currentRoute == screen.route
-                        NavigationBarItem(
-                            icon = { Icon(screen.icon ?: Icons.Default.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                            label = { 
-                                Text(
-                                    text = screen.title, 
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                ) 
-                            },
-                            selected = isSelected,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            onClick = {
-                                if (currentRoute != screen.route) {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(Screen.Feed.route) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
+            if (!isTablet && currentRoute != Screen.Auth.route) {
+                VividBottomBar(
+                    currentRoute = currentRoute,
+                    destinations = primaryDestinations,
+                    onNavigate = { screen ->
+                        if (currentRoute != screen.route) {
+                            navController.navigate(screen.route) {
+                                popUpTo(Screen.Feed.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                        )
+                        }
                     }
-                }
+                )
             }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding),
-            enterTransition = {
-                if (animationsEnabled) {
-                    fadeIn(tween(220)) +
-                        slideInHorizontally(tween(220)) { fullWidth -> fullWidth / 16 }
-                } else {
-                    EnterTransition.None
-                }
-            },
-            exitTransition = {
-                if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
-            },
-            popEnterTransition = {
-                if (animationsEnabled) fadeIn(tween(180)) else EnterTransition.None
-            },
-            popExitTransition = {
-                if (animationsEnabled) {
-                    fadeOut(tween(160)) +
-                        slideOutHorizontally(tween(160)) { fullWidth -> fullWidth / 16 }
-                } else {
-                    ExitTransition.None
-                }
+        Row(Modifier.fillMaxSize()) {
+            if (isTablet && currentRoute != Screen.Auth.route) {
+                VividNavigationRail(
+                    currentRoute = currentRoute,
+                    destinations = primaryDestinations,
+                    onNavigate = { screen ->
+                        if (currentRoute != screen.route) {
+                            navController.navigate(screen.route) {
+                                popUpTo(Screen.Feed.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
+                )
             }
-        ) {
+            NavHost(
+                navController = navController,
+                startDestination = startDestination,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(innerPadding),
+                enterTransition = {
+                    if (animationsEnabled) {
+                        fadeIn(tween(220)) +
+                            slideInHorizontally(tween(220)) { fullWidth -> fullWidth / 16 }
+                    } else {
+                        EnterTransition.None
+                    }
+                },
+                exitTransition = {
+                    if (animationsEnabled) fadeOut(tween(120)) else ExitTransition.None
+                },
+                popEnterTransition = {
+                    if (animationsEnabled) fadeIn(tween(180)) else EnterTransition.None
+                },
+                popExitTransition = {
+                    if (animationsEnabled) {
+                        fadeOut(tween(160)) +
+                            slideOutHorizontally(tween(160)) { fullWidth -> fullWidth / 16 }
+                    } else {
+                        ExitTransition.None
+                    }
+                }
+            ) {
             composable(Screen.Auth.route) {
                 AuthScreen(onLoginSuccess = {
                     navController.navigate(Screen.Feed.route) {
@@ -222,7 +235,8 @@ fun VividNavigation(
                     onOpenProfile = { navController.navigate(Screen.Profile.route) },
                     onOpenStoryViewer = { storyId ->
                         navController.navigate("story_viewer/${Uri.encode(storyId)}")
-                    }
+                    },
+                    onCreateStory = { navController.navigate(Screen.CreateStory.route) }
                 )
             }
             composable(Screen.Search.route) {
@@ -382,6 +396,193 @@ fun VividNavigation(
                 StoryViewerRoute(
                     initialStoryId = storyId,
                     onClose = { navController.popBackStack() }
+                )
+            }
+        }
+    }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Navegación principal (mejora M3 Expressive)
+//   - Barra inferior: indicador píldora animado, íconos activos/inactivos
+//     diferenciados, botón "Crear" destacado, etiquetas compactas.
+//   - Tabletas (>=600dp): conmutación automática a NavigationRail.
+// ─────────────────────────────────────────────────────────────
+
+private data class VividDestination(
+    val screen: Screen,
+    val activeIcon: ImageVector,
+    val inactiveIcon: ImageVector
+)
+
+/** Índice del destino "Crear", que se pinta como acción principal. */
+private const val CREATE_INDEX = 2
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VividBottomBar(
+    currentRoute: String?,
+    destinations: List<VividDestination>,
+    onNavigate: (Screen) -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            val barWidth = constraints.maxWidth.toFloat()
+            val itemWidth = if (destinations.isNotEmpty()) barWidth / destinations.size else barWidth
+            val selectedIndex = destinations.indexOfFirst { currentRoute == it.screen.route }
+            val safeIndex = if (selectedIndex in destinations.indices) selectedIndex else 0
+            val pillWidthPx = with(LocalDensity.current) { CREATE_PILL_WIDTH.toPx() }
+
+            val targetOffset = itemWidth * safeIndex + (itemWidth - pillWidthPx) / 2f
+            val animatedOffset by animateFloatAsState(
+                targetValue = targetOffset,
+                animationSpec = tween(durationMillis = 320),
+                label = "navPillOffset"
+            )
+
+            // Píldora indicadora activa (desliza al cambiar de destino)
+            if (safeIndex != CREATE_INDEX) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+                        .padding(vertical = 10.dp)
+                        .width(CREATE_PILL_WIDTH)
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                )
+            }
+
+            Row(Modifier.fillMaxWidth()) {
+                destinations.forEachIndexed { index, dest ->
+                    val isSelected = currentRoute == dest.screen.route
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(NAV_BAR_HEIGHT),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (dest.screen == Screen.Create) {
+                            // Acción principal: botón "Crear" de mayor énfasis
+                            Surface(
+                                onClick = { onNavigate(dest.screen) },
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                tonalElevation = 4.dp,
+                                shadowElevation = 4.dp,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Filled.Add,
+                                        contentDescription = dest.screen.title,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .clickable { onNavigate(dest.screen) }
+                            ) {
+                                Icon(
+                                    imageVector = if (isSelected) dest.activeIcon else dest.inactiveIcon,
+                                    contentDescription = dest.screen.title,
+                                    tint = if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = dest.screen.title,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    ),
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val CREATE_PILL_WIDTH = 56.dp
+private val NAV_BAR_HEIGHT = 60.dp
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VividNavigationRail(
+    currentRoute: String?,
+    destinations: List<VividDestination>,
+    onNavigate: (Screen) -> Unit
+) {
+    NavigationRail(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        windowInsets = WindowInsets(0, 0, 0, 0)
+    ) {
+        Spacer(Modifier.height(12.dp))
+        destinations.forEach { dest ->
+            val isSelected = currentRoute == dest.screen.route
+            if (dest.screen == Screen.Create) {
+                // Acción principal destacada en el rail
+                Spacer(Modifier.height(8.dp))
+                FloatingActionButton(
+                    onClick = { onNavigate(dest.screen) },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = dest.screen.title)
+                }
+                Spacer(Modifier.height(8.dp))
+            } else {
+                NavigationRailItem(
+                    selected = isSelected,
+                    onClick = { onNavigate(dest.screen) },
+                    icon = {
+                        Icon(
+                            imageVector = if (isSelected) dest.activeIcon else dest.inactiveIcon,
+                            contentDescription = dest.screen.title
+                        )
+                    },
+                    label = {
+                        Text(
+                            dest.screen.title,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        )
+                    },
+                    colors = NavigationRailItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
         }

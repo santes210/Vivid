@@ -2,72 +2,85 @@ package com.vivid.app.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.vivid.app.R
 
 /**
- * Material You 3 — Type scale completo (display, headline, title, body, label).
+ * Tipografía de marca Vivid — Material You 3 Expressive.
  *
- * Mejoras vs la versión anterior:
- *   - Escala completa M3 (antes solo había 3 estilos).
- *   - Line heights y letter spacing optimizados para móvil.
- *   - Display/headline con pesos bold/semiBold para los títulos de IG-style.
- *   - Body con mayor legibilidad (line-height 24sp).
+ * Estrategia tipográfica (mejora 2026-08-09):
+ *   - Fuente de marca (Sora) SOLO para títulos importantes (display, headline y titleLarge).
+ *     Da identidad sin sacrificar legibilidad.
+ *   - Fuente del sistema / Roboto para textos largos (body) y etiquetas (label).
+ *   - Títulos grandes reservados a "momentos hero"; el resto de la app usa pesos moderados.
+ *   - Menos negrita en listas y mejor separación entre título, descripción y metadata
+ *     (se maneja con los estilos y spacing en cada pantalla).
  *
  * Los colores los toma dinámicamente del wallpaper del usuario
  * (Android 12+). En <12 usa el fallback Vivid.
  */
+
+/** Familia de marca para títulos importantes. */
+val SoraFamily = FontFamily(
+    Font(R.font.sora_regular, FontWeight.Normal),
+    Font(R.font.sora_semibold, FontWeight.SemiBold),
+    Font(R.font.sora_bold, FontWeight.Bold),
+    Font(R.font.sora_extrabold, FontWeight.ExtraBold)
+)
+
 val VividTypography = Typography(
-    // ----- DISPLAY (héroe / splash) -----
+    // ----- DISPLAY (héroe / splash) — fuente de marca, solo en momentos hero -----
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
+        fontFamily = SoraFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 57.sp,
         lineHeight = 64.sp,
         letterSpacing = (-0.25).sp
     ),
     displayMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SoraFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 45.sp,
         lineHeight = 52.sp,
         letterSpacing = 0.sp
     ),
     displaySmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SoraFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 36.sp,
         lineHeight = 44.sp,
         letterSpacing = 0.sp
     ),
 
-    // ----- HEADLINE (secciones, top bar) -----
+    // ----- HEADLINE (secciones, top bar) — fuente de marca -----
     headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SoraFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
         letterSpacing = 0.sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SoraFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
         letterSpacing = 0.sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SoraFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
         letterSpacing = 0.sp
     ),
 
-    // ----- TITLE (cards, dialogs) -----
+    // ----- TITLE (cards, dialogs) — fuente de marca para el título principal -----
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SoraFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
@@ -88,7 +101,7 @@ val VividTypography = Typography(
         letterSpacing = 0.1.sp
     ),
 
-    // ----- BODY (texto principal) -----
+    // ----- BODY (texto principal) — sistema / Roboto -----
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,

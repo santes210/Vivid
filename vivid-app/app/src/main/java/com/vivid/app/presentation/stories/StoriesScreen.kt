@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +33,10 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.launch
 
 @Composable
-fun StoriesTray(onStoryClick: (Story) -> Unit) {
+fun StoriesTray(
+    onStoryClick: (Story) -> Unit,
+    onCreateStory: () -> Unit = {}
+) {
     val db = FirebaseFirestore.getInstance()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val scope = rememberCoroutineScope()
@@ -67,42 +72,86 @@ fun StoriesTray(onStoryClick: (Story) -> Unit) {
     }
 
     if (isLoading) {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     } else {
-        StoriesRow(stories = stories, onStoryClick = onStoryClick)
+        StoriesRow(stories = stories, onStoryClick = onStoryClick, onCreateStory = onCreateStory)
     }
 }
 
 @Composable
 fun StoriesRow(
     stories: List<Story>,
-    onStoryClick: (Story) -> Unit
+    onStoryClick: (Story) -> Unit,
+    onCreateStory: () -> Unit = {}
 ) {
-    if (stories.isEmpty()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "No hay stories todavía",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        return
-    }
-
     val groups = remember(stories) { groupStoriesByUser(stories) }
 
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Acción principal "Tu historia"
+        item(key = "create_story") {
+            CreateStoryItem(onClick = onCreateStory)
+        }
         items(groups, key = { it.userId }) { group ->
             StoryGroupItem(group = group, onClick = { onStoryClick(group.stories.first()) })
         }
+    }
+}
+
+@Composable
+private fun CreateStoryItem(onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier.size(68.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Anillo "crear" diferenciado (dashed look de "Tu historia")
+            Canvas(modifier = Modifier.size(64.dp)) {
+                val strokeWidth = 2.dp.toPx()
+                drawCircle(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                    radius = size.minDimension / 2 - strokeWidth,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Crear historia",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Tu historia",
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
