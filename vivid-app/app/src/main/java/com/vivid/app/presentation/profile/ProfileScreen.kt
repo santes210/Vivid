@@ -5,6 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.animation.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,11 +26,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -37,6 +45,7 @@ import androidx.media3.ui.PlayerView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.vivid.app.theme.LocalVividAnimationsEnabled
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -97,6 +106,12 @@ fun ProfileScreen(
     var showProfileMenu by remember { mutableStateOf(false) }
     var selectedTabIndex by remember { mutableIntStateOf(0) } // 0: Posts, 1: Reels, 2: Guardados
 
+    // Skeleton: solo se muestran placeholders hasta que llega la primera snapshot real
+    var isProfileLoaded by remember { mutableStateOf(false) }
+    var postsLoaded by remember { mutableStateOf(false) }
+    var reelsLoaded by remember { mutableStateOf(false) }
+    var savedLoaded by remember { mutableStateOf(false) }
+
     val relationshipState by viewModel.relationshipState.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
@@ -141,6 +156,7 @@ fun ProfileScreen(
                         isFollowedByCurrentUser = profile.isFollowedByCurrentUser,
                         isCurrentUser = isOwnProfile
                     )
+                    isProfileLoaded = true
                 }
 
             if (!isOwnProfile) {
@@ -172,6 +188,7 @@ fun ProfileScreen(
                             username = doc.getString("username").orEmpty()
                         )
                     }.sortedByDescending { it.timestamp }
+                    postsLoaded = true
 
                     snapshot?.documents.orEmpty().forEach { doc ->
                         val key = doc.getString("storageKey").orEmpty()
@@ -204,6 +221,7 @@ fun ProfileScreen(
                             username = doc.getString("username").orEmpty()
                         )
                     }.sortedByDescending { it.timestamp }
+                    reelsLoaded = true
                 }
 
             // ── Pestaña Guardados (solo en el perfil propio) ──
@@ -214,6 +232,7 @@ fun ProfileScreen(
                         val savedIds = snap?.documents.orEmpty().map { it.id }
                         if (savedIds.isEmpty()) {
                             savedPosts = emptyList()
+                            savedLoaded = true
                         } else {
                             scope.launch {
                                 val list = mutableListOf<ProfilePost>()
@@ -240,6 +259,7 @@ fun ProfileScreen(
                                     }
                                 }
                                 savedPosts = list.sortedByDescending { it.timestamp }
+                                savedLoaded = true
                             }
                         }
                     }
@@ -260,6 +280,13 @@ fun ProfileScreen(
         1 -> reelPosts
         2 -> savedPosts
         else -> photoPosts
+    }
+
+    val activeTabLoading = when (selectedTabIndex) {
+        0 -> !postsLoaded
+        1 -> !reelsLoaded
+        2 -> !savedLoaded
+        else -> false
     }
 
     Scaffold(
@@ -290,16 +317,32 @@ fun ProfileScreen(
                 },
                 actions = {
                     if (isOwnProfile) {
-                        IconButton(onClick = onSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "Ajustes",
-                                tint = MaterialTheme.colorScheme.primary)
-                        }
-                        IconButton(onClick = {
-                            com.vivid.app.util.PushNotificationHelper.unregisterToken()
-                            auth.signOut(); onLogout()
-                        }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar sesión",
-                                tint = MaterialTheme.colorScheme.error)
+                        // Acciones secundarias agrupadas en un menú
+                        Box {
+                            IconButton(onClick = { showProfileMenu = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Opciones de perfil")
+                            }
+                            DropdownMenu(expanded = showProfileMenu, onDismissRequest = { showProfileMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Ajustes") },
+                                    onClick = {
+                                        showProfileMenu = false
+                                        onSettings()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Settings, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Cerrar sesión", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showProfileMenu = false
+                                        com.vivid.app.util.PushNotificationHelper.unregisterToken()
+                                        auth.signOut(); onLogout()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ExitToApp, null, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                )
+                            }
                         }
                     } else {
                         Box {
@@ -360,48 +403,51 @@ fun ProfileScreen(
             columns = GridCells.Fixed(3),
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            // ── Header del perfil ──
+            // ── Header del perfil (skeleton mientras carga) ──
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
-                ProfileHeader(
-                    profile = profile, isOwnProfile = isOwnProfile,
-                    relationshipState = relationshipState,
-                    isFollowActionLoading = isFollowActionLoading,
-                    onToggleFollow = { viewModel.toggleFollow(userId) },
-                    onEditProfile = onEditProfile
-                )
+                if (isProfileLoaded) {
+                    ProfileHeader(
+                        profile = profile, isOwnProfile = isOwnProfile,
+                        relationshipState = relationshipState,
+                        isFollowActionLoading = isFollowActionLoading,
+                        onToggleFollow = { viewModel.toggleFollow(userId) },
+                        onEditProfile = onEditProfile
+                    )
+                } else {
+                    ProfileHeaderSkeleton()
+                }
             }
 
-            // ── Pestañas Material You 3 (Posts / Reels / Guardados) ──
+            // ── Pestañas primarias M3 (Posts / Reels / Guardados) ──
             if (canViewContent) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
-                    TabRow(
+                    PrimaryTabRow(
                         selectedTabIndex = selectedTabIndex,
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) },
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        containerColor = Color.Transparent,
+                        divider = {},
+                        modifier = Modifier.padding(top = 6.dp, bottom = 10.dp)
                     ) {
                         Tab(
                             selected = selectedTabIndex == 0,
                             onClick = { selectedTabIndex = 0 },
                             icon = { Icon(Icons.Default.GridView, contentDescription = "Posts") },
-                            text = { Text("Posts", fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Normal) }
+                            text = { Text("Posts") }
                         )
                         Tab(
                             selected = selectedTabIndex == 1,
                             onClick = { selectedTabIndex = 1 },
                             icon = { Icon(Icons.Default.Movie, contentDescription = "Reels") },
-                            text = { Text("Reels", fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Normal) }
+                            text = { Text("Reels") }
                         )
                         if (isOwnProfile) {
                             Tab(
                                 selected = selectedTabIndex == 2,
                                 onClick = { selectedTabIndex = 2 },
                                 icon = { Icon(Icons.Default.Bookmark, contentDescription = "Guardados") },
-                                text = { Text("Guardados", fontWeight = if (selectedTabIndex == 2) FontWeight.Bold else FontWeight.Normal) }
+                                text = { Text("Guardados") }
                             )
                         }
                     }
@@ -416,6 +462,8 @@ fun ProfileScreen(
                         hasPendingRequest = profile.isFollowRequestPending
                     )
                 }
+            } else if (activeTabLoading) {
+                items(9) { ProfileGridSkeletonCell() }
             } else if (selectedTabIndex == 2 && savedPosts.isEmpty()) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
                     EmptySavedPostsPlaceholder()
@@ -462,106 +510,231 @@ private fun ProfileHeader(
     onToggleFollow: () -> Unit,
     onEditProfile: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // ── Avatar como elemento hero con anillo degradado ──
+        Box(
+            modifier = Modifier
+                .size(116.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.tertiary
+                        )
+                    )
+                )
+                .padding(3.dp),
+            contentAlignment = Alignment.Center
         ) {
-            // ── Avatar ──
-            ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
-            Spacer(Modifier.height(12.dp))
-
-            // ── Nombre y bio ──
-            Text(profile.displayName, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-            Text("@${profile.username}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (profile.bio.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(profile.bio, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            }
-
-            // ── Badge privado ──
-            if (profile.isPrivate) {
-                Spacer(Modifier.height(4.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Lock, null, modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Privada", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // ── Stats ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center
             ) {
-                ProfileStat(profile.postsCount.toString(), "Publicaciones")
-                ProfileStat(profile.reelsCount.toString(), "Reels")
-                ProfileStat(profile.followersCount.toString(), "Seguidores")
-                ProfileStat(profile.followingCount.toString(), "Siguiendo")
+                ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
             }
+        }
 
-            Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
-            // ── Botón de acción ──
-            if (isOwnProfile) {
-                OutlinedButton(
-                    onClick = onEditProfile,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
-                        brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline)
-                    )
+        // ── Nombre y bio ──
+        Text(
+            profile.displayName,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            textAlign = TextAlign.Center
+        )
+        Text(
+            "@${profile.username}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (profile.bio.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                profile.bio,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // ── Badge privado ──
+        if (profile.isPrivate) {
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Editar perfil")
+                    Icon(Icons.Default.Lock, null, modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Privada", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
-            } else {
-                Button(
-                    onClick = onToggleFollow,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isFollowActionLoading,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
-                            MaterialTheme.colorScheme.secondaryContainer
-                        else MaterialTheme.colorScheme.primary,
-                        contentColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    if (isFollowActionLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        val text = when {
-                            relationshipState.isBlocked -> "Bloqueado"
-                            relationshipState.isFollowing -> "Siguiendo"
-                            relationshipState.hasPendingRequest -> "Solicitado"
-                            else -> "Seguir"
-                        }
-                        Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Estadísticas en un grupo coherente (contenedor tonal) ──
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProfileStat(profile.postsCount.toString(), "Publicaciones", Modifier.weight(1f))
+                VerticalDivider(
+                    modifier = Modifier.height(34.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                ProfileStat(profile.reelsCount.toString(), "Reels", Modifier.weight(1f))
+                VerticalDivider(
+                    modifier = Modifier.height(34.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                ProfileStat(profile.followersCount.toString(), "Seguidores", Modifier.weight(1f))
+                VerticalDivider(
+                    modifier = Modifier.height(34.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                ProfileStat(profile.followingCount.toString(), "Siguiendo", Modifier.weight(1f))
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Acción principal ──
+        if (isOwnProfile) {
+            FilledTonalButton(
+                onClick = onEditProfile,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Editar perfil")
+            }
+        } else {
+            Button(
+                onClick = onToggleFollow,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                enabled = !isFollowActionLoading,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
+                        MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.primary,
+                    contentColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    else MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                if (isFollowActionLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    val text = when {
+                        relationshipState.isBlocked -> "Bloqueado"
+                        relationshipState.isFollowing -> "Siguiendo"
+                        relationshipState.hasPendingRequest -> "Solicitado"
+                        else -> "Seguir"
                     }
+                    Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
                 }
             }
         }
     }
+}
+
+/**
+ * Skeleton del header mientras carga la primera snapshot de Firestore.
+ * Pulsa suavemente cuando las animaciones están activadas.
+ */
+@Composable
+private fun ProfileHeaderSkeleton() {
+    val animationsEnabled = LocalVividAnimationsEnabled.current
+    val transition = rememberInfiniteTransition(label = "profileSkeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    val blockColor = MaterialTheme.colorScheme.surfaceContainerHighest
+        .copy(alpha = if (animationsEnabled) alpha else 0.45f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Avatar
+        Box(Modifier.size(116.dp).clip(CircleShape).background(blockColor))
+        Spacer(Modifier.height(16.dp))
+        // Nombre
+        Box(Modifier.width(190.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(blockColor))
+        Spacer(Modifier.height(8.dp))
+        // @usuario
+        Box(Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).background(blockColor))
+        Spacer(Modifier.height(20.dp))
+        // Grupo de estadísticas
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(4) { index ->
+                    if (index > 0) {
+                        Spacer(Modifier.width(1.dp))
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(Modifier.width(48.dp).height(18.dp).clip(RoundedCornerShape(9.dp)).background(blockColor))
+                        Spacer(Modifier.height(6.dp))
+                        Box(Modifier.width(70.dp).height(11.dp).clip(RoundedCornerShape(5.dp)).background(blockColor))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        // Botón de acción
+        Box(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(16.dp)).background(blockColor))
+    }
+}
+
+@Composable
+private fun ProfileGridSkeletonCell() {
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f))
+    )
 }
 
 @Composable
@@ -666,7 +839,7 @@ private fun EmptySavedPostsPlaceholder() {
 // ── Componentes reutilizables ──
 
 @Composable
-private fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64: String) {
+private fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64: String, size: Dp = 100.dp) {
     if (avatarBase64.isNotBlank()) {
         var bitmap by remember(avatarBase64) { mutableStateOf<Bitmap?>(null) }
         LaunchedEffect(avatarBase64) {
@@ -674,15 +847,15 @@ private fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64: 
         }
         if (bitmap != null) {
             Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = "Avatar",
-                modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                modifier = Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
             return
         }
     }
     if (avatarUrl.isNotBlank()) {
         AsyncImage(model = avatarUrl, contentDescription = "Avatar",
-            modifier = Modifier.size(100.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+            modifier = Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
     } else {
-        Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
             Text(displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -697,7 +870,7 @@ private fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
         bitmap = if (post.imageBase64.isNotBlank()) try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } else null
     }
     Box(
-        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(6.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceContainerLow),
         contentAlignment = Alignment.Center
     ) {
         when {
@@ -767,8 +940,8 @@ private fun ProfilePostViewerDialog(
 }
 
 @Composable
-fun ProfileStat(count: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun ProfileStat(count: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(count, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
         Spacer(Modifier.height(2.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
