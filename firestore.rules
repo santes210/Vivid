@@ -81,31 +81,33 @@ service cloud.firestore {
 
       match /followers/{docId} {
         allow read: if signedIn();
-        allow create, delete: if isUser(userId) || isUser(docId);
+        // create+update: se escribe con batch.set(), que cuenta como update
+        // si el doc ya existía (p. ej. volver a seguir a alguien).
+        allow create, update, delete: if isUser(userId) || isUser(docId);
       }
 
       match /following/{docId} {
         allow read: if signedIn();
-        allow create, delete: if isUser(userId) || isUser(docId);
+        allow create, update, delete: if isUser(userId) || isUser(docId);
       }
 
       match /followRequests/{docId} {
         allow read: if isUser(userId) || isUser(docId);
-        allow create, delete: if isUser(userId) || isUser(docId);
+        allow create, update, delete: if isUser(userId) || isUser(docId);
       }
 
       match /sentFollowRequests/{docId} {
         allow read: if isUser(userId);
-        allow create, delete: if isUser(userId) || isUser(docId);
+        allow create, update, delete: if isUser(userId) || isUser(docId);
       }
 
       match /savedPosts/{postId} {
-        allow read, create, delete: if isUser(userId);
+        allow read, create, update, delete: if isUser(userId);
       }
 
       // FCM Tokens — el usuario gestiona sus propios tokens de push
       match /fcmTokens/{token} {
-        allow read, create, delete: if isUser(userId);
+        allow read, create, update, delete: if isUser(userId);
       }
     }
 
@@ -156,7 +158,10 @@ service cloud.firestore {
           allow read: if signedIn();
           // userId dentro del doc debe coincidir: el feed consulta estos likes
           // por collectionGroup con whereEqualTo("userId", uid).
-          allow create: if isUser(userId)
+          // set() sobre un doc que ya existe cuenta como update, no como
+          // create, así que hay que permitir ambos o el segundo like falla
+          // con PERMISSION_DENIED.
+          allow create, update: if isUser(userId)
             && request.resource.data.userId == request.auth.uid;
           allow delete: if isUser(userId);
         }
@@ -164,7 +169,10 @@ service cloud.firestore {
 
       match /likes/{userId} {
         allow read: if signedIn();
-        allow create: if isUser(userId)
+        // set() sobre un doc que ya existe cuenta como update, no como
+        // create, así que hay que permitir ambos o el segundo like falla
+        // con PERMISSION_DENIED.
+        allow create, update: if isUser(userId)
           && request.resource.data.userId == request.auth.uid;
         allow delete: if isUser(userId);
       }
@@ -234,7 +242,10 @@ service cloud.firestore {
 
       match /likes/{userId} {
         allow read: if signedIn();
-        allow create: if isUser(userId)
+        // set() sobre un doc que ya existe cuenta como update, no como
+        // create, así que hay que permitir ambos o el segundo like falla
+        // con PERMISSION_DENIED.
+        allow create, update: if isUser(userId)
           && request.resource.data.userId == request.auth.uid;
         allow delete: if isUser(userId);
       }
@@ -258,7 +269,10 @@ service cloud.firestore {
 
         match /likes/{userId} {
           allow read: if signedIn();
-          allow create: if isUser(userId)
+          // set() sobre un doc que ya existe cuenta como update, no como
+          // create, así que hay que permitir ambos o el segundo like falla
+          // con PERMISSION_DENIED.
+          allow create, update: if isUser(userId)
             && request.resource.data.userId == request.auth.uid;
           allow delete: if isUser(userId);
         }
