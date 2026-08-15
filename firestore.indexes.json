@@ -64,7 +64,7 @@
       "collectionGroup": "chats",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "participants", "order": "CONTAINS" },
+        { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
         { "fieldPath": "lastTimestamp", "order": "DESCENDING" }
       ]
     }
