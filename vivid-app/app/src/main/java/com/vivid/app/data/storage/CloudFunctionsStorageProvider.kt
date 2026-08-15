@@ -1,7 +1,9 @@
 package com.vivid.app.data.storage
 
 import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -15,12 +17,18 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import android.webkit.MimeTypeMap
 
+/**
+ * StorageProvider que delega en la Cloud Function segura de /cloud-function.
+ *
+ * La función exige `Authorization: Bearer <idToken>` (Firebase Auth) y valida
+ * que la key pertenezca al usuario autenticado (`<tipo>/<uid>/...`), así que
+ * todas las llamadas adjuntan el ID token del usuario actual.
+ */
 class CloudFunctionsStorageProvider(
     private val functionBaseUrl: String,
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val okHttp: OkHttpClient = defaultClient()
 ) : StorageProvider {
-
-    private val json = org.json.JSONObject()
 
     override suspend fun uploadFile(
         localFilePath: String,
@@ -32,10 +40,11 @@ class CloudFunctionsStorageProvider(
 
         onProgress(5)
         val contentType = guessContentType(remoteKey)
-        val presign = callFunction("uploadReel", mapOf(
-            "key" to remoteKey,
-            "contentType" to contentType
-        ))
+        val presign = callFunction(
+            "uploadReel",
+            mapOf("key" to remoteKey, "contentType" to contentType),
+            idToken = firebaseIdToken()
+        )
 
         val uploadUrl = presign.optString("uploadUrl")
         val uploadAuthToken = presign.optString("uploadAuthToken")
@@ -92,11 +101,12 @@ class CloudFunctionsStorageProvider(
 
     override suspend fun deleteFile(remoteKey: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val req = Request.Builder()
+            val body = JSONObject().put("key", remoteKey).toString().toRequestBody(JSON_MEDIA)
+            val builder = Request.Builder()
                 .url("$functionBaseUrl/deleteFile")
-                .delete("""{"key":"$remoteKey"}""".toRequestBody(JSON_MEDIA))
-                .build()
-            okHttp.newCall(req).execute().use { it.isSuccessful }
+                .delete(body)
+            firebaseIdToken()?.let { builder.header("Authorization", "Bearer $it") }
+            okHttp.newCall(builder.build()).execute().use { it.isSuccessful }
         } catch (e: Exception) {
             Log.e(TAG, "deleteFile vía CF falló", e)
             false
@@ -109,13 +119,29 @@ class CloudFunctionsStorageProvider(
     suspend fun renewSignedUrl(remoteKey: String, ttlSec: Int = 3600): String? =
         withContext(Dispatchers.IO) {
             try {
-                val resp = callFunction("signDownload", emptyMap(), queryParams = mapOf(
-                    "key" to remoteKey,
-                    "ttl" to ttlSec.toString()
-                ))
-                resp.optString("signedUrl").takeIf { it.isNotBlank() }
+                val token = firebaseIdToken()
+                val url = "$functionBaseUrl/signDownload" +
+                    "?key=${URLEncoder.encode(remoteKey, "UTF-8")}&ttl=$ttlSec"
+                val builder = Request.Builder().url(url).get()
+                if (!token.isNullOrBlank()) builder.header("Authorization", "Bearer $token")
+                okHttp.newCall(builder.build()).execute().use { resp ->
+                    val respBody = resp.body?.string().orEmpty()
+                    if (!resp.isSuccessful) error("signDownload → ${resp.code}: $respBody")
+                    JSONObject(respBody).optString("signedUrl").takeIf { it.isNotBlank() }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "renewSignedUrl falló", e)
+                null
+            }
+        }
+
+    /** ID token de Firebase Auth del usuario actual (null si no hay sesión). */
+    private suspend fun firebaseIdToken(): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                auth.currentUser?.getIdToken(true)?.await()?.token
+            } catch (e: Exception) {
+                Log.e(TAG, "No se pudo obtener el ID token de Firebase Auth", e)
                 null
             }
         }
@@ -123,7 +149,8 @@ class CloudFunctionsStorageProvider(
     private fun callFunction(
         name: String,
         body: Map<String, Any>,
-        queryParams: Map<String, String> = emptyMap()
+        queryParams: Map<String, String> = emptyMap(),
+        idToken: String? = null
     ): JSONObject {
         val urlBuilder = StringBuilder("$functionBaseUrl/$name")
         if (queryParams.isNotEmpty()) {
@@ -132,11 +159,11 @@ class CloudFunctionsStorageProvider(
             urlBuilder.setLength(urlBuilder.length - 1)
         }
 
-        val req = Request.Builder()
+        val builder = Request.Builder()
             .url(urlBuilder.toString())
             .header("Content-Type", "application/json")
-            .post(JSONObject(body).toString().toRequestBody(JSON_MEDIA))
-            .build()
+        if (!idToken.isNullOrBlank()) builder.header("Authorization", "Bearer $idToken")
+        val req = builder.post(JSONObject(body).toString().toRequestBody(JSON_MEDIA)).build()
 
         okHttp.newCall(req).execute().use { resp ->
             val respBody = resp.body?.string().orEmpty()

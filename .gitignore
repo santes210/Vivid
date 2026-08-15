@@ -4,7 +4,9 @@
 
 # Credenciales locales
 local.properties
-app/src/main/java/com/vivid/app/di/BuildConfigSecrets.kt
+# Archivo de secrets B2: NUNCA commitearlo (el patrón **/ matchea en
+# cualquier subdirectorio, p. ej. vivid-app/app/src/main/java/com/vivid/app/di/)
+**/BuildConfigSecrets.kt
 *.keystore
 *.jks
 
@@ -28,3 +30,6 @@ app/src/main/java/com/vivid/app/di/BuildConfigSecrets.kt
 secrets.properties
 *.env
 .env.local
+
+# Node (cloud-function)
+node_modules/

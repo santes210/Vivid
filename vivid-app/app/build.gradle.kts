@@ -16,11 +16,41 @@ hilt {
 }
 
 // =========================================================
-//  CREDENCIALES EMBEBIDAS (modo inseguro, decidiste aceptarlo)
+//  CONFIGURACIÓN SIN SECRETOS EN EL REPO
 // =========================================================
-// Estas constantes se inyectan en BuildConfig para que
-// StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
-val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
+// Las claves de Backblaze B2 NUNCA deben commitearse (ya pasó una vez:
+// ver scripts/purge-secrets.sh y SECURITY.md). Se inyectan en BuildConfig
+// desde, en orden de prioridad:
+//   1. Variables de entorno (las usa GitHub Actions con secrets del repo)
+//   2. Propiedades de Gradle (-Pb2KeyId=... )
+//   3. local.properties (gitignored): b2.keyId, b2.applicationKey, ...
+// Si no hay claves, el APK compila igual pero StorageModule falla al
+// arrancar con un mensaje claro. MODO DIRECTO es temporal: la salida
+// segura es la Cloud Function de /cloud-function.
+fun secretFrom(envName: String, gradleProp: String, localKey: String): String {
+    providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() }?.let { return it }
+    providers.gradleProperty(gradleProp).orNull?.takeIf { it.isNotBlank() }?.let { return it }
+    val localProps = rootProject.file("local.properties")
+    if (localProps.exists()) {
+        val props = java.util.Properties()
+        localProps.inputStream().use { props.load(it) }
+        props.getProperty(localKey)?.takeIf { it.isNotBlank() }?.let { return it }
+    }
+    return ""
+}
+
+val B2_KEY_ID_VALUE = secretFrom("B2_KEY_ID", "b2KeyId", "b2.keyId")
+val B2_APPLICATION_KEY_VALUE = secretFrom("B2_APPLICATION_KEY", "b2ApplicationKey", "b2.applicationKey")
+val B2_BUCKET_ID_VALUE = secretFrom("B2_BUCKET_ID", "b2BucketId", "b2.bucketId")
+val B2_BUCKET_NAME_VALUE = secretFrom("B2_BUCKET_NAME", "b2BucketName", "b2.bucketName")
+
+// URL pública de la Cloud Function (no es secreta). Definir CF_BASE_URL,
+// -PcfBaseUrl=... o local.properties cf.baseUrl=... para tu proyecto.
+val CF_BASE_URL_VALUE = secretFrom("CF_BASE_URL", "cfBaseUrl", "cf.baseUrl")
+    .ifBlank { "https://us-central1-TU_PROYECTO.cloudfunctions.net" }
+
+// Escapa comillas y barras para buildConfigField
+fun bcEscape(value: String): String = value.replace("\\", "\\\\").replace("\"", "\\\"")
 
 // En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
 // Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
@@ -63,8 +93,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
-        // Inyecta CF_BASE_URL en BuildConfig (accesible desde Kotlin/Java)
-        buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+        // Inyecta la config (CF_BASE_URL + claves B2) en BuildConfig.
+        // Las claves B2 vienen de env/props/local.properties — NUNCA del repo.
+        buildConfigField("String", "CF_BASE_URL", "\"${bcEscape(CF_BASE_URL_VALUE)}\"")
+        buildConfigField("String", "B2_KEY_ID", "\"${bcEscape(B2_KEY_ID_VALUE)}\"")
+        buildConfigField("String", "B2_APPLICATION_KEY", "\"${bcEscape(B2_APPLICATION_KEY_VALUE)}\"")
+        buildConfigField("String", "B2_BUCKET_ID", "\"${bcEscape(B2_BUCKET_ID_VALUE)}\"")
+        buildConfigField("String", "B2_BUCKET_NAME", "\"${bcEscape(B2_BUCKET_NAME_VALUE)}\"")
     }
 
     signingConfigs {
@@ -80,7 +115,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+            buildConfigField("String", "CF_BASE_URL", "\"${bcEscape(CF_BASE_URL_VALUE)}\"")
         }
         release {
             isMinifyEnabled = false
@@ -89,7 +124,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+            buildConfigField("String", "CF_BASE_URL", "\"${bcEscape(CF_BASE_URL_VALUE)}\"")
         }
     }
 

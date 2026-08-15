@@ -1,0 +1,62 @@
+diff --git a/.github/workflows/build-apk.yml b/.github/workflows/build-apk.yml
+index b5f71bc..65103a3 100644
+--- a/.github/workflows/build-apk.yml
++++ b/.github/workflows/build-apk.yml
+@@ -26,6 +26,12 @@ jobs:
+       ANDROID_KEY_ALIAS: ${{ secrets.VIVID_KEY_ALIAS }}
+       ANDROID_KEY_PASSWORD: ${{ secrets.VIVID_KEY_PASSWORD }}
+ 
++      # Claves B2 inyectadas desde secrets del repo (NUNCA commitearlas).
++      B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
++      B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
++      B2_BUCKET_ID: ${{ secrets.B2_BUCKET_ID }}
++      B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
++
+     steps:
+       - name: Checkout code
+         uses: actions/checkout@v4
+@@ -124,6 +130,11 @@ jobs:
+ 
+           echo "apk_path=$OUTPUT_APK" >> "$GITHUB_OUTPUT"
+ 
++      # ⚠️ Este artefacto queda DESCARGABLE por cualquiera (repo público).
++      # Mientras el APK lleve embebidas las claves B2 (modo directo), subirlo
++      # aquí vuelve a filtrar las claves. Migra a la Cloud Function (claves
++      # solo en Firebase) antes de publicar artefactos release, o elimina
++      # este paso.
+       - name: Upload signed release APK
+         uses: actions/upload-artifact@v4
+         with:
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml
+index 6518ff7..799aa00 100644
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -17,6 +17,13 @@ jobs:
+       # Refuerza la memoria aunque Gradle no alcance a leer gradle.properties.
+       GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC"
+       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
++      # Claves B2 inyectadas desde secrets del repo (NUNCA commitearlas).
++      # Si no están definidas, el APK compila igual pero el modo directo
++      # fallará al arrancar con un mensaje claro.
++      B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
++      B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
++      B2_BUCKET_ID: ${{ secrets.B2_BUCKET_ID }}
++      B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+ 
+     steps:
+       - name: Checkout code
+@@ -46,10 +53,7 @@ jobs:
+           ./gradlew --version
+           ./gradlew clean assembleDebug --no-daemon --max-workers=1 --stacktrace
+ 
+-      - name: Upload APK
+-        if: success()
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: vivid-debug-apk
+-          path: vivid-app/app/build/outputs/apk/debug/*.apk
+-          retention-days: 30
++      # ⚠️ NO subir el APK debug como artefacto: en un repo público cualquier
++      # persona con cuenta de GitHub podría descargarlo y extraer las claves B2
++      # mientras se mantenga el modo directo. Este job solo valida que compila.
++      # (Incidente 2026-08: las claves ya se filtraron una vez por esta vía.)
