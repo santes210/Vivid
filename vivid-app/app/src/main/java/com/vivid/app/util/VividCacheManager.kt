@@ -120,6 +120,7 @@ object VividCacheManager {
     /**
      * Limpia TODOS los cachés: Room, Coil, archivos temporales y resetea timestamps.
      */
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
     suspend fun clearAllCaches(
         context: Context,
         database: VividDatabase,
