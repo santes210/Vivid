@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -327,8 +328,11 @@ fun ChatScreen(
                                                 isGroupStart = isGroupStart,
                                                 isGroupEnd = isGroupEnd,
                                                 onLongPress = {
+                                                    // Long-press SOLO abre la barra de reacciones.
+                                                    // Copiar/eliminar viven en el botón "⋯" de esa barra,
+                                                    // así la ventana de opciones no tapa las reacciones.
                                                     activeReactionMessageId = message.id
-                                                    selectedMessageForOptions = message
+                                                    selectedMessageForOptions = null
                                                 },
                                                 onDoubleTap = { viewModel.reactToMessage(chatId, message.id, "❤️") },
                                                 onImageClick = { url -> viewerImageUrl = url },
@@ -437,31 +441,70 @@ fun ChatScreen(
                 visible = activeReactionMessageId != null,
                 enter = if (animationsEnabled) fadeIn() + scaleIn() else EnterTransition.None,
                 exit = if (animationsEnabled) fadeOut() + scaleOut() else ExitTransition.None,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Menú de reacciones expresivo: superficie tonal plana, sin sombras ni bordes
-                Surface(
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shadowElevation = 0.dp,
-                    tonalElevation = 0.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf("❤️", "🥰", "😂", "😮", "😢", "🫶", "🔥", "🙃").forEach { emoji ->
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Transparent,
-                                modifier = Modifier.clickable {
-                                    activeReactionMessageId?.let { msgId -> viewModel.reactToMessage(chatId, msgId, emoji) }
-                                    activeReactionMessageId = null
-                                    selectedMessageForOptions = null
-                                }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Scrim invisible: tocar fuera cierra la barra de reacciones
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
                             ) {
-                                Text(text = emoji, fontSize = 27.sp, modifier = Modifier.padding(5.dp))
+                                activeReactionMessageId = null
+                                selectedMessageForOptions = null
+                            }
+                    )
+                    // Menú de reacciones expresivo: superficie tonal plana, sin sombras ni bordes
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shadowElevation = 0.dp,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 92.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf("❤️", "🥰", "😂", "😮", "😢", "🫶", "🔥", "🙃").forEach { emoji ->
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Transparent,
+                                    modifier = Modifier.clickable {
+                                        activeReactionMessageId?.let { msgId -> viewModel.reactToMessage(chatId, msgId, emoji) }
+                                        activeReactionMessageId = null
+                                        selectedMessageForOptions = null
+                                    }
+                                ) {
+                                    Text(text = emoji, fontSize = 27.sp, modifier = Modifier.padding(5.dp))
+                                }
+                            }
+                            // Botón "⋯": abre copiar/eliminar SIN tapar las reacciones
+                            VerticalDivider(
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .padding(horizontal = 8.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            )
+                            IconButton(
+                                onClick = {
+                                    val targetId = activeReactionMessageId
+                                    activeReactionMessageId = null
+                                    selectedMessageForOptions = messages.firstOrNull { it.id == targetId }
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "Más opciones (copiar, eliminar)",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
