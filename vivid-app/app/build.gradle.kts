@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -28,13 +30,16 @@ hilt {
 // arrancar con un mensaje claro. MODO DIRECTO es temporal: la salida
 // segura es la Cloud Function de /cloud-function.
 fun secretFrom(envName: String, gradleProp: String, localKey: String): String {
-    providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() }?.let { return it }
-    providers.gradleProperty(gradleProp).orNull?.takeIf { it.isNotBlank() }?.let { return it }
+    val fromEnv = providers.environmentVariable(envName).orNull
+    if (!fromEnv.isNullOrBlank()) return fromEnv
+    val fromProp = providers.gradleProperty(gradleProp).orNull
+    if (!fromProp.isNullOrBlank()) return fromProp
     val localProps = rootProject.file("local.properties")
     if (localProps.exists()) {
-        val props = java.util.Properties()
+        val props = Properties()
         localProps.inputStream().use { props.load(it) }
-        props.getProperty(localKey)?.takeIf { it.isNotBlank() }?.let { return it }
+        val fromLocal = props.getProperty(localKey)
+        if (!fromLocal.isNullOrBlank()) return fromLocal
     }
     return ""
 }
