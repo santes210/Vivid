@@ -122,17 +122,35 @@ fun groupStoriesByUser(stories: List<Story>): List<StoryGroup> {
 suspend fun uploadStoryWithCompression(
     context: Context,
     uri: Uri,
-    caption: String
+    caption: String,
+    storage: com.vivid.app.data.storage.StorageProvider? = null
 ): Result<String> = withContext(Dispatchers.IO) {
     try {
         val auth = FirebaseAuth.getInstance()
         val firestore = FirebaseFirestore.getInstance()
         val user = auth.currentUser ?: return@withContext Result.failure(IllegalStateException("No hay sesión iniciada"))
 
-        val compressedBase64 = ImageCompressor.compressToBase64(uri, context)
-        if (compressedBase64.isNullOrBlank()) {
+        val compressedFile = java.io.File(context.cacheDir, "story_photo_${System.currentTimeMillis()}.jpg")
+        val compressed = ImageCompressor.compressToFile(uri, context, compressedFile)
+        if (!compressed || !compressedFile.exists() || compressedFile.length() == 0L) {
             return@withContext Result.failure(IllegalStateException("No se pudo comprimir la imagen de la story"))
         }
+
+        var mediaUrl = ""
+        var mediaBase64 = ""
+        var storageKey = ""
+        if (storage != null) {
+            val ts = System.currentTimeMillis()
+            storageKey = "stories/${user.uid}/$ts.jpg"
+            mediaUrl = storage.uploadFile(compressedFile.absolutePath, storageKey)
+        } else {
+            val bytes = compressedFile.readBytes()
+            if (bytes.size > 900_000) {
+                return@withContext Result.failure(IllegalStateException("La imagen es demasiado grande y no hay almacenamiento disponible"))
+            }
+            mediaBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        }
+        compressedFile.delete()
 
         val userSnapshot = firestore.collection("users").document(user.uid).get().await()
         val username = userSnapshot.getString("username")
@@ -145,18 +163,23 @@ suspend fun uploadStoryWithCompression(
 
         val now = System.currentTimeMillis()
         val storyId = UUID.randomUUID().toString()
-        val storyData = mapOf(
+        val storyData = mutableMapOf(
             "userId" to user.uid,
             "username" to username,
             "avatarUrl" to avatarUrl,
             "avatarBase64" to avatarBase64,
-            "mediaUrl" to "",
-            "mediaBase64" to compressedBase64,
+            "userAvatar" to avatarUrl,
+            "mediaUrl" to mediaUrl,
+            "mediaBase64" to mediaBase64,
+            "thumbnailUrl" to mediaUrl,
             "caption" to caption,
+            "type" to "photo",
             "isPrivate" to isPrivate,
             "createdAt" to now,
-            "expiresAt" to now + STORY_DURATION_MILLIS
+            "expiresAt" to now + STORY_DURATION_MILLIS,
+            "viewersCount" to 0L
         )
+        if (storageKey.isNotBlank()) storyData["storageKey"] = storageKey
 
         firestore.collection("stories")
             .document(storyId)
@@ -188,15 +211,12 @@ suspend fun deleteExpiredStoriesForCurrentUser(
         .get()
         .await()
 
-    // Si hay storage, borra primero los archivos de B2 (best-effort) antes de borrar el doc
-    // para no dejar huérfanos que consuman espacio.
     if (storage != null) {
         expiredStories.documents.forEach { doc ->
             try {
                 val storageKey = doc.getString("storageKey").orEmpty()
                 if (storageKey.isNotBlank()) {
                     runCatching { storage.deleteFile(storageKey) }
-                    // Intentar borrar thumbnail asociado (mismo nombre pero .jpg)
                     val thumbKey = if (storageKey.endsWith(".mp4", true)) {
                         storageKey.substringBeforeLast(".") + ".jpg"
                     } else ""
@@ -205,7 +225,6 @@ suspend fun deleteExpiredStoriesForCurrentUser(
                     }
                 }
             } catch (_: Exception) {
-                // best-effort: si falla el borrado de B2, igual borramos el doc de Firestore
             }
         }
     }
