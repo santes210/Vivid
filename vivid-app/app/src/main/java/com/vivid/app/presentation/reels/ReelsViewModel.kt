@@ -58,16 +58,41 @@ class ReelsViewModel @Inject constructor(
             _hasMore.value = true
             lastDoc = null
             try {
-                val snapshot = firestore.collection("reels")
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(pageSize.toLong())
-                    .get()
-                    .await()
+                val userId = auth.currentUser?.uid.orEmpty()
+                val followingIds = if (userId.isBlank()) emptyList() else {
+                    firestore.collection("users").document(userId).collection("following")
+                        .get().await().documents.map { it.id }
+                }
+                val privateAuthorChunks = (followingIds + userId)
+                    .filter { it.isNotBlank() }.distinct().chunked(30)
 
-                lastDoc = snapshot.documents.lastOrNull()
-                val mapped = mapDocs(snapshot.documents)
-                _reels.value = mapped
-                _hasMore.value = mapped.size >= pageSize
+                val (publicSnapshot, privateDocuments) = coroutineScope {
+                    val publicRequest = async {
+                        firestore.collection("reels")
+                            .whereEqualTo("isPrivate", false)
+                            .orderBy("timestamp", Query.Direction.DESCENDING)
+                            .limit(pageSize.toLong())
+                            .get().await()
+                    }
+                    val privateRequests = privateAuthorChunks.map { authors ->
+                        async {
+                            firestore.collection("reels")
+                                .whereIn("userId", authors)
+                                .whereEqualTo("isPrivate", true)
+                                .orderBy("timestamp", Query.Direction.DESCENDING)
+                                .limit(pageSize.toLong())
+                                .get().await().documents
+                        }
+                    }
+                    publicRequest.await() to privateRequests.awaitAll().flatten()
+                }
+
+                lastDoc = publicSnapshot.documents.lastOrNull()
+                val documents = (publicSnapshot.documents + privateDocuments)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.getLong("timestamp") ?: 0L }
+                _reels.value = mapDocs(documents)
+                _hasMore.value = publicSnapshot.size() >= pageSize
             } catch (e: Exception) {
                 _reels.value = emptyList()
                 _hasMore.value = false
@@ -84,6 +109,7 @@ class ReelsViewModel @Inject constructor(
             _isLoadingMore.value = true
             try {
                 val snapshot = firestore.collection("reels")
+                    .whereEqualTo("isPrivate", false)
                     .orderBy("timestamp", Query.Direction.DESCENDING)
                     .startAfter(currentLast)
                     .limit(pageSize.toLong())
@@ -170,6 +196,7 @@ class ReelsViewModel @Inject constructor(
                 ?: user.email?.substringBefore('@')
                 ?: "usuario"
             val userAvatar = userSnapshot.getString("avatarUrl").orEmpty()
+            val isPrivate = userSnapshot.getBoolean("isPrivate") ?: false
 
             val timestamp = System.currentTimeMillis()
             val remoteKey = "reels/${user.uid}/$timestamp.mp4"
@@ -180,6 +207,7 @@ class ReelsViewModel @Inject constructor(
                 "userId" to user.uid,
                 "username" to username,
                 "userAvatar" to userAvatar,
+                "isPrivate" to isPrivate,
                 "videoUrl" to publicUrl,
                 "storageKey" to remoteKey,
                 "provider" to "backblaze",

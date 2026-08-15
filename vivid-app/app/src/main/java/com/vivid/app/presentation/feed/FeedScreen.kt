@@ -170,64 +170,92 @@ fun FeedScreen(
         posts = posts.filterNot { it.userId in blockedUserIds }
     }
 
-    DisposableEffect(currentUserId, likedPostIds, blockedUserIds, blockedUsersState.isLoaded, retryKey) {
+    DisposableEffect(
+        currentUserId,
+        likedPostIds,
+        blockedUserIds,
+        blockedUsersState.isLoaded,
+        followingUserIds,
+        retryKey
+    ) {
         if (currentUserId.isBlank() || !blockedUsersState.isLoaded) {
             onDispose { }
         } else {
             isLoading = true
             isError = false
             val db = FirebaseFirestore.getInstance()
-            val postsListener = db.collection("posts")
+            val registrations = mutableListOf<ListenerRegistration>()
+            val pages = mutableMapOf<String, List<com.google.firebase.firestore.DocumentSnapshot>>()
+
+            fun publishVisiblePosts() {
+                val documents = pages.values.flatten()
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.getLong("timestamp") ?: 0L }
+                posts = documents.mapNotNull { doc ->
+                    try {
+                        val data = doc.data ?: return@mapNotNull null
+                        val authorId = data["userId"] as? String ?: ""
+                        if (authorId in blockedUserIds) return@mapNotNull null
+                        PostData(
+                            id = doc.id,
+                            userId = authorId,
+                            username = data["username"] as? String ?: "usuario",
+                            userProfilePicture = data["userAvatar"] as? String
+                                ?: data["userProfilePicture"] as? String ?: "",
+                            caption = data["caption"] as? String ?: "",
+                            imageUrl = data["imageUrl"] as? String ?: "",
+                            imageBase64 = data["imageBase64"] as? String ?: "",
+                            storageKey = data["storageKey"] as? String ?: "",
+                            videoUrl = data["videoUrl"] as? String ?: "",
+                            thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
+                            isVideo = data["isVideo"] as? Boolean ?: false,
+                            likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
+                            commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
+                            timestamp = data["timestamp"] as? Long ?: 0L,
+                            isLiked = likedPostIds?.contains(doc.id) == true,
+                            musicTitle = data["musicTitle"] as? String ?: "",
+                            musicArtist = data["musicArtist"] as? String ?: "",
+                            musicAssetFile = data["musicAssetFile"] as? String ?: "",
+                            musicUrl = data["musicUrl"] as? String ?: "",
+                            musicStorageKey = data["musicStorageKey"] as? String ?: ""
+                        )
+                    } catch (_: Exception) { null }
+                }
+                isLoading = false
+            }
+
+            // Las queries reflejan exactamente lo que permiten las rules: todo
+            // lo público y contenido privado solo de cuentas ya seguidas.
+            registrations += db.collection("posts")
+                .whereEqualTo("isPrivate", false)
                 .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(20)
                 .addSnapshotListener { snap, err ->
-                    if (err != null || snap == null) {
+                    if (snap != null) {
+                        pages["public"] = snap.documents
+                        lastVisibleDoc = snap.documents.lastOrNull()
+                        hasMore = snap.size() >= 20
+                        publishVisiblePosts()
+                    } else if (err != null && pages.isEmpty()) {
                         isLoading = false
                         isError = true
-                        return@addSnapshotListener
                     }
-                    // Mapeo SIN llamadas a B2 (rápido, evita spinner infinito)
-                    val mapped = snap.documents.mapNotNull { doc ->
-                        try {
-                            val data = doc.data ?: return@mapNotNull null
-                            val authorId = data["userId"] as? String ?: ""
-                            if (authorId in blockedUserIds) return@mapNotNull null
-                            val isLiked = when {
-                                currentUserId.isBlank() -> false
-                                likedPostIds != null -> doc.id in likedPostIds!!
-                                else -> false
-                            }
-                            PostData(
-                                id = doc.id,
-                                userId = authorId,
-                                username = data["username"] as? String ?: "usuario",
-                                userProfilePicture = data["userAvatar"] as? String
-                                    ?: data["userProfilePicture"] as? String ?: "",
-                                caption = data["caption"] as? String ?: "",
-                                imageUrl = data["imageUrl"] as? String ?: "",
-                                imageBase64 = data["imageBase64"] as? String ?: "",
-                                storageKey = data["storageKey"] as? String ?: "",
-                                videoUrl = data["videoUrl"] as? String ?: "",
-                                thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
-                                isVideo = data["isVideo"] as? Boolean ?: false,
-                                likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
-                                commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
-                                timestamp = data["timestamp"] as? Long ?: 0L,
-                                isLiked = isLiked,
-                                musicTitle = data["musicTitle"] as? String ?: "",
-                                musicArtist = data["musicArtist"] as? String ?: "",
-                                musicAssetFile = data["musicAssetFile"] as? String ?: "",
-                                musicUrl = data["musicUrl"] as? String ?: "",
-                                musicStorageKey = data["musicStorageKey"] as? String ?: ""
-                            )
-                        } catch (_: Exception) { null }
-                    }
-                    posts = mapped
-                    lastVisibleDoc = snap.documents.lastOrNull()
-                    hasMore = snap.size() >= 20
-                    isLoading = false
                 }
-            onDispose { postsListener.remove() }
+
+            (followingUserIds + currentUserId).chunked(30).forEachIndexed { index, privateAuthors ->
+                registrations += db.collection("posts")
+                    .whereIn("userId", privateAuthors)
+                    .whereEqualTo("isPrivate", true)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(20)
+                    .addSnapshotListener { snap, _ ->
+                        if (snap != null) {
+                            pages["private_$index"] = snap.documents
+                            publishVisiblePosts()
+                        }
+                    }
+            }
+            onDispose { registrations.forEach { it.remove() } }
         }
     }
 
@@ -1114,6 +1142,7 @@ private suspend fun loadInitialPostsFromFirebase(
 ): FeedPageResult = withContext(Dispatchers.IO) {
     val firestore = FirebaseFirestore.getInstance()
     val snapshot = firestore.collection("posts")
+        .whereEqualTo("isPrivate", false)
         .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
         .limit(20)
         .get()
@@ -1150,6 +1179,7 @@ private suspend fun loadMorePostsFromFirebase(
     // bloqueo podía cortar la paginación prematuramente.
     do {
         val snapshot = firestore.collection("posts")
+            .whereEqualTo("isPrivate", false)
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .startAfter(cursor)
             .limit(20)

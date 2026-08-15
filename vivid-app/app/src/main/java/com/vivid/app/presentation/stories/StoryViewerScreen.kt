@@ -92,49 +92,35 @@ fun StoryViewerRoute(
     // ViewModel para limpieza con B2 (obtenido fuera del DisposableEffect, fix compilación)
     val storyCleanupViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
-    DisposableEffect(initialStoryId, currentUserId) {
-        var registration: ListenerRegistration? = null
-        if (currentUserId.isNotBlank()) {
-            storyCleanupViewModel.cleanExpiredStories(currentUserId)
+    LaunchedEffect(initialStoryId, currentUserId) {
+        if (currentUserId.isNotBlank()) storyCleanupViewModel.cleanExpiredStories(currentUserId)
+        val docs = runCatching { loadVisibleStoryDocuments(db, currentUserId) }
+            .getOrDefault(emptyList())
+        val visibleStories = buildVisibleStories(db, currentUserId, docs)
+        val docsById = docs.associateBy { it.id }
+        val mappedStories = visibleStories.map { story ->
+            val raw = docsById[story.id]
+            ViewerStory(
+                id = story.id,
+                userId = story.userId,
+                username = story.username,
+                avatarUrl = story.avatarUrl.ifBlank { raw?.getString("userAvatar").orEmpty() },
+                avatarBase64 = story.avatarBase64,
+                mediaUrl = story.mediaUrl.ifBlank { raw?.getString("thumbnailUrl").orEmpty() },
+                mediaBase64 = story.mediaBase64,
+                videoUrl = raw?.getString("videoUrl").orEmpty(),
+                thumbnailUrl = raw?.getString("thumbnailUrl").orEmpty(),
+                caption = story.caption,
+                type = raw?.getString("type")
+                    ?: if (raw?.getString("videoUrl").isNullOrBlank()) "photo" else "video",
+                expiresAt = story.expiresAt
+            )
         }
-        registration = db.collection("stories")
-            .whereGreaterThan("expiresAt", System.currentTimeMillis())
-            .orderBy("expiresAt", Query.Direction.ASCENDING)
-            .limit(50)
-            .addSnapshotListener { snapshot, _ ->
-                val docs = snapshot?.documents.orEmpty()
-                scope.launch {
-                    val visibleStories = buildVisibleStories(
-                        firestore = db,
-                        currentUserId = currentUserId,
-                        storyDocs = docs
-                    )
-                    val docsById = docs.associateBy { it.id }
-                    val mappedStories = visibleStories.map { story ->
-                        val raw = docsById[story.id]
-                        ViewerStory(
-                            id = story.id,
-                            userId = story.userId,
-                            username = story.username,
-                            avatarUrl = story.avatarUrl.ifBlank { raw?.getString("userAvatar").orEmpty() },
-                            avatarBase64 = story.avatarBase64,
-                            mediaUrl = story.mediaUrl.ifBlank { raw?.getString("thumbnailUrl").orEmpty() },
-                            mediaBase64 = story.mediaBase64,
-                            videoUrl = raw?.getString("videoUrl").orEmpty(),
-                            thumbnailUrl = raw?.getString("thumbnailUrl").orEmpty(),
-                            caption = story.caption,
-                            type = raw?.getString("type") ?: if (raw?.getString("videoUrl").isNullOrBlank()) "photo" else "video",
-                            expiresAt = story.expiresAt
-                        )
-                    }
-                    stories = mappedStories
-                    currentIndex = mappedStories.indexOfFirst { it.id == initialStoryId }
-                        .takeIf { it >= 0 }
-                        ?: currentIndex.coerceIn(0, (mappedStories.size - 1).coerceAtLeast(0))
-                    isLoading = false
-                }
-            }
-        onDispose { registration?.remove() }
+        stories = mappedStories
+        currentIndex = mappedStories.indexOfFirst { it.id == initialStoryId }
+            .takeIf { it >= 0 }
+            ?: currentIndex.coerceIn(0, (mappedStories.size - 1).coerceAtLeast(0))
+        isLoading = false
     }
 
     val currentStory = stories.getOrNull(currentIndex)

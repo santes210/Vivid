@@ -47,6 +47,7 @@ fun ExploreScreen(
             val snapshot = FirebaseFirestore.getInstance()
                 .collection("posts")
                 .whereArrayContains("hashtags", tag)
+                .whereEqualTo("isPrivate", false)
                 .limit(20)
                 .get()
                 .await()
