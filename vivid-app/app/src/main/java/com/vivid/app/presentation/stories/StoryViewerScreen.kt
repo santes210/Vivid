@@ -572,8 +572,9 @@ private fun VideoStoryPlayer(story: ViewerStory, onCompleted: () -> Unit) {
 private fun PhotoStoryView(story: ViewerStory) {
     val bitmap = remember(story.mediaBase64) { decodeBase64Bitmap(story.mediaBase64) }
     when {
-        bitmap != null -> Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        // Fotos nuevas se suben a B2: mediaUrl trae la URL firmada.
         story.mediaUrl.isNotBlank() -> AsyncImage(model = story.mediaUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        bitmap != null -> Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         story.thumbnailUrl.isNotBlank() -> AsyncImage(model = story.thumbnailUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Story", color = Color.White) }
     }
