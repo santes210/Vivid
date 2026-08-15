@@ -2,7 +2,6 @@ package com.vivid.app.presentation.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.local.dao.PostDao
 import com.vivid.app.data.local.entity.PostEntity
@@ -30,24 +29,11 @@ class FeedViewModel @Inject constructor(
     val posts: StateFlow<List<PostEntity>> = postDao.getAllPosts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun likePost(postId: String) {
-        viewModelScope.launch {
-            val currentPost = postDao.getPostById(postId) ?: return@launch
-            val newIsLiked = !currentPost.isLiked
-            val newLikesCount = (currentPost.likesCount + if (newIsLiked) 1 else -1).coerceAtLeast(0)
-
-            postDao.updateLike(postId, newLikesCount, newIsLiked)
-
-            runCatching {
-                firestore.collection("posts")
-                    .document(postId)
-                    .update("likesCount", FieldValue.increment(if (newIsLiked) 1L else -1L))
-                    .await()
-            }.onFailure {
-                postDao.updateLike(postId, currentPost.likesCount, currentPost.isLiked)
-            }
-        }
-    }
+    // NOTA: aquí vivía un likePost() que solo incrementaba likesCount sin
+    // escribir el doc en posts/{id}/likes/{uid}. Nadie lo llamaba, pero era
+    // una bomba de tiempo: sin el doc de like, el corazón nunca aparece
+    // encendido y cada tap suma +1 infinito. El like real es
+    // FeedScreen.togglePostLike(), que escribe doc + contador juntos.
 
     fun toggleFollowUser(targetUserId: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {

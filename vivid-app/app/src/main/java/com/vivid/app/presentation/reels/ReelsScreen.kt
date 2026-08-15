@@ -838,18 +838,30 @@ private fun ReelCommentRow(comment: ReelComment) {
     }
 }
 
+/**
+ * Like idempotente de reel: transacción que verifica el doc de like antes de
+ * tocar el contador (mismo fix que togglePostLike en FeedScreen: sin esto,
+ * un estado de UI desactualizado permitía sumar likes infinitos).
+ */
 private suspend fun setReelLike(reelId: String, currentUserId: String, shouldLike: Boolean) {
     if (currentUserId.isBlank()) error("No hay sesión activa")
     val firestore = FirebaseFirestore.getInstance()
     val likeRef = firestore.collection("reels").document(reelId).collection("likes").document(currentUserId)
     val reelRef = firestore.collection("reels").document(reelId)
-    if (shouldLike) {
-        likeRef.set(mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis())).await()
-        reelRef.update("likes", FieldValue.increment(1)).await()
-    } else {
-        likeRef.delete().await()
-        reelRef.update("likes", FieldValue.increment(-1)).await()
-    }
+    firestore.runTransaction { txn ->
+        val alreadyLiked = txn.get(likeRef).exists()
+        when {
+            shouldLike && !alreadyLiked -> {
+                txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
+                txn.update(reelRef, "likes", FieldValue.increment(1))
+            }
+            !shouldLike && alreadyLiked -> {
+                txn.delete(likeRef)
+                txn.update(reelRef, "likes", FieldValue.increment(-1))
+            }
+        }
+        null
+    }.await()
 }
 
 private fun shareReel(context: android.content.Context, reel: Reel) {

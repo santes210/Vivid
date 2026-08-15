@@ -58,6 +58,20 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────
+    //  Likes (collection group)
+    // ─────────────────────────────────────────────────
+    // El feed y la hoja de comentarios cargan "qué ya likeé yo" con UNA
+    // query de collectionGroup("likes").whereEqualTo("userId", uid).
+    // Las queries de collectionGroup NO se autorizan con los match de ruta
+    // específica (posts/{id}/likes, reels/{id}/likes, ...): Firestore exige
+    // un match de grupo /{path=**}/likes. Sin esto, la query fallaba con
+    // PERMISSION_DENIED en silencio, el corazón salía siempre apagado y
+    // cada tap volvía a sumar +1 al contador (likes infinitos).
+    match /{path=**}/likes/{likeId} {
+      allow read: if signedIn();
+    }
+
+    // ─────────────────────────────────────────────────
     //  Usuarios
     // ─────────────────────────────────────────────────
     match /users/{userId} {
@@ -290,10 +304,16 @@ service cloud.firestore {
 
       function isParticipant() {
         return signedIn()
-          && hasValidParticipants(resource.data)
           && request.auth.uid in resource.data.participants;
       }
 
+      // OJO: la regla de read NO puede exigir participants.size() == 2.
+      // La lista de chats consulta con whereArrayContains("participants", uid)
+      // y, en queries de lista, Firestore debe poder probar la regla solo con
+      // las restricciones de la query. array-contains prueba la pertenencia,
+      // pero nada prueba el tamaño del array, así que un size() == 2 aquí
+      // rechaza TODA la query con PERMISSION_DENIED. La validación de tamaño
+      // vive en create/update, que es donde protege la integridad del dato.
       allow read: if isParticipant();
 
       allow create: if signedIn()
