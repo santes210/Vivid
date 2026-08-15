@@ -3,6 +3,7 @@ package com.vivid.app.util
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
@@ -61,9 +62,11 @@ object VideoCacheManager {
             simpleCache?.let { return it }
             val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
             val evictor = LeastRecentlyUsedCacheEvictor(MAX_CACHE_BYTES)
-            // Constructor de 2 args: media3 crea su propio executor interno.
-            // (El de 3 args espera un DatabaseProvider, no un Executor.)
-            return SimpleCache(cacheDir, evictor).also { simpleCache = it }
+            // Constructor con DatabaseProvider (el de 2 args está deprecado en
+            // media3 1.4.x). StandaloneDatabaseProvider crea su propia DB SQLite
+            // para el índice del caché.
+            return SimpleCache(cacheDir, evictor, StandaloneDatabaseProvider(context))
+                .also { simpleCache = it }
         }
     }
 
