@@ -44,16 +44,20 @@ class ChatRepository @Inject constructor(
     }
 
     suspend fun ensureChatExists(chatId: String, otherUserId: String, otherUserName: String, avatarUrl: String, avatarBase64: String = "") {
-        if (currentUserId.isBlank() || otherUserId.isBlank()) return
+        val senderId = currentUserId
+        if (senderId.isBlank() || otherUserId.isBlank() || chatId.isBlank()) return
+
+        require(chatId == buildChatId(senderId, otherUserId)) {
+            "El identificador de la conversación no coincide con sus participantes"
+        }
 
         val currentUser = auth.currentUser
         val currentUserName = currentUser?.displayName
             ?: currentUser?.email?.substringBefore("@")
             ?: "Usuario"
         val currentAvatar = currentUser?.photoUrl?.toString().orEmpty()
-        val currentBase64 = ""
-
         val now = System.currentTimeMillis()
+
         chatDao.insertOrUpdateChat(
             ChatEntity(
                 chatId = chatId,
@@ -65,29 +69,49 @@ class ChatRepository @Inject constructor(
             )
         )
 
-        // NOTA: no se incluye unreadCounts aquí a propósito. Con merge(), reescribirlo
-        // al abrir el chat borraría los no-leídos del OTRO participante. Los contadores
-        // solo se tocan con FieldValue.increment (al enviar) y markChatAsRead (al abrir).
-        firestore.collection("chats").document(chatId).set(
-            mapOf(
-                "participants" to listOf(currentUserId, otherUserId),
+        val chatRef = firestore.collection("chats").document(chatId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(chatRef)
+            val profileFields = mapOf(
                 "participantNames" to mapOf(
-                    currentUserId to currentUserName,
+                    senderId to currentUserName,
                     otherUserId to otherUserName
                 ),
                 "participantAvatars" to mapOf(
-                    currentUserId to currentAvatar,
+                    senderId to currentAvatar,
                     otherUserId to avatarUrl
                 ),
                 "participantAvatarBase64s" to mapOf(
-                    currentUserId to currentBase64,
+                    senderId to "",
                     otherUserId to avatarBase64
                 ),
-                "createdAt" to now,
                 "updatedAt" to now
-            ),
-            SetOptions.merge()
-        ).await()
+            )
+
+            if (snapshot.exists()) {
+                val participants = snapshot.get("participants") as? List<*>
+                check(
+                    participants != null &&
+                        participants.contains(senderId) &&
+                        participants.contains(otherUserId)
+                ) {
+                    "La conversación existente no pertenece a estos usuarios"
+                }
+                // No reescribimos participants ni createdAt. Las reglas nuevas protegen
+                // ese conjunto y así una actualización de perfil no rompe chats antiguos.
+                transaction.set(chatRef, profileFields, SetOptions.merge())
+            } else {
+                transaction.set(
+                    chatRef,
+                    profileFields + mapOf(
+                        "participants" to listOf(senderId, otherUserId),
+                        "createdAt" to now,
+                        "unreadCounts" to mapOf(senderId to 0, otherUserId to 0)
+                    )
+                )
+            }
+            null
+        }.await()
     }
 
     fun getMessagesFlow(chatId: String): Flow<List<Message>> {
@@ -113,7 +137,8 @@ class ChatRepository @Inject constructor(
     }
 
     suspend fun sendMessage(chatId: String, text: String, receiverId: String, replyToStoryId: String = "") {
-        if (currentUserId.isBlank() || receiverId.isBlank() || text.isBlank()) return
+        val senderId = currentUserId
+        if (senderId.isBlank() || receiverId.isBlank() || text.isBlank()) return
 
         val now = System.currentTimeMillis()
         val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
@@ -121,37 +146,36 @@ class ChatRepository @Inject constructor(
         val message = MessageEntity(
             id = messageId,
             chatId = chatId,
-            senderId = currentUserId,
+            senderId = senderId,
             text = text,
             timestamp = now,
             type = type,
             replyToStoryId = replyToStoryId
         )
+        val messageData = mapOf(
+            "text" to text,
+            "senderId" to senderId,
+            "receiverId" to receiverId,
+            "timestamp" to now,
+            "type" to type,
+            "isRead" to false,
+            "isDelivered" to false,
+            "replyToStoryId" to replyToStoryId
+        )
+        val preview = if (type == "story_reply") "↳ Respondió a tu story" else text
 
-        messageDao.insertMessage(message)
-
-        firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document(messageId)
-            .set(
-                mapOf(
-                    "text" to text,
-                    "senderId" to currentUserId,
-                    "receiverId" to receiverId,
-                    "timestamp" to now,
-                    "type" to type,
-                    "isRead" to false,
-                    "isDelivered" to false,
-                    "replyToStoryId" to replyToStoryId
-                )
-            ).await()
-
-        val preview = when (type) {
-            "story_reply" -> "↳ Respondió a tu story"
-            else -> text
-        }
-        updateChatPreview(chatId, receiverId, lastMessage = preview, lastMessageType = type, now)
+        persistOutgoingMessage(
+            chatId = chatId,
+            receiverId = receiverId,
+            messageId = messageId,
+            messageData = messageData,
+            lastMessage = preview,
+            lastMessageType = type,
+            now = now
+        )
+        // El mensaje local solo se inserta después de que Firestore confirma la
+        // transacción. Así no quedan mensajes fantasma cuando faltan permisos.
+        repositoryScope.launch { messageDao.insertMessage(message) }
     }
 
     /**
@@ -159,55 +183,57 @@ class ChatRepository @Inject constructor(
      * la URL firmada + la key remota en Firestore (documento ligero, sin Base64).
      */
     suspend fun sendImageMessage(chatId: String, receiverId: String, imageUrl: String, imageKey: String) {
-        if (currentUserId.isBlank() || receiverId.isBlank() || imageUrl.isBlank()) return
+        val senderId = currentUserId
+        if (senderId.isBlank() || receiverId.isBlank() || imageUrl.isBlank() || imageKey.isBlank()) return
 
         val now = System.currentTimeMillis()
         val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
         val message = MessageEntity(
             id = messageId,
             chatId = chatId,
-            senderId = currentUserId,
+            senderId = senderId,
             text = "",
             timestamp = now,
             type = "image",
             imageUrl = imageUrl,
             imageKey = imageKey
         )
+        val messageData = mapOf(
+            "text" to "",
+            "senderId" to senderId,
+            "receiverId" to receiverId,
+            "timestamp" to now,
+            "type" to "image",
+            "isRead" to false,
+            "isDelivered" to false,
+            "imageUrl" to imageUrl,
+            "imageKey" to imageKey
+        )
 
-        messageDao.insertMessage(message)
-
-        firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document(messageId)
-            .set(
-                mapOf(
-                    "text" to "",
-                    "senderId" to currentUserId,
-                    "receiverId" to receiverId,
-                    "timestamp" to now,
-                    "type" to "image",
-                    "isRead" to false,
-                    "isDelivered" to false,
-                    "imageUrl" to imageUrl,
-                    "imageKey" to imageKey
-                )
-            ).await()
-
-        updateChatPreview(chatId, receiverId, lastMessage = "Imagen", lastMessageType = "image", now)
+        persistOutgoingMessage(
+            chatId = chatId,
+            receiverId = receiverId,
+            messageId = messageId,
+            messageData = messageData,
+            lastMessage = "Imagen",
+            lastMessageType = "image",
+            now = now
+        )
+        repositoryScope.launch { messageDao.insertMessage(message) }
     }
 
     /**
      * Envía una nota de voz. El audio YA está en B2; guarda URL + duración.
      */
     suspend fun sendVoiceMessage(chatId: String, receiverId: String, voiceUrl: String, voiceKey: String, durationMs: Long) {
-        if (currentUserId.isBlank() || receiverId.isBlank() || voiceUrl.isBlank()) return
+        val senderId = currentUserId
+        if (senderId.isBlank() || receiverId.isBlank() || voiceUrl.isBlank() || voiceKey.isBlank()) return
         val now = System.currentTimeMillis()
         val messageId = firestore.collection("chats").document(chatId).collection("messages").document().id
         val message = MessageEntity(
             id = messageId,
             chatId = chatId,
-            senderId = currentUserId,
+            senderId = senderId,
             text = "",
             timestamp = now,
             type = "voice",
@@ -215,26 +241,29 @@ class ChatRepository @Inject constructor(
             voiceKey = voiceKey,
             voiceDurationMs = durationMs
         )
-        messageDao.insertMessage(message)
-        firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document(messageId)
-            .set(
-                mapOf(
-                    "text" to "",
-                    "senderId" to currentUserId,
-                    "receiverId" to receiverId,
-                    "timestamp" to now,
-                    "type" to "voice",
-                    "isRead" to false,
-                    "isDelivered" to false,
-                    "voiceUrl" to voiceUrl,
-                    "voiceKey" to voiceKey,
-                    "voiceDurationMs" to durationMs
-                )
-            ).await()
-        updateChatPreview(chatId, receiverId, lastMessage = "🎙️ Nota de voz ${formatDuration(durationMs)}", lastMessageType = "voice", now)
+        val messageData = mapOf(
+            "text" to "",
+            "senderId" to senderId,
+            "receiverId" to receiverId,
+            "timestamp" to now,
+            "type" to "voice",
+            "isRead" to false,
+            "isDelivered" to false,
+            "voiceUrl" to voiceUrl,
+            "voiceKey" to voiceKey,
+            "voiceDurationMs" to durationMs
+        )
+
+        persistOutgoingMessage(
+            chatId = chatId,
+            receiverId = receiverId,
+            messageId = messageId,
+            messageData = messageData,
+            lastMessage = "🎙️ Nota de voz ${formatDuration(durationMs)}",
+            lastMessageType = "voice",
+            now = now
+        )
+        repositoryScope.launch { messageDao.insertMessage(message) }
     }
 
     private fun formatDuration(ms: Long): String {
@@ -242,50 +271,79 @@ class ChatRepository @Inject constructor(
         return "%d:%02d".format(s / 60, s % 60)
     }
 
-    private suspend fun updateChatPreview(
+    /**
+     * Guarda el mensaje y la preview del chat en una sola transacción.
+     *
+     * Antes eran dos escrituras independientes: el mensaje podía existir aunque
+     * la actualización de la preview fuera rechazada por las reglas nuevas, y la
+     * UI mostraba la imagen/voz como fallida. Además, el primer envío podía correr
+     * antes de que openChat terminara de crear el documento padre.
+     */
+    private suspend fun persistOutgoingMessage(
         chatId: String,
         receiverId: String,
+        messageId: String,
+        messageData: Map<String, Any>,
         lastMessage: String,
         lastMessageType: String,
         now: Long
     ) {
-        // Actualizar preview del chat: participantes, último mensaje, timestamps
-        // y contadores de no leídos usando dot-notation para evitar sobrescribir
-        val chatRef = firestore.collection("chats").document(chatId)
-        try {
-            chatRef.update(
-                mapOf(
-                    "participants" to listOf(currentUserId, receiverId),
-                    "lastMessage" to lastMessage,
-                    "lastMessageType" to lastMessageType,
-                    "lastSenderId" to currentUserId,
-                    "lastMessageSenderId" to currentUserId,
-                    "lastTimestamp" to now,
-                    "updatedAt" to now,
-                    "unreadCounts.$currentUserId" to 0,
-                    "unreadCounts.$receiverId" to FieldValue.increment(1)
-                )
-            ).await()
-        } catch (e: Exception) {
-            // Si el documento no existe aún, crearlo con set merge
-            chatRef.set(
-                mapOf(
-                    "participants" to listOf(currentUserId, receiverId),
-                    "lastMessage" to lastMessage,
-                    "lastMessageType" to lastMessageType,
-                    "lastSenderId" to currentUserId,
-                    "lastMessageSenderId" to currentUserId,
-                    "lastTimestamp" to now,
-                    "unreadCounts" to mapOf(
-                        currentUserId to 0,
-                        receiverId to 1
-                    ),
-                    "updatedAt" to now,
-                    "createdAt" to now
-                ),
-                SetOptions.merge()
-            ).await()
+        val senderId = currentUserId
+        require(senderId.isNotBlank() && receiverId.isNotBlank()) { "Sesión de chat no válida" }
+        require(chatId == buildChatId(senderId, receiverId)) {
+            "El identificador de la conversación no coincide con sus participantes"
         }
+
+        val chatRef = firestore.collection("chats").document(chatId)
+        val messageRef = chatRef.collection("messages").document(messageId)
+
+        firestore.runTransaction { transaction ->
+            val chatSnapshot = transaction.get(chatRef)
+            if (chatSnapshot.exists()) {
+                val participants = chatSnapshot.get("participants") as? List<*>
+                check(
+                    participants != null &&
+                        participants.size == 2 &&
+                        participants.contains(senderId) &&
+                        participants.contains(receiverId)
+                ) { "La conversación no tiene participantes válidos" }
+
+                val previewUpdate = mutableMapOf<String, Any>(
+                    "lastMessage" to lastMessage,
+                    "lastMessageType" to lastMessageType,
+                    "lastSenderId" to senderId,
+                    "lastMessageSenderId" to senderId,
+                    "lastTimestamp" to now,
+                    "updatedAt" to now,
+                    "unreadCounts.$senderId" to 0
+                )
+                if (receiverId != senderId) {
+                    previewUpdate["unreadCounts.$receiverId"] = FieldValue.increment(1)
+                }
+                transaction.update(chatRef, previewUpdate)
+            } else {
+                transaction.set(
+                    chatRef,
+                    mapOf(
+                        "participants" to listOf(senderId, receiverId),
+                        "lastMessage" to lastMessage,
+                        "lastMessageType" to lastMessageType,
+                        "lastSenderId" to senderId,
+                        "lastMessageSenderId" to senderId,
+                        "lastTimestamp" to now,
+                        "unreadCounts" to if (receiverId == senderId) {
+                            mapOf(senderId to 0)
+                        } else {
+                            mapOf(senderId to 0, receiverId to 1)
+                        },
+                        "updatedAt" to now,
+                        "createdAt" to now
+                    )
+                )
+            }
+            transaction.set(messageRef, messageData)
+            null
+        }.await()
     }
 
     suspend fun deleteMessage(chatId: String, message: Message) {
@@ -467,12 +525,20 @@ class ChatRepository @Inject constructor(
      * Ahora devuelve el [ListenerRegistration] para que el ViewModel pueda
      * removerlo al salir (antes el listener quedaba vivo para siempre: leak).
      */
-    fun listenToMessages(chatId: String, onMessageEvent: (MessageChange) -> Unit): ListenerRegistration {
+    fun listenToMessages(
+        chatId: String,
+        onMessageEvent: (MessageChange) -> Unit,
+        onError: (Exception) -> Unit = {}
+    ): ListenerRegistration {
         return firestore.collection("chats")
             .document(chatId)
             .collection("messages")
             .orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
                 snapshot?.documentChanges?.forEach { change ->
                     val timestamp = change.document.getLong("timestamp") ?: 0L
                     val msg = Message(

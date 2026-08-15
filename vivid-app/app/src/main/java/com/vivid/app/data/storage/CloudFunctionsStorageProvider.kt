@@ -13,6 +13,7 @@ import java.io.File
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import android.webkit.MimeTypeMap
 
 /**
  * Implementación SEGURA de [StorageProvider] que usa Firebase Cloud
@@ -47,11 +48,13 @@ class CloudFunctionsStorageProvider(
         val file = File(localFilePath)
         require(file.exists()) { "No existe: $localFilePath" }
 
-        // 1. Pedir uploadUrl + signedDownloadUrl a la Cloud Function
+        // 1. Pedir uploadUrl + signedDownloadUrl a la Cloud Function.
+        //    El contentType se infiere de la extensión para no romper imágenes/audios.
         onProgress(5)
+        val contentType = guessContentType(remoteKey)
         val presign = callFunction("uploadReel", mapOf(
             "key" to remoteKey,
-            "contentType" to "video/mp4"
+            "contentType" to contentType
         ))
 
         val uploadUrl = presign.optString("uploadUrl")
@@ -67,10 +70,10 @@ class CloudFunctionsStorageProvider(
         val putReq = Request.Builder()
             .url(uploadUrl)
             .header("Authorization", uploadAuthToken)
-            .header("Content-Type", "video/mp4")
+            .header("Content-Type", contentType)
             .header("X-Bz-File-Name", b2EncodeFileName(remoteKey))
             .header("X-Bz-Content-Sha1", sha1Hex(file))
-            .post(file.asRequestBody(BINARY_MEDIA))
+            .post(file.asRequestBody(contentType.toMediaType()))
             .build()
 
         okHttp.newCall(putReq).execute().use { resp ->
@@ -186,10 +189,29 @@ class CloudFunctionsStorageProvider(
     private fun b2EncodeFileName(fileName: String): String =
         URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
 
+    /**
+     * Infiere el Content-Type a partir de la extensión del archivo.
+     * Antes esto estaba hardcodeado a "video/mp4", lo que rompía la subida
+     * de imágenes (image/jpeg) y notas de voz (audio/mp4) si se migraba a CF.
+     */
+    private fun guessContentType(key: String): String {
+        val ext = MimeTypeMap.getFileExtensionFromUrl(key)
+        val fromMap = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+        if (!fromMap.isNullOrBlank()) return fromMap
+        return when {
+            key.endsWith(".m4a", true) -> "audio/mp4"
+            key.endsWith(".aac", true) -> "audio/aac"
+            key.endsWith(".webp", true) -> "image/webp"
+            key.endsWith(".jpg", true) || key.endsWith(".jpeg", true) -> "image/jpeg"
+            key.endsWith(".png", true) -> "image/png"
+            key.endsWith(".mp4", true) -> "video/mp4"
+            else -> "application/octet-stream"
+        }
+    }
+
     companion object {
         private const val TAG = "CFStorage"
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
-        private val BINARY_MEDIA = "video/mp4".toMediaType()
         private val THUMB_MEDIA = "image/jpeg".toMediaType()
 
         private fun defaultClient() = OkHttpClient.Builder()

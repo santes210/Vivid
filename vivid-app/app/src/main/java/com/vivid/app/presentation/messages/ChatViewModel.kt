@@ -2,11 +2,13 @@ package com.vivid.app.presentation.messages
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.data.local.entity.ChatEntity
 import com.vivid.app.data.storage.BackblazeStorageProvider
@@ -48,7 +50,8 @@ data class VoiceUpload(
     val phase: ImageUpload.Phase = ImageUpload.Phase.UPLOADING,
     val progress: Int = 0,
     val error: String? = null,
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val localFilePath: String? = null
 )
 
 @HiltViewModel
@@ -83,8 +86,10 @@ class ChatViewModel @Inject constructor(
     private val _recordingDurationMs = MutableStateFlow(0L)
     val recordingDurationMs: StateFlow<Long> = _recordingDurationMs.asStateFlow()
 
+    private val _userMessage = MutableStateFlow<String?>(null)
+    val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
+
     private var loadedChatId: String? = null
-    private var otherUserIdCached: String = ""
     private var messagesListener: ListenerRegistration? = null
     private var typingListener: ListenerRegistration? = null
     private var typingJob: Job? = null
@@ -93,13 +98,17 @@ class ChatViewModel @Inject constructor(
     private val currentUserId get() = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
 
     fun openChat(chatId: String, receiverId: String, receiverName: String) {
-        otherUserIdCached = receiverId
         viewModelScope.launch {
-            val avatarBase64 = savedStateHandle.get<String>("avatarBase64") ?: ""
-            val avatarUrl = savedStateHandle.get<String>("avatarUrl") ?: ""
-            chatRepository.ensureChatExists(chatId, receiverId, receiverName, avatarUrl, avatarBase64)
-            chatRepository.markChatAsRead(chatId)
-            _canMessage.value = computeCanMessage(receiverId)
+            try {
+                val avatarBase64 = savedStateHandle.get<String>("avatarBase64") ?: ""
+                val avatarUrl = savedStateHandle.get<String>("avatarUrl") ?: ""
+                chatRepository.ensureChatExists(chatId, receiverId, receiverName, avatarUrl, avatarBase64)
+                chatRepository.markChatAsRead(chatId)
+                _canMessage.value = computeCanMessage(receiverId)
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo preparar el chat $chatId", error)
+                showError(readableError(error, "No se pudo abrir la conversación"))
+            }
         }
         loadMessages(chatId)
         observeTyping(chatId, receiverId)
@@ -149,33 +158,44 @@ class ChatViewModel @Inject constructor(
         }
 
         messagesListener?.remove()
-        messagesListener = chatRepository.listenToMessages(chatId) { event ->
-            when (event) {
-                is ChatRepository.MessageChange.Upsert -> {
-                    val current = _messages.value.toMutableList()
-                    val index = current.indexOfFirst { it.id == event.message.id }
-                    if (index >= 0) {
-                        current[index] = event.message
-                    } else {
-                        current.add(event.message)
+        messagesListener = chatRepository.listenToMessages(
+            chatId = chatId,
+            onMessageEvent = { event ->
+                when (event) {
+                    is ChatRepository.MessageChange.Upsert -> {
+                        val current = _messages.value.toMutableList()
+                        val index = current.indexOfFirst { it.id == event.message.id }
+                        if (index >= 0) {
+                            current[index] = event.message
+                        } else {
+                            current.add(event.message)
+                        }
+                        _messages.value = current.sortedBy { it.timestamp }
+                        if (event.message.senderId != currentUserId && !event.message.isRead) {
+                            viewModelScope.launch { chatRepository.markMessagesAsRead(chatId) }
+                        }
                     }
-                    _messages.value = current.sortedBy { it.timestamp }
-                    // Auto mark as read if message is from other user
-                    if (event.message.senderId != currentUserId && !event.message.isRead) {
-                        viewModelScope.launch { chatRepository.markMessagesAsRead(chatId) }
+                    is ChatRepository.MessageChange.Removed -> {
+                        _messages.value = _messages.value.filterNot { it.id == event.messageId }
                     }
                 }
-                is ChatRepository.MessageChange.Removed -> {
-                    _messages.value = _messages.value.filterNot { it.id == event.messageId }
-                }
+            },
+            onError = { error ->
+                Log.e(TAG, "Listener de mensajes rechazado para $chatId", error)
+                showError(readableError(error, "No se pudieron cargar los mensajes"))
             }
-        }
+        )
     }
 
     fun sendMessage(chatId: String, text: String, receiverId: String) {
         viewModelScope.launch {
-            chatRepository.sendMessage(chatId, text, receiverId)
-            setTyping(chatId, false)
+            try {
+                chatRepository.sendMessage(chatId, text, receiverId)
+                setTyping(chatId, false)
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo enviar mensaje en $chatId", error)
+                showError(readableError(error, "No se pudo enviar el mensaje"))
+            }
         }
     }
 
@@ -249,36 +269,42 @@ class ChatViewModel @Inject constructor(
         val uri = upload.uri ?: return
         viewModelScope.launch {
             var tempFile: File? = null
+            var uploadedKey: String? = null
             try {
-                tempFile = withContext(Dispatchers.IO) {
+                val processedFile = withContext(Dispatchers.IO) {
                     val dest = File(context.cacheDir, "chat_img_${upload.localId}.jpg")
-                    ImageCompressor.compressToFile(uri, context, dest)
+                    val compressed = ImageCompressor.compressToFile(uri, context, dest)
+                    check(compressed && dest.exists() && dest.length() > 0L) {
+                        "No se pudo procesar la imagen"
+                    }
                     dest
                 }
-                if (!tempFile!!.exists() || tempFile!!.length() == 0L) {
-                    throw IllegalStateException("No se pudo procesar la imagen")
-                }
+                tempFile = processedFile
                 updateUpload(upload.localId) {
                     it.copy(phase = ImageUpload.Phase.UPLOADING, progress = 5)
                 }
                 val key = "chat_images/$chatId/${upload.localId}.jpg"
-                val imageUrl = storage.uploadFile(tempFile!!.absolutePath, key) { pct ->
+                val imageUrl = storage.uploadFile(processedFile.absolutePath, key) { pct ->
                     updateUpload(upload.localId) {
                         it.copy(phase = ImageUpload.Phase.UPLOADING, progress = pct.coerceIn(5, 98))
                     }
                 }
+                check(imageUrl.isNotBlank()) { "El servidor no devolvió la imagen" }
+                uploadedKey = key
                 chatRepository.sendImageMessage(chatId, receiverId, imageUrl, key)
                 updateUpload(upload.localId) { it.copy(phase = ImageUpload.Phase.DONE, progress = 100) }
-                withContext(Dispatchers.IO) { tempFile?.delete() }
+                withContext(Dispatchers.IO) { processedFile.delete() }
                 delay(1500)
                 dismissImageUpload(upload.localId)
-            } catch (e: Exception) {
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo enviar imagen en $chatId", error)
+                uploadedKey?.let { key -> runCatching { storage.deleteFile(key) } }
+                withContext(Dispatchers.IO) { tempFile?.delete() }
+                val message = readableError(error, "No se pudo enviar la imagen")
                 updateUpload(upload.localId) {
-                    it.copy(
-                        phase = ImageUpload.Phase.FAILED,
-                        error = e.message ?: "No se pudo enviar la imagen"
-                    )
+                    it.copy(phase = ImageUpload.Phase.FAILED, error = message)
                 }
+                showError(message)
             }
         }
     }
@@ -296,15 +322,17 @@ class ChatViewModel @Inject constructor(
         if (_isRecording.value) return
         if (voiceRecorder == null) voiceRecorder = com.vivid.app.util.VoiceRecorder(context)
         val file = voiceRecorder?.startRecording()
-        if (file != null) {
-            _isRecording.value = true
-            _recordingDurationMs.value = 0L
-            recordingTickerJob?.cancel()
-            recordingTickerJob = viewModelScope.launch {
-                while (_isRecording.value) {
-                    delay(200)
-                    _recordingDurationMs.value = voiceRecorder?.getElapsedMs() ?: 0L
-                }
+        if (file == null) {
+            showError("No se pudo iniciar el micrófono")
+            return
+        }
+        _isRecording.value = true
+        _recordingDurationMs.value = 0L
+        recordingTickerJob?.cancel()
+        recordingTickerJob = viewModelScope.launch {
+            while (_isRecording.value) {
+                delay(200)
+                _recordingDurationMs.value = voiceRecorder?.getElapsedMs() ?: 0L
             }
         }
     }
@@ -315,44 +343,100 @@ class ChatViewModel @Inject constructor(
         _isRecording.value = false
         _recordingDurationMs.value = 0L
         if (cancel) return null
+        if (file == null) showError("La nota de voz es demasiado corta o no se pudo guardar")
         return file
     }
 
     fun sendVoice(chatId: String, receiverId: String, file: File, durationMs: Long) {
         if (receiverId.isBlank() || currentUserId.isBlank() || chatId.isBlank()) return
-        if (!file.exists() || file.length() == 0L) return
+        if (!file.exists() || file.length() == 0L) {
+            showError("La grabación está vacía")
+            return
+        }
         val localId = UUID.randomUUID().toString()
-        val upload = VoiceUpload(localId = localId, progress = 5, durationMs = durationMs)
+        val upload = VoiceUpload(
+            localId = localId,
+            progress = 5,
+            durationMs = durationMs,
+            localFilePath = file.absolutePath
+        )
         _voiceUploads.value = _voiceUploads.value + upload
+        launchVoiceUpload(chatId, receiverId, upload)
+    }
+
+    private fun launchVoiceUpload(chatId: String, receiverId: String, upload: VoiceUpload) {
+        val file = upload.localFilePath?.let(::File) ?: return
         viewModelScope.launch {
+            var uploadedKey: String? = null
             try {
-                val key = "chat_voice/$chatId/$localId.m4a"
+                check(file.exists() && file.length() > 0L) { "La grabación ya no está disponible" }
+                val key = "chat_voice/$chatId/${upload.localId}.m4a"
                 val voiceUrl = storage.uploadFile(file.absolutePath, key) { pct ->
                     _voiceUploads.value = _voiceUploads.value.map {
-                        if (it.localId == localId) it.copy(progress = pct) else it
+                        if (it.localId == upload.localId) {
+                            it.copy(phase = ImageUpload.Phase.UPLOADING, progress = pct)
+                        } else {
+                            it
+                        }
                     }
                 }
-                chatRepository.sendVoiceMessage(chatId, receiverId, voiceUrl, key, durationMs)
+                check(voiceUrl.isNotBlank()) { "El servidor no devolvió el audio" }
+                uploadedKey = key
+                chatRepository.sendVoiceMessage(
+                    chatId,
+                    receiverId,
+                    voiceUrl,
+                    key,
+                    upload.durationMs
+                )
                 _voiceUploads.value = _voiceUploads.value.map {
-                    if (it.localId == localId) it.copy(progress = 100, phase = ImageUpload.Phase.DONE) else it
+                    if (it.localId == upload.localId) {
+                        it.copy(progress = 100, phase = ImageUpload.Phase.DONE, error = null)
+                    } else {
+                        it
+                    }
                 }
                 delay(1200)
-                _voiceUploads.value = _voiceUploads.value.filterNot { it.localId == localId }
+                _voiceUploads.value = _voiceUploads.value.filterNot { it.localId == upload.localId }
                 withContext(Dispatchers.IO) { file.delete() }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo enviar nota de voz en $chatId", error)
+                uploadedKey?.let { key -> runCatching { storage.deleteFile(key) } }
+                val message = readableError(error, "No se pudo enviar la nota de voz")
                 _voiceUploads.value = _voiceUploads.value.map {
-                    if (it.localId == localId) it.copy(phase = ImageUpload.Phase.FAILED, error = e.message) else it
+                    if (it.localId == upload.localId) {
+                        it.copy(phase = ImageUpload.Phase.FAILED, error = message)
+                    } else {
+                        it
+                    }
                 }
+                showError(message)
             }
         }
     }
 
     fun retryVoiceUpload(chatId: String, receiverId: String, localId: String) {
-        // Not implemented for brevity — voice retry requires file retention
-        _voiceUploads.value = _voiceUploads.value.filterNot { it.localId == localId }
+        val failed = _voiceUploads.value.firstOrNull { it.localId == localId } ?: return
+        val path = failed.localFilePath ?: return
+        if (!File(path).exists()) {
+            dismissVoiceUpload(localId)
+            showError("La grabación ya no está disponible")
+            return
+        }
+        val retry = failed.copy(
+            phase = ImageUpload.Phase.UPLOADING,
+            progress = 5,
+            error = null
+        )
+        _voiceUploads.value = _voiceUploads.value.map { if (it.localId == localId) retry else it }
+        launchVoiceUpload(chatId, receiverId, retry)
     }
 
     fun dismissVoiceUpload(localId: String) {
+        _voiceUploads.value.firstOrNull { it.localId == localId }
+            ?.localFilePath
+            ?.let(::File)
+            ?.delete()
         _voiceUploads.value = _voiceUploads.value.filterNot { it.localId == localId }
     }
 
@@ -365,11 +449,13 @@ class ChatViewModel @Inject constructor(
                     imageKey,
                     BackblazeStorageProvider.MAX_SIGNED_TTL_SEC
                 )
+                check(freshUrl.isNotBlank()) { "No se pudo renovar la imagen" }
                 firestore.collection("chats")
                     .document(chatId)
                     .collection("messages")
                     .document(messageId)
                     .update("imageUrl", freshUrl)
+                    .await()
                 _messages.value = _messages.value.map {
                     if (it.id == messageId) it.copy(imageUrl = freshUrl) else it
                 }
@@ -383,9 +469,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val freshUrl = storage.signDownloadUrl(voiceKey, BackblazeStorageProvider.MAX_SIGNED_TTL_SEC)
+                check(freshUrl.isNotBlank()) { "No se pudo renovar el audio" }
                 firestore.collection("chats").document(chatId)
                     .collection("messages").document(messageId)
                     .update("voiceUrl", freshUrl)
+                    .await()
                 _messages.value = _messages.value.map {
                     if (it.id == messageId) it.copy(voiceUrl = freshUrl) else it
                 }
@@ -395,8 +483,13 @@ class ChatViewModel @Inject constructor(
 
     fun deleteMessage(chatId: String, message: Message) {
         viewModelScope.launch {
-            chatRepository.deleteMessage(chatId, message)
-            _messages.value = _messages.value.filterNot { it.id == message.id }
+            try {
+                chatRepository.deleteMessage(chatId, message)
+                _messages.value = _messages.value.filterNot { it.id == message.id }
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo borrar ${message.id}", error)
+                showError(readableError(error, "No se pudo eliminar el mensaje"))
+            }
         }
     }
 
@@ -411,7 +504,44 @@ class ChatViewModel @Inject constructor(
                     .collection("messages")
                     .document(messageId)
                     .update("reaction", reaction)
-            } catch (_: Exception) {}
+                    .await()
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo reaccionar a $messageId", error)
+                showError(readableError(error, "No se pudo guardar la reacción"))
+            }
+        }
+    }
+
+    fun onMicrophonePermissionDenied() {
+        showError("Necesitas permitir el micrófono para enviar notas de voz")
+    }
+
+    fun consumeUserMessage(message: String) {
+        if (_userMessage.value == message) _userMessage.value = null
+    }
+
+    private fun showError(message: String) {
+        _userMessage.value = message
+    }
+
+    private fun readableError(error: Throwable, fallback: String): String {
+        return when {
+            error is FirebaseFirestoreException &&
+                error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                "$fallback: permisos de la conversación rechazados"
+            error is FirebaseFirestoreException &&
+                error.code == FirebaseFirestoreException.Code.UNAUTHENTICATED ->
+                "$fallback: vuelve a iniciar sesión"
+            error is FirebaseFirestoreException &&
+                error.code == FirebaseFirestoreException.Code.UNAVAILABLE ->
+                "$fallback: revisa tu conexión"
+            error.message?.contains("b2_authorize_account", ignoreCase = true) == true ->
+                "$fallback: el almacenamiento no pudo iniciar sesión"
+            error.message?.contains("b2_", ignoreCase = true) == true ->
+                "$fallback: el almacenamiento rechazó la subida"
+            error.message?.contains("Unable to resolve host", ignoreCase = true) == true ->
+                "$fallback: revisa tu conexión"
+            else -> fallback
         }
     }
 
@@ -422,5 +552,9 @@ class ChatViewModel @Inject constructor(
         typingListener = null
         voiceRecorder?.stopRecording(cancel = true)
         super.onCleared()
+    }
+
+    companion object {
+        private const val TAG = "ChatViewModel"
     }
 }

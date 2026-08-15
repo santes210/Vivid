@@ -283,61 +283,73 @@ service cloud.firestore {
     //  Chats
     // ─────────────────────────────────────────────────
     match /chats/{chatId} {
+      function hasValidParticipants(data) {
+        return data.participants is list
+          && data.participants.size() == 2;
+      }
+
       function isParticipant() {
-        return signedIn() && request.auth.uid in resource.data.participants;
+        return signedIn()
+          && hasValidParticipants(resource.data)
+          && request.auth.uid in resource.data.participants;
       }
 
       allow read: if isParticipant();
 
       allow create: if signedIn()
-        && request.auth.uid in request.resource.data.participants
-        && request.resource.data.participants.size() == 2;
+        && hasValidParticipants(request.resource.data)
+        && request.auth.uid in request.resource.data.participants;
 
-      // Un participante actualiza la preview del chat, pero NO puede meter a
-      // un tercero en la conversación.
-      //
-      // Ojo: updateChatPreview() reescribe `participants` como
-      // [emisor, receptor], así que el orden cambia según quién escriba.
-      // Por eso se compara pertenencia (hasOnly) y no igualdad del array.
-      // La doble comprobación hasOnly equivale a "mismo conjunto":
-      // impide agregar a un tercero y también dejar [A, A] fuera al otro.
+      // Un participante puede actualizar metadata y la preview, pero nunca
+      // agregar o quitar usuarios. La comparación es por conjunto para seguir
+      // aceptando APKs anteriores que invertían el orden [emisor, receptor].
       allow update: if isParticipant()
-        && request.resource.data.participants.size() == 2
-        && request.auth.uid in request.resource.data.participants
+        && hasValidParticipants(request.resource.data)
         && request.resource.data.participants.hasOnly(resource.data.participants)
         && resource.data.participants.hasOnly(request.resource.data.participants);
 
       allow delete: if false;
 
       match /messages/{messageId} {
-        function chatParticipants() {
-          return get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        function chatPath() {
+          return /databases/$(database)/documents/chats/$(chatId);
         }
-        function inChat() {
-          return signedIn() && request.auth.uid in chatParticipants();
+        function existingChatParticipants() {
+          return get(chatPath()).data.participants;
+        }
+        function resultingChatParticipants() {
+          // getAfter permite crear el chat padre y el primer mensaje en la
+          // misma transacción, eliminando la carrera que rompía el primer envío.
+          return getAfter(chatPath()).data.participants;
+        }
+        function inExistingChat() {
+          return signedIn()
+            && exists(chatPath())
+            && get(chatPath()).data.participants is list
+            && request.auth.uid in existingChatParticipants();
+        }
+        function inResultingChat() {
+          return signedIn()
+            && existsAfter(chatPath())
+            && getAfter(chatPath()).data.participants is list
+            && request.auth.uid in resultingChatParticipants();
         }
 
-        allow read: if inChat();
+        allow read: if inExistingChat();
 
-        allow create: if inChat()
-          && request.resource.data.senderId == request.auth.uid;
+        allow create: if inResultingChat()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.receiverId in resultingChatParticipants()
+          && request.resource.data.get('type', 'text') in ['text', 'image', 'voice', 'story_reply'];
 
-        // El autor puede editar su propio mensaje (p. ej. re-firmar la URL de
-        // B2 cuando expira a los 7 días).
-        //
-        // El receptor SOLO puede tocar acuses de lectura, su reacción y las
-        // URLs re-firmadas — ya no puede reescribir el texto del otro.
-        //
-        // TODO: imageUrl/voiceUrl están acá porque ChatViewModel.refreshImageUrl()
-        // persiste en Firestore la URL re-firmada. Lo ideal sería usarla solo en
-        // memoria; el día que se cambie, sacar esos dos campos de la lista.
-        allow update: if inChat() && (
-          resource.data.senderId == request.auth.uid
-          || onlyChanges(['isRead', 'isDelivered', 'reaction', 'imageUrl', 'voiceUrl'])
-        );
+        // Tanto emisor como receptor pueden actualizar únicamente acuses,
+        // reacción y URLs firmadas. Nadie puede reescribir texto, dueño o tipo.
+        allow update: if inExistingChat()
+          && onlyChanges(['isRead', 'isDelivered', 'reaction', 'imageUrl', 'voiceUrl']);
 
         // Borrar solo lo propio (la UI ya solo ofrece la opción al autor).
-        allow delete: if inChat() && resource.data.senderId == request.auth.uid;
+        allow delete: if inExistingChat()
+          && resource.data.senderId == request.auth.uid;
       }
     }
   }
