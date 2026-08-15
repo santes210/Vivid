@@ -13,6 +13,30 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // Contenido de una cuenta privada: únicamente el autor y seguidores
+    // aceptados. Las solicitudes pendientes no crean el doc /followers/{uid}.
+    function canReadOwnedContent(authorId, isPrivate) {
+      return signedIn() && (
+        request.auth.uid == authorId
+        || isPrivate == false
+        || exists(/databases/$(database)/documents/users/$(authorId)/followers/$(request.auth.uid))
+      );
+    }
+
+    function matchesAuthorPrivacy(authorId, isPrivate) {
+      return isPrivate == getAfter(/databases/$(database)/documents/users/$(authorId)).data.get('isPrivate', false);
+    }
+
+    function canReadPost(postId) {
+      let post = get(/databases/$(database)/documents/posts/$(postId)).data;
+      return canReadOwnedContent(post.userId, post.get('isPrivate', true));
+    }
+
+    function canReadReel(reelId) {
+      let reel = get(/databases/$(database)/documents/reels/$(reelId)).data;
+      return canReadOwnedContent(reel.userId, reel.get('isPrivate', true));
+    }
+
     // Claves que cambian en este update.
     function changedKeys() {
       return request.resource.data.diff(resource.data).changedKeys();
@@ -95,14 +119,24 @@ service cloud.firestore {
 
       match /followers/{docId} {
         allow read: if signedIn();
-        // create+update: se escribe con batch.set(), que cuenta como update
-        // si el doc ya existía (p. ej. volver a seguir a alguien).
-        allow create, update, delete: if isUser(userId) || isUser(docId);
+        // En cuentas privadas solo el propietario puede aceptar y crear el
+        // vínculo. En públicas, el propio seguidor puede seguir directamente.
+        allow create, update: if isUser(userId) || (
+          isUser(docId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.get('isPrivate', false) == false
+        );
+        allow delete: if isUser(userId) || isUser(docId);
       }
 
       match /following/{docId} {
         allow read: if signedIn();
-        allow create, update, delete: if isUser(userId) || isUser(docId);
+        // userId es quien sigue y docId es la cuenta seguida. Una cuenta
+        // privada crea este lado del vínculo al aceptar la solicitud.
+        allow create, update: if isUser(docId) || (
+          isUser(userId)
+          && get(/databases/$(database)/documents/users/$(docId)).data.get('isPrivate', false) == false
+        );
+        allow delete: if isUser(userId) || isUser(docId);
       }
 
       match /followRequests/{docId} {
@@ -129,11 +163,13 @@ service cloud.firestore {
     //  Posts
     // ─────────────────────────────────────────────────
     match /posts/{postId} {
-      allow read: if signedIn();
+      allow read: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true));
 
-      // Un post nace siempre con los contadores en cero.
+      // Un post nace siempre con los contadores en cero y la privacidad
+      // desnormalizada coincide con el perfil actual del autor.
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
+        && matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate)
         && request.resource.data.get('likesCount', 0) == 0
         && request.resource.data.get('commentsCount', 0) == 0;
 
@@ -141,9 +177,12 @@ service cloud.firestore {
       // Un tercero solo mueve likesCount / commentsCount de a 1.
       allow update: if signedIn() && (
         (resource.data.userId == request.auth.uid
-          && request.resource.data.userId == resource.data.userId)
+          && request.resource.data.userId == resource.data.userId
+          && (request.resource.data.isPrivate == true
+            || matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate)))
         || (
-          onlyChanges(['likesCount', 'commentsCount'])
+          canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true))
+          && onlyChanges(['likesCount', 'commentsCount'])
           && stepsByOne('likesCount')
           && stepsByOne('commentsCount')
         )
@@ -152,12 +191,12 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 
       match /comments/{commentId} {
-        allow read: if signedIn();
-        allow create: if signedIn()
+        allow read: if canReadPost(postId);
+        allow create: if canReadPost(postId)
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.get('likesCount', 0) == 0;
 
-        allow update: if signedIn() && (
+        allow update: if canReadPost(postId) && (
           (resource.data.userId == request.auth.uid
             && request.resource.data.userId == resource.data.userId)
           || (onlyChanges(['likesCount']) && stepsByOne('likesCount'))
@@ -175,7 +214,8 @@ service cloud.firestore {
           // set() sobre un doc que ya existe cuenta como update, no como
           // create, así que hay que permitir ambos o el segundo like falla
           // con PERMISSION_DENIED.
-          allow create, update: if isUser(userId)
+          allow create, update: if canReadPost(postId)
+            && isUser(userId)
             && request.resource.data.userId == request.auth.uid;
           allow delete: if isUser(userId);
         }
@@ -186,7 +226,8 @@ service cloud.firestore {
         // set() sobre un doc que ya existe cuenta como update, no como
         // create, así que hay que permitir ambos o el segundo like falla
         // con PERMISSION_DENIED.
-        allow create, update: if isUser(userId)
+        allow create, update: if canReadPost(postId)
+          && isUser(userId)
           && request.resource.data.userId == request.auth.uid;
         allow delete: if isUser(userId);
       }
@@ -196,22 +237,34 @@ service cloud.firestore {
     //  Stories
     // ─────────────────────────────────────────────────
     match /stories/{storyId} {
-      allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true));
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate);
 
       // Solo el autor edita la story. Un tercero únicamente suma +1 a
       // viewersCount al verla por primera vez (StoryViewerScreen).
       allow update: if signedIn() && (
-        resource.data.userId == request.auth.uid
-        || (onlyChanges(['viewersCount']) && incrementsByOne('viewersCount'))
+        (resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && (request.resource.data.isPrivate == true
+            || matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate)))
+        || (canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true))
+          && onlyChanges(['viewersCount']) && incrementsByOne('viewersCount'))
       );
 
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 
       // Vistas: quién vio la story
       match /viewers/{viewerId} {
-        allow read: if signedIn();
-        allow create, update: if isUser(viewerId)
+        allow read: if canReadOwnedContent(
+          get(/databases/$(database)/documents/stories/$(storyId)).data.userId,
+          get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true)
+        );
+        allow create, update: if canReadOwnedContent(
+            get(/databases/$(database)/documents/stories/$(storyId)).data.userId,
+            get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true)
+          ) && isUser(viewerId)
           && request.resource.data.get('uid', viewerId) == viewerId;
         allow delete: if isUser(viewerId)
           || get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
@@ -222,9 +275,10 @@ service cloud.firestore {
     //  Reels
     // ─────────────────────────────────────────────────
     match /reels/{reelId} {
-      allow read: if signedIn();
+      allow read: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true));
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
+        && matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate)
         && request.resource.data.get('likes', 0) == 0
         && request.resource.data.get('comments', 0) == 0;
 
@@ -232,9 +286,12 @@ service cloud.firestore {
       // métricas de ReelAnalyticsTracker (que solo pueden crecer).
       allow update: if signedIn() && (
         (resource.data.userId == request.auth.uid
-          && request.resource.data.userId == resource.data.userId)
+          && request.resource.data.userId == resource.data.userId
+          && (request.resource.data.isPrivate == true
+            || matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate)))
         || (
-          onlyChanges(['likes', 'comments', 'viewsCount', 'completedViews', 'totalWatchTimeSec'])
+          canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true))
+          && onlyChanges(['likes', 'comments', 'viewsCount', 'completedViews', 'totalWatchTimeSec'])
           && stepsByOne('likes')
           && stepsByOne('comments')
           && incrementsByOne('viewsCount')
@@ -248,29 +305,29 @@ service cloud.firestore {
       // Analytics de vistas únicas (ReelAnalyticsTracker.trackView).
       // Antes no existía esta regla, así que la escritura fallaba en silencio.
       match /viewers/{viewerId} {
-        allow read: if signedIn();
-        allow create, update: if isUser(viewerId);
+        allow read: if canReadReel(reelId);
+        allow create, update: if canReadReel(reelId) && isUser(viewerId);
         allow delete: if isUser(viewerId)
           || get(/databases/$(database)/documents/reels/$(reelId)).data.userId == request.auth.uid;
       }
 
       match /likes/{userId} {
-        allow read: if signedIn();
+        allow read: if canReadReel(reelId);
         // set() sobre un doc que ya existe cuenta como update, no como
         // create, así que hay que permitir ambos o el segundo like falla
         // con PERMISSION_DENIED.
-        allow create, update: if isUser(userId)
+        allow create, update: if canReadReel(reelId) && isUser(userId)
           && request.resource.data.userId == request.auth.uid;
         allow delete: if isUser(userId);
       }
 
       match /comments/{commentId} {
-        allow read: if signedIn();
-        allow create: if signedIn()
+        allow read: if canReadReel(reelId);
+        allow create: if canReadReel(reelId)
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.get('likesCount', 0) == 0;
 
-        allow update: if signedIn() && (
+        allow update: if canReadReel(reelId) && (
           (resource.data.userId == request.auth.uid
             && request.resource.data.userId == resource.data.userId)
           || (onlyChanges(['likesCount']) && stepsByOne('likesCount'))

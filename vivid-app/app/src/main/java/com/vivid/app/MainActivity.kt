@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.domain.repository.ensureCurrentUserContentPrivacy
 import com.vivid.app.navigation.VividNavigation
 import com.vivid.app.notifications.NotificationForegroundService
 import com.vivid.app.theme.LocalVividAnimationsEnabled
@@ -23,6 +26,7 @@ import com.vivid.app.util.PushNotificationHelper
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.UserPresenceHelper
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -43,6 +47,13 @@ class MainActivity : ComponentActivity() {
         // ── Auth listener: token FCM + Foreground Service para notificaciones ──
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             if (auth.currentUser != null) {
+                val userId = auth.currentUser?.uid.orEmpty()
+                lifecycleScope.launch {
+                    runCatching {
+                        ensureCurrentUserContentPrivacy(FirebaseFirestore.getInstance(), userId)
+                    }
+                }
+
                 // Token FCM (para cuando actives Blaze en el futuro)
                 PushNotificationHelper.registerTokenForCurrentUser()
 

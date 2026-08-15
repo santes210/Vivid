@@ -29,9 +29,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
-import kotlinx.coroutines.launch
 
 @Composable
 fun StoriesTray(
@@ -40,36 +37,21 @@ fun StoriesTray(
 ) {
     val db = FirebaseFirestore.getInstance()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-    val scope = rememberCoroutineScope()
-
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     // ViewModel para limpieza con borrado de B2 (fix 2026-08-09) - sin try-catch porque hiltViewModel es @Composable
     val storyViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
-    DisposableEffect(currentUserId) {
-        var registration: ListenerRegistration? = null
+    LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
-            // Limpieza con B2 (borra Firestore + archivos de B2)
             storyViewModel.cleanExpiredStories(currentUserId)
+            stories = runCatching {
+                val docs = loadVisibleStoryDocuments(db, currentUserId)
+                buildVisibleStories(db, currentUserId, docs)
+            }.getOrDefault(emptyList())
         }
-        registration = db.collection("stories")
-            .whereGreaterThan("expiresAt", System.currentTimeMillis())
-            .orderBy("expiresAt", Query.Direction.ASCENDING)
-            .limit(50)
-            .addSnapshotListener { snapshot, _ ->
-                val docs = snapshot?.documents.orEmpty()
-                scope.launch {
-                    stories = buildVisibleStories(
-                        firestore = db,
-                        currentUserId = currentUserId,
-                        storyDocs = docs
-                    )
-                    isLoading = false
-                }
-            }
-        onDispose { registration?.remove() }
+        isLoading = false
     }
 
     if (isLoading) {

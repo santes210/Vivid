@@ -178,6 +178,7 @@ private fun extractHashtags(text: String): List<String> {
                     ?: user.displayName
                     ?: user.email?.substringBefore('@')
                     ?: "usuario"
+                val isPrivate = userDoc.getBoolean("isPrivate") ?: false
 
                 val hashtags = extractHashtags(caption)
                 val baseMusicMap = mutableMapOf<String, Any>().apply {
@@ -193,6 +194,7 @@ private fun extractHashtags(text: String): List<String> {
                     val postData = mutableMapOf<String, Any>(
                         "userId" to user.uid,
                         "username" to username,
+                        "isPrivate" to isPrivate,
                         "imageUrl" to publicUrl,
                         "storageKey" to storageKey,
                         "provider" to "backblaze-direct",
@@ -221,6 +223,7 @@ private fun extractHashtags(text: String): List<String> {
                     val postData = mutableMapOf<String, Any>(
                         "userId" to user.uid,
                         "username" to username,
+                        "isPrivate" to isPrivate,
                         "imageBase64" to compressedBase64,
                         "caption" to caption.trim(),
                         "likesCount" to 0L,

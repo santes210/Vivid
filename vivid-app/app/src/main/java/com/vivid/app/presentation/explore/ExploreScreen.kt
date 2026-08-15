@@ -17,11 +17,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.feed.PostData
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,8 +31,9 @@ fun ExploreScreen(
     onPostClick: (String) -> Unit = {},
     onProfileClick: (String) -> Unit = {}
 ) {
-    val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
+    val blockedUsersState by blockedUsersViewModel.state.collectAsState()
+    val blockedUserIds = blockedUsersState.userIds
 
     var selectedTag by remember { mutableStateOf("vivid") }
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
@@ -39,59 +41,62 @@ fun ExploreScreen(
 
     val tags = remember { listOf("vivid", "arte", "musica", "viaje", "comida", "tecnologia", "moda", "deporte") }
 
-    fun loadPosts(tag: String) {
-        scope.launch {
-            loading = true
-            try {
-                val snapshot = FirebaseFirestore.getInstance()
-                    .collection("posts")
-                    .whereArrayContains("hashtags", tag)
-                    .limit(20)
-                    .get()
-                    .await()
-                posts = snapshot.documents.mapNotNull { doc ->
-                    val id = doc.id
-                    val caption = doc.getString("caption") ?: ""
-                    val username = doc.getString("username") ?: ""
-                    val userId = doc.getString("userId") ?: ""
-                    val imageUrl = doc.getString("imageUrl") ?: ""
-                    val videoUrl = doc.getString("videoUrl") ?: ""
-                    val isVideo = doc.getBoolean("isVideo") ?: false
-                    val timestamp = doc.getLong("timestamp") ?: 0L
-                    val likesCount = doc.getLong("likesCount")?.toInt() ?: 0
-                    val commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0
-                    val storageKey = doc.getString("storageKey") ?: ""
-                    PostData(
-                        id = id,
-                        userId = userId,
-                        username = username,
-                        userProfilePicture = "",
-                        userProfilePictureBase64 = "",
-                        imageUrl = imageUrl,
-                        videoUrl = videoUrl,
-                        isVideo = isVideo,
-                        caption = caption,
-                        likesCount = likesCount,
-                        commentsCount = commentsCount,
-                        timestamp = timestamp,
-                        isLiked = false,
-                        isSaved = false,
-                        storageKey = storageKey
-                    )
-                }
-            } catch (_: Exception) { posts = emptyList() }
-            loading = false
-        }
+    suspend fun loadPosts(tag: String) {
+        loading = true
+        try {
+            val snapshot = FirebaseFirestore.getInstance()
+                .collection("posts")
+                .whereArrayContains("hashtags", tag)
+                .whereEqualTo("isPrivate", false)
+                .limit(20)
+                .get()
+                .await()
+            posts = snapshot.documents.mapNotNull { doc ->
+                val id = doc.id
+                val caption = doc.getString("caption") ?: ""
+                val username = doc.getString("username") ?: ""
+                val userId = doc.getString("userId") ?: ""
+                if (userId in blockedUserIds) return@mapNotNull null
+                val imageUrl = doc.getString("imageUrl") ?: ""
+                val videoUrl = doc.getString("videoUrl") ?: ""
+                val isVideo = doc.getBoolean("isVideo") ?: false
+                val timestamp = doc.getLong("timestamp") ?: 0L
+                val likesCount = doc.getLong("likesCount")?.toInt() ?: 0
+                val commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0
+                val storageKey = doc.getString("storageKey") ?: ""
+                PostData(
+                    id = id,
+                    userId = userId,
+                    username = username,
+                    userProfilePicture = "",
+                    userProfilePictureBase64 = "",
+                    imageUrl = imageUrl,
+                    videoUrl = videoUrl,
+                    isVideo = isVideo,
+                    caption = caption,
+                    likesCount = likesCount,
+                    commentsCount = commentsCount,
+                    timestamp = timestamp,
+                    isLiked = false,
+                    isSaved = false,
+                    storageKey = storageKey
+                )
+            }
+        } catch (_: Exception) { posts = emptyList() }
+        loading = false
     }
 
-    LaunchedEffect(selectedTag) { loadPosts(selectedTag) }
+    LaunchedEffect(selectedTag, blockedUserIds, blockedUsersState.isLoaded) {
+        if (blockedUsersState.isLoaded) loadPosts(selectedTag)
+    }
 
     var searchQuery by remember { mutableStateOf("") }
     val searchUsers = remember { mutableStateOf<List<SearchUser>>(emptyList()) }
     val searchLoading = remember { mutableStateOf(false) }
 
-    LaunchedEffect(searchQuery) {
+    LaunchedEffect(searchQuery, blockedUserIds, blockedUsersState.isLoaded) {
         val q = searchQuery.trim().lowercase()
+        if (!blockedUsersState.isLoaded) return@LaunchedEffect
         if (q.length < 2) {
             searchUsers.value = emptyList()
             searchLoading.value = false
@@ -111,7 +116,7 @@ fun ExploreScreen(
             val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
             searchUsers.value = snapshot.documents.mapNotNull { doc ->
                 val uid = doc.getString("uid") ?: doc.id
-                if (uid == currentUserId) return@mapNotNull null
+                if (uid == currentUserId || uid in blockedUserIds) return@mapNotNull null
                 SearchUser(
                     uid = uid,
                     username = doc.getString("username") ?: "usuario",

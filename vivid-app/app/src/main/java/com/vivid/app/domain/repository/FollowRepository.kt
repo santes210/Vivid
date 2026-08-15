@@ -4,6 +4,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -338,12 +341,42 @@ class FollowRepository @Inject constructor(
             .await()
     }
 
-    suspend fun getBlockedUsers(): List<SocialUserPreview> {
-        if (currentUserId.isBlank()) return emptyList()
+    suspend fun getBlockedUserIds(): Set<String> {
+        if (currentUserId.isBlank()) return emptySet()
         val snapshot = firestore.collection("users").document(currentUserId).get().await()
-        val ids = (snapshot.get("blockedUsers") as? List<*>)?.mapNotNull { it as? String }.orEmpty()
-        return loadUserPreviews(ids)
+        return snapshot.blockedUserIds()
     }
+
+    /**
+     * Mantiene feed, explorar y búsqueda sincronizados con los bloqueos sin
+     * obligar a reiniciar la pantalla después de bloquear o desbloquear.
+     */
+    fun observeBlockedUserIds(): Flow<Set<String>> = callbackFlow {
+        val userId = currentUserId
+        if (userId.isBlank()) {
+            trySend(emptySet())
+            close()
+            return@callbackFlow
+        }
+
+        var hasEmittedSnapshot = false
+        val registration = firestore.collection("users").document(userId)
+            .addSnapshotListener { snapshot, error ->
+                // Una lectura fallida no debe borrar un set ya cargado y volver
+                // a exponer cuentas bloqueadas. Si falla la primera lectura,
+                // liberamos la UI con un set vacío para conservar usabilidad.
+                if (snapshot != null) {
+                    hasEmittedSnapshot = true
+                    trySend(snapshot.blockedUserIds())
+                } else if (error != null && !hasEmittedSnapshot) {
+                    trySend(emptySet())
+                }
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun getBlockedUsers(): List<SocialUserPreview> =
+        loadUserPreviews(getBlockedUserIds().toList())
 
     suspend fun blockUser(targetUserId: String) {
         if (currentUserId.isBlank() || targetUserId.isBlank() || targetUserId == currentUserId) return
@@ -434,6 +467,12 @@ class FollowRepository @Inject constructor(
         )
         batch.commit().await()
     }
+
+    private fun com.google.firebase.firestore.DocumentSnapshot.blockedUserIds(): Set<String> =
+        (get("blockedUsers") as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?.filterTo(mutableSetOf()) { it.isNotBlank() }
+            .orEmpty()
 
     private suspend fun loadUserPreviews(ids: List<String>): List<SocialUserPreview> {
         if (ids.isEmpty()) return emptyList()

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.BuildConfig
+import com.vivid.app.domain.repository.setAccountContentPrivacy
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
 import com.vivid.app.ui.components.VividSettingsGroup
 import com.vivid.app.ui.components.VividSettingsItem
@@ -223,8 +224,16 @@ fun PrivacidadSettingsScreen(
                         checked = isPrivate,
                         onCheckedChange = { checked ->
                             isPrivate = checked
-                            user?.uid?.let { firestore.collection("users").document(it).update("isPrivate", checked) }
-                            scope.launch { onShowSnackbar(if (checked) "Cuenta privada" else "Cuenta pública") }
+                            user?.uid?.let { uid ->
+                                scope.launch {
+                                    runCatching { setAccountContentPrivacy(firestore, uid, checked) }
+                                        .onSuccess { onShowSnackbar(if (checked) "Cuenta privada" else "Cuenta pública") }
+                                        .onFailure {
+                                            isPrivate = !checked
+                                            onShowSnackbar("No se pudo cambiar la privacidad")
+                                        }
+                                }
+                            }
                         },
                         showDivider = true
                     )

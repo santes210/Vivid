@@ -21,9 +21,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.presentation.common.BlockedUsersViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 
@@ -45,13 +47,16 @@ fun SearchScreen(
     var users by remember { mutableStateOf<List<SearchUser>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
+    val blockedUsersState by blockedUsersViewModel.state.collectAsState()
+    val blockedUserIds = blockedUsersState.userIds
 
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val db = FirebaseFirestore.getInstance()
 
-    LaunchedEffect(query, currentUserId) {
+    LaunchedEffect(query, currentUserId, blockedUserIds, blockedUsersState.isLoaded) {
         val cleanQuery = query.trim().lowercase()
-        if (cleanQuery.length < 2 || currentUserId.isBlank()) {
+        if (!blockedUsersState.isLoaded || cleanQuery.length < 2 || currentUserId.isBlank()) {
             users = emptyList()
             isLoading = false
             errorMessage = null
@@ -72,7 +77,7 @@ fun SearchScreen(
 
             users = snapshot.documents.mapNotNull { doc ->
                 val uid = doc.getString("uid") ?: doc.id
-                if (uid == currentUserId) return@mapNotNull null
+                if (uid == currentUserId || uid in blockedUserIds) return@mapNotNull null
                 SearchUser(
                     uid = uid,
                     username = doc.getString("username") ?: "usuario",

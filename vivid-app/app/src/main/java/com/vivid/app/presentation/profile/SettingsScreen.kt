@@ -26,6 +26,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.BuildConfig
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
+import com.vivid.app.domain.repository.setAccountContentPrivacy
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.composeEmail
 import com.vivid.app.util.launchExternalIntent
@@ -122,7 +123,13 @@ fun SettingsScreen(
     fun updatePrivateAccount(enabled: Boolean) {
         isPrivateAccount = enabled
         user?.uid?.let { uid ->
-            firestore.collection("users").document(uid).update("isPrivate", enabled)
+            scope.launch {
+                runCatching { setAccountContentPrivacy(firestore, uid, enabled) }
+                    .onFailure {
+                        isPrivateAccount = !enabled
+                        snackbarHostState.showSnackbar("No se pudo cambiar la privacidad")
+                    }
+            }
         }
     }
 

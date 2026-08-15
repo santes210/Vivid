@@ -193,11 +193,13 @@ class CreateReelViewModel @Inject constructor(
             ?: auth.currentUser?.email?.substringBefore('@')
             ?: "usuario"
         val avatar = userDoc.getString("avatarUrl").orEmpty()
+        val isPrivate = userDoc.getBoolean("isPrivate") ?: false
 
         val data = mapOf(
             "userId" to uid,
             "username" to username,
             "userAvatar" to avatar,
+            "isPrivate" to isPrivate,
             "videoUrl" to videoUrl,
             "thumbnailUrl" to thumbnailUrl,
             "storageKey" to storageKey,
