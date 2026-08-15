@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.vivid.app.ui.components.VividSettingsGroup
 import com.vivid.app.ui.components.VividSettingsItem
@@ -38,6 +39,15 @@ fun SettingsHubScreen(
     notifValue: String = "",
     storageValue: String = ""
 ) {
+    // Muestra el tamaño real del caché en el hub (calculado en background)
+    val context = LocalContext.current
+    val appContext = context.applicationContext
+    var realCacheMB by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        realCacheMB = runCatching { com.vivid.app.util.VividCacheManager.calculateCacheSizeMB(appContext) }
+            .getOrDefault(0f)
+    }
+    val effectiveStorageValue = if (realCacheMB > 0f) String.format("%.1f MB", realCacheMB) else null
     VividSettingsScaffold(title = "Ajustes", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -86,7 +96,7 @@ fun SettingsHubScreen(
                         title = "Almacenamiento",
                         subtitle = "Caché y calidad de descarga",
                         icon = Icons.Outlined.Storage,
-                        value = storageValue.takeIf { it.isNotBlank() },
+                        value = effectiveStorageValue,
                         onClick = onNavigateAlmacenamiento,
                         showDivider = true
                     )

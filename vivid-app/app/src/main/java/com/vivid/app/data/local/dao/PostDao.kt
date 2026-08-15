@@ -12,6 +12,9 @@ interface PostDao {
     @Query("SELECT * FROM posts ORDER BY timestamp DESC")
     fun getAllPosts(): Flow<List<PostEntity>>
 
+    @Query("SELECT * FROM posts ORDER BY timestamp DESC")
+    suspend fun getPostsOnce(): List<PostEntity>
+
     @Query("SELECT * FROM posts WHERE id = :postId LIMIT 1")
     suspend fun getPostById(postId: String): PostEntity?
 
@@ -26,4 +29,7 @@ interface PostDao {
 
     @Query("DELETE FROM posts")
     suspend fun clearPosts()
+
+    @Query("SELECT MAX(cachedAt) FROM posts")
+    suspend fun getLastCachedAt(): Long?
 }

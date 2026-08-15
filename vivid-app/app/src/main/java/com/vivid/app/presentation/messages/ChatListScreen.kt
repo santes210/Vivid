@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +70,39 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
     // Caché de presencia: evita re-consultar Firestore en cada cambio del snapshot
     var cachedPresence by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     var lastPresenceFetch by remember { mutableLongStateOf(0L) }
+
+    // ── Caché Room de la lista de chats: se muestra al instante mientras
+    // Firestore refresca en background (el servidor trabaja menos). ──
+    val appContext = LocalContext.current.applicationContext
+    val chatDao = remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            appContext,
+            com.vivid.app.di.VividCacheEntryPoint::class.java
+        ).database().chatDao()
+    }
+    val roomChats by chatDao.getAllChats().collectAsState(initial = emptyList())
+
+    // Si Firestore aún no responde pero hay caché, mostrarla de inmediato
+    var firestoreLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(roomChats, firestoreLoaded) {
+        if (!firestoreLoaded && roomChats.isNotEmpty()) {
+            chats = roomChats.map { entity ->
+                ChatPreview(
+                    chatId = entity.chatId,
+                    otherUserId = entity.otherUserId,
+                    otherUserName = entity.otherUserName,
+                    lastMessage = entity.lastMessage,
+                    lastMessageSenderId = entity.lastMessageSenderId,
+                    timestamp = entity.lastMessageTimestamp,
+                    avatarUrl = entity.otherUserAvatar,
+                    avatarBase64 = entity.avatarBase64,
+                    unreadCount = entity.unreadCount,
+                    isOnline = false // la presencia se calcula aparte
+                )
+            }
+            isLoading = false
+        }
+    }
 
     // Search & Category states
     var searchQuery by remember { mutableStateOf("") }
@@ -127,6 +161,28 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                             unreadCount = unreadCount,
                             isOnline = presenceByUserId[otherUserId] == true
                         )
+                    }
+
+                    // Guardar en caché Room para arranque instantáneo/offline
+                    firestoreLoaded = true
+                    scope.launch {
+                        runCatching {
+                            val entities = previews.map { p ->
+                                com.vivid.app.data.local.entity.ChatEntity(
+                                    chatId = p.chatId,
+                                    otherUserId = p.otherUserId,
+                                    otherUserName = p.otherUserName,
+                                    otherUserAvatar = p.avatarUrl,
+                                    lastMessage = p.lastMessage,
+                                    lastMessageTimestamp = p.timestamp,
+                                    unreadCount = p.unreadCount,
+                                    lastMessageSenderId = p.lastMessageSenderId,
+                                    lastMessageType = "text",
+                                    avatarBase64 = p.avatarBase64
+                                )
+                            }
+                            chatDao.insertChats(entities)
+                        }
                     }
 
                     // Presencia: 1 query por lote de 10 (whereIn) en vez de 1 query por usuario.

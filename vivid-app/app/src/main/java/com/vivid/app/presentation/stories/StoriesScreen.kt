@@ -25,10 +25,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
 @Composable
 fun StoriesTray(
@@ -36,6 +38,8 @@ fun StoriesTray(
     onCreateStory: () -> Unit = {}
 ) {
     val db = FirebaseFirestore.getInstance()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -46,10 +50,31 @@ fun StoriesTray(
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
             storyViewModel.cleanExpiredStories(currentUserId)
-            stories = runCatching {
+
+            // ── Caché Room: si hay stories cacheadas de menos de 7 días,
+            // mostrarlas al instante (arranque rápido / offline) ──
+            runCatching {
+                if (storyViewModel.isStoryCacheFresh()) {
+                    val cached = storyViewModel.getCachedStories()
+                    if (cached.isNotEmpty()) {
+                        stories = storyViewModel.cachedStoriesToData(cached)
+                        isLoading = false
+                    }
+                }
+            }
+
+            // ── Firestore: datos frescos en tiempo real + persistir en caché ──
+            val fresh = runCatching {
                 val docs = loadVisibleStoryDocuments(db, currentUserId)
                 buildVisibleStories(db, currentUserId, docs)
             }.getOrDefault(emptyList())
+            if (fresh.isNotEmpty()) {
+                stories = fresh
+                scope.launch {
+                    storyViewModel.cacheStories(fresh)
+                    com.vivid.app.util.VividCacheManager.markStoriesCached(context)
+                }
+            }
         }
         isLoading = false
     }

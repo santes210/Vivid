@@ -21,9 +21,14 @@ data class Story(
     val avatarBase64: String = "",
     val mediaUrl: String = "",
     val mediaBase64: String = "",
+    val videoUrl: String = "",
+    val thumbnailUrl: String = "",
+    val type: String = "photo",
     val caption: String = "",
     val createdAt: Long = 0L,
     val expiresAt: Long = 0L,
+    val isPrivate: Boolean = false,
+    val storageKey: String = "",
     val hasUnseenStory: Boolean = true
 )
 
@@ -87,9 +92,14 @@ suspend fun buildVisibleStories(
                 ?: doc.getString("avatarBase64").orEmpty(),
             mediaUrl = doc.getString("mediaUrl").orEmpty(),
             mediaBase64 = doc.getString("mediaBase64").orEmpty(),
+            videoUrl = doc.getString("videoUrl").orEmpty(),
+            thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+            type = doc.getString("type") ?: "photo",
             caption = doc.getString("caption").orEmpty(),
             createdAt = doc.getLong("createdAt") ?: 0L,
             expiresAt = doc.getLong("expiresAt") ?: 0L,
+            isPrivate = doc.getBoolean("isPrivate") ?: false,
+            storageKey = doc.getString("storageKey").orEmpty(),
             hasUnseenStory = true
         )
     }

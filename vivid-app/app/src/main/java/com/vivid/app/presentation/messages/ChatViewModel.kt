@@ -142,6 +142,8 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private var readReceiptsListener: ListenerRegistration? = null
+
     fun loadMessages(chatId: String) {
         if (loadedChatId == chatId) return
         loadedChatId = chatId
@@ -158,33 +160,85 @@ class ChatViewModel @Inject constructor(
         }
 
         messagesListener?.remove()
-        messagesListener = chatRepository.listenToMessages(
-            chatId = chatId,
-            onMessageEvent = { event ->
-                when (event) {
-                    is ChatRepository.MessageChange.Upsert -> {
-                        val current = _messages.value.toMutableList()
-                        val index = current.indexOfFirst { it.id == event.message.id }
-                        if (index >= 0) {
-                            current[index] = event.message
-                        } else {
-                            current.add(event.message)
-                        }
-                        _messages.value = current.sortedBy { it.timestamp }
-                        if (event.message.senderId != currentUserId && !event.message.isRead) {
-                            viewModelScope.launch { chatRepository.markMessagesAsRead(chatId) }
-                        }
+        readReceiptsListener?.remove()
+
+        // ── Estrategia de caché (para que el servidor no lea todo el historial) ──
+        // Caché vacía → sync completo (backfill del historial).
+        // Caché vigente → sync incremental: el servidor solo envía mensajes más
+        // nuevos que el último cacheado; el historial se sirve desde Room.
+        // Caché con >7 días sin actividad → sync completo ocasional (también
+        // sincroniza borrados del otro lado y read receipts de mensajes viejos).
+        viewModelScope.launch {
+            val lastCachedTs = runCatching {
+                chatRepository.getLastCachedTimestamp(chatId)
+            }.getOrNull()
+
+            val idleDays = lastCachedTs?.let {
+                (System.currentTimeMillis() - it) / (24L * 60L * 60L * 1000L)
+            } ?: Long.MAX_VALUE
+            val useFullSync = lastCachedTs == null || idleDays >= 7L
+
+            if (useFullSync) {
+                // Historial completo: repobla la caché Room
+                runCatching { chatRepository.backfillMessages(chatId) }
+                messagesListener = chatRepository.listenToMessages(
+                    chatId = chatId,
+                    onMessageEvent = { event -> handleMessageEvent(chatId, event) },
+                    onError = { error ->
+                        Log.e(TAG, "Listener de mensajes rechazado para $chatId", error)
+                        showError(readableError(error, "No se pudieron cargar los mensajes"))
                     }
-                    is ChatRepository.MessageChange.Removed -> {
-                        _messages.value = _messages.value.filterNot { it.id == event.messageId }
+                )
+            } else {
+                // Sync incremental: solo mensajes nuevos + read receipts ligeros
+                messagesListener = chatRepository.listenToNewMessages(
+                    chatId = chatId,
+                    afterTimestamp = lastCachedTs ?: 0L,
+                    onMessageEvent = { event -> handleMessageEvent(chatId, event) },
+                    onError = { error ->
+                        Log.e(TAG, "Listener incremental rechazado para $chatId", error)
+                        showError(readableError(error, "No se pudieron cargar los mensajes"))
                     }
-                }
-            },
-            onError = { error ->
-                Log.e(TAG, "Listener de mensajes rechazado para $chatId", error)
-                showError(readableError(error, "No se pudieron cargar los mensajes"))
+                )
+                readReceiptsListener = chatRepository.listenToReadReceipts(
+                    chatId = chatId,
+                    onMessageRead = { messageId ->
+                        _messages.value = _messages.value.map {
+                            if (it.id == messageId) it.copy(isRead = true, isDelivered = true) else it
+                        }
+                    },
+                    onError = { error ->
+                        // Índice ausente o permisos: los read receipts se degradan
+                        // silenciosamente (los mensajes siguen funcionando).
+                        Log.w(TAG, "Listener de read receipts rechazado: ${error.message}")
+                    }
+                )
             }
-        )
+        }
+    }
+
+    private fun handleMessageEvent(
+        chatId: String,
+        event: ChatRepository.MessageChange
+    ) {
+        when (event) {
+            is ChatRepository.MessageChange.Upsert -> {
+                val current = _messages.value.toMutableList()
+                val index = current.indexOfFirst { it.id == event.message.id }
+                if (index >= 0) {
+                    current[index] = event.message
+                } else {
+                    current.add(event.message)
+                }
+                _messages.value = current.sortedBy { it.timestamp }
+                if (event.message.senderId != currentUserId && !event.message.isRead) {
+                    viewModelScope.launch { chatRepository.markMessagesAsRead(chatId) }
+                }
+            }
+            is ChatRepository.MessageChange.Removed -> {
+                _messages.value = _messages.value.filterNot { it.id == event.messageId }
+            }
+        }
     }
 
     fun sendMessage(chatId: String, text: String, receiverId: String) {
@@ -505,6 +559,8 @@ class ChatViewModel @Inject constructor(
                     .document(messageId)
                     .update("reaction", reaction)
                     .await()
+                // Guardar la reacción en el caché Room
+                runCatching { chatRepository.updateReactionInCache(messageId, reaction) }
             } catch (error: Exception) {
                 Log.e(TAG, "No se pudo reaccionar a $messageId", error)
                 showError(readableError(error, "No se pudo guardar la reacción"))
@@ -547,8 +603,10 @@ class ChatViewModel @Inject constructor(
 
     override fun onCleared() {
         messagesListener?.remove()
+        readReceiptsListener?.remove()
         typingListener?.remove()
         messagesListener = null
+        readReceiptsListener = null
         typingListener = null
         voiceRecorder?.stopRecording(cancel = true)
         super.onCleared()

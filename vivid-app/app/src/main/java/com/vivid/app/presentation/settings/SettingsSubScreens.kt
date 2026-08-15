@@ -29,6 +29,7 @@ import com.vivid.app.ui.components.VividSettingsItem
 import com.vivid.app.ui.components.VividSettingsScaffold
 import com.vivid.app.ui.components.VividSettingsSwitchItem
 import com.vivid.app.util.SettingsManager
+import com.vivid.app.util.VividCacheManager
 import com.vivid.app.util.composeEmail
 import com.vivid.app.util.launchExternalIntent
 import com.vivid.app.util.openUrl
@@ -470,12 +471,43 @@ fun NotificacionesSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
 @Composable
 fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Unit) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val scope = rememberCoroutineScope()
     val firestore = FirebaseFirestore.getInstance()
     val user = FirebaseAuth.getInstance().currentUser
-    val cache = SettingsManager.simulatedCacheSizeMB
     val quality = SettingsManager.downloadQualityOption
     var showQuality by remember { mutableStateOf(false) }
+    var isClearingCache by remember { mutableStateOf(false) }
+
+    // Lee el tamaño real del caché (Room + Coil + archivos temporales)
+    var realCacheSizeMB by remember { mutableFloatStateOf(0f) }
+    var cacheChecked by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        realCacheSizeMB = runCatching { VividCacheManager.calculateCacheSizeMB(appContext) }.getOrDefault(0f)
+        cacheChecked = true
+    }
+
+    fun clearCache() {
+        if (isClearingCache) return
+        isClearingCache = true
+        scope.launch {
+            runCatching {
+                val entryPoint = dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    appContext,
+                    com.vivid.app.di.VividCacheEntryPoint::class.java
+                )
+                val db = entryPoint.database()
+                val imageLoader = entryPoint.imageLoader()
+                VividCacheManager.clearAllCaches(appContext, db, imageLoader)
+                SettingsManager.recordCacheClear(appContext)
+                realCacheSizeMB = 0f
+                onShowSnackbar("Caché limpiada — se regenerará al recargar")
+            }.onFailure { e ->
+                onShowSnackbar("Error al limpiar caché: ${e.message}")
+            }
+            isClearingCache = false
+        }
+    }
 
     VividSettingsScaffold(title = "Almacenamiento", onBack = onBack) { padding ->
         LazyColumn(
@@ -487,12 +519,11 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
                 VividSettingsGroup {
                     VividSettingsItem(
                         title = "Borrar caché local",
-                        subtitle = "Aprox. ${String.format("%.1f", cache)} MB",
+                        subtitle = if (isClearingCache) "Limpiando…"
+                            else if (cacheChecked) "Aprox. ${String.format("%.1f", realCacheSizeMB)} MB"
+                            else "Calculando…",
                         icon = Icons.Outlined.Cached,
-                        onClick = {
-                            if (cache > 0f) { SettingsManager.setCacheSize(context, 0f); scope.launch { onShowSnackbar("Caché limpiada (0 MB)") } }
-                            else scope.launch { onShowSnackbar("Caché ya limpia") }
-                        },
+                        onClick = { clearCache() },
                         showDivider = true
                     )
                     VividSettingsItem(

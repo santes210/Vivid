@@ -6,6 +6,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.vivid.app.data.local.dao.ReelDao
+import com.vivid.app.data.local.entity.ReelEntity
 import com.vivid.app.data.storage.StorageProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -30,7 +32,8 @@ import javax.inject.Inject
 class ReelsViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: StorageProvider,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val reelDao: ReelDao
 ) : ViewModel() {
 
     private val _reels = MutableStateFlow<List<Reel>>(emptyList())
@@ -57,6 +60,18 @@ class ReelsViewModel @Inject constructor(
             _isLoading.value = true
             _hasMore.value = true
             lastDoc = null
+
+            // ── Caché Room: mostrar reels cacheados (menos de 7 días) al instante ──
+            runCatching {
+                if (isReelCacheFresh()) {
+                    val cached = reelDao.getReelsOnce()
+                    if (cached.isNotEmpty()) {
+                        _reels.value = cachedEntitiesToData(cached)
+                        _isLoading.value = false
+                    }
+                }
+            }
+
             try {
                 val userId = auth.currentUser?.uid.orEmpty()
                 val followingIds = if (userId.isBlank()) emptyList() else {
@@ -91,16 +106,70 @@ class ReelsViewModel @Inject constructor(
                 val documents = (publicSnapshot.documents + privateDocuments)
                     .distinctBy { it.id }
                     .sortedByDescending { it.getLong("timestamp") ?: 0L }
-                _reels.value = mapDocs(documents)
+                val fresh = mapDocs(documents)
+                _reels.value = fresh
                 _hasMore.value = publicSnapshot.size() >= pageSize
+
+                // Persistir en caché Room
+                if (fresh.isNotEmpty()) {
+                    cacheReels(fresh)
+                }
             } catch (e: Exception) {
-                _reels.value = emptyList()
-                _hasMore.value = false
+                // Si falla la red pero hay caché, la dejamos visible
+                if (_reels.value.isEmpty()) {
+                    _reels.value = emptyList()
+                    _hasMore.value = false
+                }
             } finally {
                 _isLoading.value = false
             }
         }
     }
+
+    // ── Caché local de reels (Room, TTL 7 días) ──
+
+    private suspend fun isReelCacheFresh(): Boolean {
+        val lastCached = reelDao.getLastCachedAt() ?: return false
+        return (System.currentTimeMillis() - lastCached) < 7L * 24L * 60L * 60L * 1000L
+    }
+
+    private suspend fun cacheReels(reels: List<Reel>) {
+        if (reels.isEmpty()) return
+        val now = System.currentTimeMillis()
+        reelDao.insertReels(reels.map { reel ->
+            ReelEntity(
+                id = reel.id,
+                userId = reel.userId,
+                username = reel.username,
+                userAvatar = reel.userAvatar,
+                videoUrl = reel.videoUrl,
+                thumbnailUrl = reel.thumbnailUrl,
+                caption = reel.caption,
+                likes = reel.likes,
+                commentsCount = reel.commentsCount,
+                timestamp = reel.timestamp,
+                isPrivate = reel.isPrivate,
+                storageKey = reel.storageKey,
+                cachedAt = now
+            )
+        })
+    }
+
+    private fun cachedEntitiesToData(entities: List<ReelEntity>): List<Reel> =
+        entities.map { entity ->
+            Reel(
+                id = entity.id,
+                userId = entity.userId,
+                videoUrl = entity.videoUrl,
+                thumbnailUrl = entity.thumbnailUrl,
+                username = entity.username,
+                caption = entity.caption,
+                likes = entity.likes,
+                commentsCount = entity.commentsCount,
+                userAvatar = entity.userAvatar,
+                storageKey = entity.storageKey
+            )
+        }
 
     fun loadMore() {
         if (_isLoadingMore.value || !_hasMore.value) return
@@ -173,7 +242,9 @@ class ReelsViewModel @Inject constructor(
                         likes = doc.getLong("likes")?.toInt() ?: 0,
                         commentsCount = doc.getLong("comments")?.toInt() ?: 0,
                         userAvatar = doc.getString("userAvatar").orEmpty(),
-                        storageKey = storageKey
+                        storageKey = storageKey,
+                        timestamp = doc.getLong("timestamp") ?: 0L,
+                        isPrivate = doc.getBoolean("isPrivate") ?: false
                     )
                 } catch (_: Exception) {
                     null

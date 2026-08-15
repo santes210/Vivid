@@ -229,10 +229,16 @@ private fun ReelPage(
     val scope = rememberCoroutineScope()
     val followRepository = remember { FollowRepository(firestore, FirebaseAuth.getInstance()) }
 
-    // ExoPlayer con remember keyed por videoUrl para que se recicle correctamente
+    // ExoPlayer con remember keyed por videoUrl para que se recicle correctamente.
+    // Usa caché local (Vivid video cache): el reel no se re-descarga de B2 en
+    // cada visita — se sirve de disco hasta que se borre caché o caduque (7d).
     val exoPlayer = remember(reel.videoUrl) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(reel.videoUrl))
+            if (com.vivid.app.util.VideoCacheManager.isCacheable(reel.videoUrl)) {
+                setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(context, reel.videoUrl))
+            } else {
+                setMediaItem(MediaItem.fromUri(reel.videoUrl))
+            }
             repeatMode = ExoPlayer.REPEAT_MODE_ALL
             prepare()
         }

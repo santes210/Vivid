@@ -11,5 +11,9 @@ data class ChatEntity(
     val otherUserAvatar: String,
     val lastMessage: String,
     val lastMessageTimestamp: Long,
-    val unreadCount: Int = 0
+    val unreadCount: Int = 0,
+    val lastMessageSenderId: String = "",
+    val lastMessageType: String = "text",
+    val avatarBase64: String = "",
+    val cachedAt: Long = System.currentTimeMillis()
 )
