@@ -17,4 +17,7 @@ interface UserDao {
 
     @Query("DELETE FROM users WHERE uid = :uid")
     suspend fun deleteUser(uid: String)
+
+    @Query("DELETE FROM users")
+    suspend fun clearAllUsers()
 }

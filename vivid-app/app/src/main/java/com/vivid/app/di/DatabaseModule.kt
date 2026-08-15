@@ -6,6 +6,8 @@ import com.vivid.app.data.local.VividDatabase
 import com.vivid.app.data.local.dao.ChatDao
 import com.vivid.app.data.local.dao.MessageDao
 import com.vivid.app.data.local.dao.PostDao
+import com.vivid.app.data.local.dao.ReelDao
+import com.vivid.app.data.local.dao.StoryDao
 import com.vivid.app.data.local.dao.UserDao
 import dagger.Module
 import dagger.Provides
@@ -26,7 +28,11 @@ object DatabaseModule {
             VividDatabase::class.java,
             "vivid_database"
         )
-            .addMigrations(VividDatabase.MIGRATION_1_2, VividDatabase.MIGRATION_2_3)
+            .addMigrations(
+                VividDatabase.MIGRATION_1_2,
+                VividDatabase.MIGRATION_2_3,
+                VividDatabase.MIGRATION_3_4
+            )
             .fallbackToDestructiveMigrationOnDowngrade()
             .fallbackToDestructiveMigration()
             .build()
@@ -43,4 +49,10 @@ object DatabaseModule {
 
     @Provides
     fun provideMessageDao(db: VividDatabase): MessageDao = db.messageDao()
+
+    @Provides
+    fun provideStoryDao(db: VividDatabase): StoryDao = db.storyDao()
+
+    @Provides
+    fun provideReelDao(db: VividDatabase): ReelDao = db.reelDao()
 }

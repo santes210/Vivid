@@ -925,7 +925,14 @@ private fun ProfilePostViewerDialog(
                         post.isVideo && post.videoUrl.isNotBlank() -> {
                             val ctx = androidx.compose.ui.platform.LocalContext.current
                             val player = remember(post.videoUrl) {
-                                ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(post.videoUrl)); repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true }
+                                ExoPlayer.Builder(ctx).build().apply {
+                                    if (com.vivid.app.util.VideoCacheManager.isCacheable(post.videoUrl)) {
+                                        setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(ctx, post.videoUrl))
+                                    } else {
+                                        setMediaItem(MediaItem.fromUri(post.videoUrl))
+                                    }
+                                    repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true
+                                }
                             }
                             DisposableEffect(player) { onDispose { player.release() } }
                             AndroidView(factory = { ctx2 -> PlayerView(ctx2).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())

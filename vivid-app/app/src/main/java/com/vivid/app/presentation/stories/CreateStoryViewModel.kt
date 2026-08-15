@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.data.local.dao.StoryDao
+import com.vivid.app.data.local.entity.StoryEntity
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.data.storage.VideoCompressor
 import com.vivid.app.util.VideoThumbnailer
@@ -37,7 +39,8 @@ sealed interface CreateStoryUiState {
 class CreateStoryViewModel @Inject constructor(
     private val storage: StorageProvider,
     private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val storyDao: StoryDao
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<CreateStoryUiState>(CreateStoryUiState.Idle)
@@ -259,6 +262,76 @@ class CreateStoryViewModel @Inject constructor(
                 android.util.Log.w("CreateStoryVM", "Limpieza falló: ${e.message}")
             }
         }
+    }
+
+    // ── Caché local de stories (Room, TTL 7 días) ──
+
+    /**
+     * Guarda las stories visibles en la caché Room. Se llama tras cada
+     * carga desde Firestore para tener arranque instantáneo y offline.
+     */
+    suspend fun cacheStories(stories: List<Story>) {
+        if (stories.isEmpty()) return
+        val now = System.currentTimeMillis()
+        storyDao.insertStories(stories.map { story ->
+            StoryEntity(
+                id = story.id,
+                userId = story.userId,
+                username = story.username,
+                avatarUrl = story.avatarUrl,
+                avatarBase64 = story.avatarBase64,
+                mediaUrl = story.mediaUrl,
+                mediaBase64 = story.mediaBase64,
+                videoUrl = story.videoUrl,
+                thumbnailUrl = story.thumbnailUrl,
+                type = story.type,
+                caption = story.caption,
+                createdAt = story.createdAt,
+                expiresAt = story.expiresAt,
+                isPrivate = story.isPrivate,
+                storageKey = story.storageKey,
+                cachedAt = now
+            )
+        })
+    }
+
+    /**
+     * Devuelve las stories cacheadas en Room (una sola lectura), filtrando
+     * las que ya caducaron (las stories viven 24h, el caché hasta 7 días).
+     */
+    suspend fun getCachedStories(): List<StoryEntity> {
+        // Limpia del caché las stories vencidas y devuelve solo las activas
+        storyDao.deleteExpiredStories(System.currentTimeMillis())
+        return storyDao.getActiveStoriesOnce(System.currentTimeMillis())
+    }
+
+    /** Convierte entidades cacheadas a [Story] para la UI. */
+    fun cachedStoriesToData(entities: List<StoryEntity>): List<Story> =
+        entities.map { entity ->
+            Story(
+                id = entity.id,
+                userId = entity.userId,
+                username = entity.username,
+                avatarUrl = entity.avatarUrl,
+                avatarBase64 = entity.avatarBase64,
+                mediaUrl = entity.mediaUrl,
+                mediaBase64 = entity.mediaBase64,
+                videoUrl = entity.videoUrl,
+                thumbnailUrl = entity.thumbnailUrl,
+                type = entity.type,
+                caption = entity.caption,
+                createdAt = entity.createdAt,
+                expiresAt = entity.expiresAt,
+                isPrivate = entity.isPrivate,
+                storageKey = entity.storageKey,
+                hasUnseenStory = true
+            )
+        }
+
+    /** Indica si la caché de stories sigue vigente (menos de 7 días). */
+    suspend fun isStoryCacheFresh(): Boolean {
+        val lastCached = storyDao.getLastCachedAt() ?: return false
+        return (System.currentTimeMillis() - lastCached) < 7L * 24L * 60L * 60L * 1000L
     }
 
     fun reset() {

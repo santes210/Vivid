@@ -753,7 +753,12 @@ private fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoice
     val ctx = LocalContext.current
     val player = remember(message.voiceUrl) {
         ExoPlayer.Builder(ctx).build().apply {
-            setMediaItem(MediaItem.fromUri(message.voiceUrl))
+            // Caché local: las notas de voz de B2 no se re-descargan en cada escucha
+            if (com.vivid.app.util.VideoCacheManager.isCacheable(message.voiceUrl)) {
+                setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(ctx, message.voiceUrl))
+            } else {
+                setMediaItem(MediaItem.fromUri(message.voiceUrl))
+            }
             prepare()
         }
     }

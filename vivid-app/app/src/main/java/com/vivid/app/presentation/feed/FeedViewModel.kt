@@ -129,4 +129,79 @@ class FeedViewModel @Inject constructor(
     /** Borra best-effort un archivo remoto (al eliminar un post). */
     suspend fun deleteRemoteFile(storageKey: String): Boolean =
         runCatching { storage.deleteFile(storageKey) }.getOrDefault(false)
+
+    /**
+     * Guarda los posts visibles en la caché Room (con timestamp de caché).
+     * Se llama cuando el feed recibe datos de Firestore.
+     */
+    suspend fun cachePosts(posts: List<PostData>) {
+        if (posts.isEmpty()) return
+        val now = System.currentTimeMillis()
+        postDao.insertPosts(posts.map { post ->
+            PostEntity(
+                id = post.id,
+                userId = post.userId,
+                username = post.username,
+                userProfilePicture = post.userProfilePicture,
+                imageUrl = post.imageUrl,
+                imageBase64 = post.imageBase64,
+                caption = post.caption,
+                likesCount = post.likesCount,
+                commentsCount = post.commentsCount,
+                timestamp = post.timestamp,
+                isLiked = post.isLiked,
+                storageKey = post.storageKey,
+                videoUrl = post.videoUrl,
+                thumbnailUrl = post.thumbnailUrl,
+                isVideo = post.isVideo,
+                musicTitle = post.musicTitle,
+                musicArtist = post.musicArtist,
+                musicAssetFile = post.musicAssetFile,
+                musicUrl = post.musicUrl,
+                musicStorageKey = post.musicStorageKey,
+                cachedAt = now
+            )
+        })
+    }
+
+    /**
+     * Convierte entidades Room cacheadas a [PostData] para mostrar offline
+     * o mientras se refresca Firestore.
+     */
+    fun cachedPostsToData(entities: List<PostEntity>): List<PostData> =
+        entities.map { entity ->
+            PostData(
+                id = entity.id,
+                userId = entity.userId,
+                username = entity.username,
+                userProfilePicture = entity.userProfilePicture,
+                imageUrl = entity.imageUrl,
+                imageBase64 = entity.imageBase64,
+                storageKey = entity.storageKey,
+                videoUrl = entity.videoUrl,
+                thumbnailUrl = entity.thumbnailUrl,
+                isVideo = entity.isVideo,
+                caption = entity.caption,
+                likesCount = entity.likesCount,
+                commentsCount = entity.commentsCount,
+                timestamp = entity.timestamp,
+                isLiked = entity.isLiked,
+                musicTitle = entity.musicTitle,
+                musicArtist = entity.musicArtist,
+                musicAssetFile = entity.musicAssetFile,
+                musicUrl = entity.musicUrl,
+                musicStorageKey = entity.musicStorageKey
+            )
+        }
+
+    /**
+     * Indica si la caché de posts sigue vigente (menos de 7 días).
+     */
+    suspend fun isPostCacheFresh(): Boolean {
+        val lastCached = postDao.getLastCachedAt() ?: return false
+        return (System.currentTimeMillis() - lastCached) < 7L * 24L * 60L * 60L * 1000L
+    }
+
+    /** Devuelve los posts cacheados en Room (una sola lectura). */
+    suspend fun getCachedPosts(): List<PostEntity> = postDao.getPostsOnce()
 }

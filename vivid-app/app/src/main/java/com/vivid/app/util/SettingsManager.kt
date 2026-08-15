@@ -31,6 +31,7 @@ object SettingsManager {
     private const val KEY_ACTIVITY_STATUS = "activity_status"
     private const val KEY_2FA = "two_factor_auth"
     private const val KEY_CACHE_SIZE = "cache_size_mb"
+    private const val KEY_LAST_CACHE_CLEAR = "last_cache_clear"
 
     // Observable/reactive compose states
     var selectedThemeOption by mutableStateOf("Sistema")
@@ -67,7 +68,9 @@ object SettingsManager {
         private set
     var twoFactorAuthEnabled by mutableStateOf(false)
         private set
-    var simulatedCacheSizeMB by mutableStateOf(48.5f)
+    var simulatedCacheSizeMB by mutableStateOf(0f)
+        private set
+    var lastCacheClearAt by mutableStateOf(0L)
         private set
 
     fun init(context: Context) {
@@ -89,7 +92,8 @@ object SettingsManager {
         downloadQualityOption = prefs.getString(KEY_DOWNLOAD_QUALITY, "Alta (HD)") ?: "Alta (HD)"
         activityStatusEnabled = prefs.getBoolean(KEY_ACTIVITY_STATUS, true)
         twoFactorAuthEnabled = prefs.getBoolean(KEY_2FA, false)
-        simulatedCacheSizeMB = prefs.getFloat(KEY_CACHE_SIZE, 48.5f)
+        simulatedCacheSizeMB = prefs.getFloat(KEY_CACHE_SIZE, 0f)
+        lastCacheClearAt = prefs.getLong(KEY_LAST_CACHE_CLEAR, 0L)
     }
 
     /** Sincroniza las preferencias de notificación a Firestore para que la Cloud Function las lea */
@@ -220,6 +224,14 @@ object SettingsManager {
         simulatedCacheSizeMB = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putFloat(KEY_CACHE_SIZE, value).apply()
+    }
+
+    /** Registra cuándo se limpió el caché por última vez (para forzar regeneración). */
+    fun recordCacheClear(context: Context) {
+        lastCacheClearAt = System.currentTimeMillis()
+        setCacheSize(context, 0f)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putLong(KEY_LAST_CACHE_CLEAR, lastCacheClearAt).apply()
     }
 
     fun filterOffensiveWords(text: String): String {

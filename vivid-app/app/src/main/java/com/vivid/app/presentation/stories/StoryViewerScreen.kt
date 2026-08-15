@@ -76,6 +76,7 @@ fun StoryViewerRoute(
     onClose: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val context = LocalContext.current
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val scope = rememberCoroutineScope()
 
@@ -94,6 +95,36 @@ fun StoryViewerRoute(
 
     LaunchedEffect(initialStoryId, currentUserId) {
         if (currentUserId.isNotBlank()) storyCleanupViewModel.cleanExpiredStories(currentUserId)
+
+        // ── Caché Room: mostrar stories cacheadas al instante (arranque rápido) ──
+        runCatching {
+            if (storyCleanupViewModel.isStoryCacheFresh()) {
+                val cached = storyCleanupViewModel.getCachedStories()
+                if (cached.isNotEmpty()) {
+                    val cachedMapped = storyCleanupViewModel.cachedStoriesToData(cached).map { story ->
+                        ViewerStory(
+                            id = story.id,
+                            userId = story.userId,
+                            username = story.username,
+                            avatarUrl = story.avatarUrl,
+                            avatarBase64 = story.avatarBase64,
+                            mediaUrl = story.mediaUrl,
+                            mediaBase64 = story.mediaBase64,
+                            videoUrl = story.videoUrl,
+                            thumbnailUrl = story.thumbnailUrl,
+                            caption = story.caption,
+                            type = story.type,
+                            expiresAt = story.expiresAt
+                        )
+                    }
+                    if (cachedMapped.isNotEmpty()) {
+                        stories = cachedMapped
+                        isLoading = false
+                    }
+                }
+            }
+        }
+
         val docs = runCatching { loadVisibleStoryDocuments(db, currentUserId) }
             .getOrDefault(emptyList())
         val visibleStories = buildVisibleStories(db, currentUserId, docs)
@@ -108,11 +139,10 @@ fun StoryViewerRoute(
                 avatarBase64 = story.avatarBase64,
                 mediaUrl = story.mediaUrl.ifBlank { raw?.getString("thumbnailUrl").orEmpty() },
                 mediaBase64 = story.mediaBase64,
-                videoUrl = raw?.getString("videoUrl").orEmpty(),
-                thumbnailUrl = raw?.getString("thumbnailUrl").orEmpty(),
+                videoUrl = story.videoUrl,
+                thumbnailUrl = story.thumbnailUrl,
                 caption = story.caption,
-                type = raw?.getString("type")
-                    ?: if (raw?.getString("videoUrl").isNullOrBlank()) "photo" else "video",
+                type = story.type,
                 expiresAt = story.expiresAt
             )
         }
@@ -121,6 +151,14 @@ fun StoryViewerRoute(
             .takeIf { it >= 0 }
             ?: currentIndex.coerceIn(0, (mappedStories.size - 1).coerceAtLeast(0))
         isLoading = false
+
+        // Persistir en caché Room
+        if (visibleStories.isNotEmpty()) {
+            scope.launch {
+                storyCleanupViewModel.cacheStories(visibleStories)
+                com.vivid.app.util.VividCacheManager.markStoriesCached(context)
+            }
+        }
     }
 
     val currentStory = stories.getOrNull(currentIndex)
@@ -537,7 +575,12 @@ private fun VideoStoryPlayer(story: ViewerStory, onCompleted: () -> Unit) {
     val context = LocalContext.current
     val player = remember(story.videoUrl) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(story.videoUrl))
+            // Caché local: el video de la story no se re-descarga en cada visita
+            if (com.vivid.app.util.VideoCacheManager.isCacheable(story.videoUrl)) {
+                setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(context, story.videoUrl))
+            } else {
+                setMediaItem(MediaItem.fromUri(story.videoUrl))
+            }
             prepare()
             playWhenReady = true
         }

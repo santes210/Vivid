@@ -13,5 +13,7 @@ data class Reel(
     val likes: Int,
     val commentsCount: Int = 0,
     val userAvatar: String = "",
-    val storageKey: String = ""
+    val storageKey: String = "",
+    val timestamp: Long = 0L,
+    val isPrivate: Boolean = false
 )

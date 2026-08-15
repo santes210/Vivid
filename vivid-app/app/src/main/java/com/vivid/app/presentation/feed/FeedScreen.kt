@@ -164,6 +164,19 @@ fun FeedScreen(
         isLoading = false
     }
 
+    // ── Caché Room (offline / arranque rápido): si hay posts cacheados de
+    // menos de 7 días, mostrarlos al instante mientras Firestore responde.
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotBlank()) {
+            runCatching {
+                val cached = feedViewModel.getCachedPosts()
+                if (cached.isNotEmpty() && feedViewModel.isPostCacheFresh()) {
+                    posts = feedViewModel.cachedPostsToData(cached)
+                }
+            }
+        }
+    }
+
     // Al bloquear, retira inmediatamente cualquier página ya cargada. Al
     // desbloquear, el DisposableEffect inferior vuelve a consultar el feed.
     LaunchedEffect(blockedUserIds) {
@@ -222,6 +235,16 @@ fun FeedScreen(
                     } catch (_: Exception) { null }
                 }
                 isLoading = false
+
+                // Persistir en caché Room (para arranque rápido y offline).
+                // Firestore ya manda solo lo visible; la caché se renueva cada
+                // vez que llega data fresca.
+                if (posts.isNotEmpty()) {
+                    scope.launch {
+                        feedViewModel.cachePosts(posts)
+                        com.vivid.app.util.VividCacheManager.markPostsCached(context)
+                    }
+                }
             }
 
             // Las queries reflejan exactamente lo que permiten las rules: todo
@@ -994,7 +1017,12 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
                 // Usar Uri.parse para manejar query params con Authorization correctamente
                 val parsedUri = android.net.Uri.parse(uri)
                 val p = ExoPlayer.Builder(context).build().apply {
-                    setMediaItem(MediaItem.fromUri(parsedUri))
+                    // Caché local para música remota (B2); assets locales van directo
+                    if (com.vivid.app.util.VideoCacheManager.isCacheable(uri)) {
+                        setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(context, uri))
+                    } else {
+                        setMediaItem(MediaItem.fromUri(parsedUri))
+                    }
                     prepare()
                     playWhenReady = true
                     volume = 1.0f
@@ -1118,7 +1146,15 @@ private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var isReady by remember { mutableStateOf(false) }
     val player = remember(videoUrl) {
-        ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(videoUrl)); prepare() }
+        ExoPlayer.Builder(ctx).build().apply {
+            // Caché local: los videos de B2 no se re-descargan en cada visita
+            if (com.vivid.app.util.VideoCacheManager.isCacheable(videoUrl)) {
+                setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(ctx, videoUrl))
+            } else {
+                setMediaItem(MediaItem.fromUri(videoUrl))
+            }
+            prepare()
+        }
     }
     DisposableEffect(player) { onDispose { player.release() } }
 
@@ -1929,7 +1965,16 @@ private fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss
                     when {
                         post.isVideo && post.videoUrl.isNotBlank() -> {
                             val ctx = androidx.compose.ui.platform.LocalContext.current
-                            val player = remember(post.videoUrl) { ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(post.videoUrl)); repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true } }
+                            val player = remember(post.videoUrl) {
+                                ExoPlayer.Builder(ctx).build().apply {
+                                    if (com.vivid.app.util.VideoCacheManager.isCacheable(post.videoUrl)) {
+                                        setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(ctx, post.videoUrl))
+                                    } else {
+                                        setMediaItem(MediaItem.fromUri(post.videoUrl))
+                                    }
+                                    repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true
+                                }
+                            }
                             DisposableEffect(player) { onDispose { player.release() } }
                             AndroidView(factory = { c -> PlayerView(c).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
                         }
