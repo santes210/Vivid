@@ -43,19 +43,6 @@ class CreateStoryViewModel @Inject constructor(
     private val _state = MutableStateFlow<CreateStoryUiState>(CreateStoryUiState.Idle)
     val state: StateFlow<CreateStoryUiState> = _state.asStateFlow()
 
-    /**
-     * Sube un story con video — VERSIÓN MEJORADA 2026-08-09
-     *
-     * Flujo IG-style:
-     *   0. Auto-trim a 15s si el video es más largo (como Instagram).
-     *   1. Comprimir a 540p/720p agresivo (ahorra datos y tiempo de subida).
-     *   2. Si el usuario eligió audio del dispositivo, reemplazar/muxear audio (AudioMixer).
-     *   3. Watermark Vivid siempre.
-     *   4. Thumbnail + upload a B2 + metadata 24h.
-     *
-     * @param audioUri opcional: Uri de audio del dispositivo (mp3, m4a, wav, etc.).
-     *                  Si se provee, el audio del video se reemplaza por este.
-     */
     fun publishVideoStory(
         context: Context,
         videoUri: Uri,
@@ -70,7 +57,6 @@ class CreateStoryViewModel @Inject constructor(
                 var currentUri = videoUri
                 val ts = System.currentTimeMillis()
 
-                // 0. Auto-trim a 15 segundos (estilo IG)
                 val durationMs = getVideoDurationMs(context, currentUri)
                 if (durationMs > 15_000) {
                     _state.value = CreateStoryUiState.Trimming(0)
@@ -93,18 +79,14 @@ class CreateStoryViewModel @Inject constructor(
                     _state.value = CreateStoryUiState.Trimming(100)
                 }
 
-                // 1. Comprimir (más agresivo que Reels: 540p)
                 _state.value = CreateStoryUiState.Compressing(0)
                 val compressed = VideoCompressor.compress(context, currentUri) { pct ->
                     _state.value = CreateStoryUiState.Compressing(pct)
                 }
                 currentUri = Uri.fromFile(File(compressed))
 
-                // 2. Si hay audio seleccionado, mezclar/reemplazar
-                // AHORRO B2: si el audio dura >15s, recortarlo a 15s antes de mezclar para no subir canción completa
                 if (audioUri != null) {
                     _state.value = CreateStoryUiState.MixingAudio(0)
-                    // Auto-trim del audio a 15s máx si es necesario - NUNCA subir canción completa
                     val audioToMix = try {
                         val audioDur = com.vivid.app.util.AudioTrimmer.getDurationMs(context, audioUri)
                         if (audioDur > 15_000) {
@@ -143,7 +125,6 @@ class CreateStoryViewModel @Inject constructor(
                     _state.value = CreateStoryUiState.MixingAudio(100)
                 }
 
-                // 3. Watermark
                 _state.value = CreateStoryUiState.Watermarking(0)
                 val wmFile = File(context.cacheDir, "story_wm_${ts}.mp4")
                 val watermarked = VideoWatermarker.applyWatermark(
@@ -153,31 +134,26 @@ class CreateStoryViewModel @Inject constructor(
                 )
                 currentUri = Uri.fromFile(File(watermarked))
 
-                // 4. Generar thumbnail del resultado final (con audio ya mezclado)
                 val thumbFile = File(context.cacheDir, "story_thumb_${ts}.jpg")
                 VideoThumbnailer.extract(context, currentUri, thumbFile)
 
-                // 5. Subir video a B2
                 _state.value = CreateStoryUiState.Uploading(0)
                 val videoKey = "stories/${user.uid}/$ts.mp4"
-                // currentUri apunta al archivo watermarked final, necesitamos path local absoluto
                 val localVideoPath = currentUri.path ?: watermarked
                 val finalVideoPath = if (File(localVideoPath).exists()) localVideoPath else watermarked
                 val videoUrl = storage.uploadFile(finalVideoPath, videoKey) { pct ->
-                    _state.value = CreateStoryUiState.Uploading(pct / 2) // 0..50%
+                    _state.value = CreateStoryUiState.Uploading(pct / 2)
                 }
 
-                // 6. Subir thumbnail a B2 (best-effort)
                 val thumbKey = "stories/${user.uid}/$ts.jpg"
                 val thumbUrl = if (thumbFile.exists() && thumbFile.length() > 0) {
                     try {
                         storage.uploadFile(thumbFile.absolutePath, thumbKey) { pct ->
-                            _state.value = CreateStoryUiState.Uploading(50 + pct / 2) // 50..100%
+                            _state.value = CreateStoryUiState.Uploading(50 + pct / 2)
                         }
                     } catch (_: Exception) { "" }
                 } else ""
 
-                // 7. Metadata en Firestore
                 _state.value = CreateStoryUiState.SavingMetadata
                 writeStoryMetadata(
                     uid = user.uid,
@@ -195,7 +171,6 @@ class CreateStoryViewModel @Inject constructor(
         }
     }
 
-    /** Obtiene duración del video en ms usando MediaMetadataRetriever, 0 si falla */
     private fun getVideoDurationMs(context: Context, uri: Uri): Long {
         return try {
             val retriever = android.media.MediaMetadataRetriever()
@@ -206,9 +181,6 @@ class CreateStoryViewModel @Inject constructor(
         } catch (_: Exception) { 0L }
     }
 
-    /**
-     * Sube un story con foto usando compresión y Base64 (robusto y confiable).
-     */
     fun publishPhotoStory(context: Context, photoUri: Uri, caption: String) {
         viewModelScope.launch {
             try {
@@ -216,7 +188,7 @@ class CreateStoryViewModel @Inject constructor(
                     ?: throw IllegalStateException("No hay sesión")
                 _state.value = CreateStoryUiState.Uploading(0)
 
-                val result = uploadStoryWithCompression(context, photoUri, caption)
+                val result = uploadStoryWithCompression(context, photoUri, caption, storage)
                 if (result.isSuccess) {
                     _state.value = CreateStoryUiState.Success
                 } else {
@@ -246,9 +218,6 @@ class CreateStoryViewModel @Inject constructor(
         val avatarBase64 = userDoc.getString("avatarBase64").orEmpty()
         val isPrivate = userDoc.getBoolean("isPrivate") ?: false
         val isVideo = videoUrl.isNotBlank()
-        // FIX: antes mediaUrl era thumbnail en ambos casos (bug copiado). Ahora:
-        // - video: mediaUrl = thumbnail (para tray), videoUrl = video real
-        // - foto: mediaUrl = "" (usa mediaBase64)
         val mediaUrl = if (isVideo) thumbnailUrl else ""
 
         val data = mapOf(
@@ -273,11 +242,6 @@ class CreateStoryViewModel @Inject constructor(
         firestore.collection("stories").add(data).await()
     }
 
-    /**
-     * Limpia stories expiradas (>24h) borrando tanto el documento de Firestore
-     * como los archivos de B2 (video + thumbnail) para no dejar huérfanos.
-     * FIX 2026-08-09: antes solo borraba Firestore, B2 se quedaba lleno.
-     */
     fun cleanExpiredStories(currentUserId: String) {
         if (currentUserId.isBlank()) return
         viewModelScope.launch {
