@@ -11,7 +11,6 @@ import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import java.io.File
-import java.util.concurrent.Executors
 
 /**
  * Caché de videos/audio para ExoPlayer (media3) con TTL de 7 días.
@@ -36,8 +35,6 @@ object VideoCacheManager {
 
     @Volatile
     private var ttlChecked = false
-
-    private val cacheExecutor = Executors.newSingleThreadExecutor()
 
     /**
      * Verifica (una vez por sesión) que el caché no tenga más de 7 días.
@@ -64,7 +61,9 @@ object VideoCacheManager {
             simpleCache?.let { return it }
             val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
             val evictor = LeastRecentlyUsedCacheEvictor(MAX_CACHE_BYTES)
-            return SimpleCache(cacheDir, evictor, cacheExecutor).also { simpleCache = it }
+            // Constructor de 2 args: media3 crea su propio executor interno.
+            // (El de 3 args espera un DatabaseProvider, no un Executor.)
+            return SimpleCache(cacheDir, evictor).also { simpleCache = it }
         }
     }
 
