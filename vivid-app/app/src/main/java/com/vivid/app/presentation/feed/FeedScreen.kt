@@ -1198,18 +1198,39 @@ private suspend fun mapPostDoc(
     )
 }
 
+/**
+ * Like idempotente: 1 like por persona, garantizado por transacción.
+ *
+ * ANTES: 2 escrituras ciegas (set del doc + increment del contador). Si la UI
+ * tenía el estado desactualizado (p. ej. la query de collectionGroup fallaba y
+ * el corazón salía apagado), cada tap volvía a sumar +1 → likes infinitos.
+ *
+ * AHORA: la transacción LEE el doc posts/{id}/likes/{uid} y solo toca el
+ * contador cuando el estado realmente cambia. Dar like dos veces no suma dos;
+ * quitar un like inexistente no resta. La fuente de verdad es el servidor,
+ * no el estado de la UI.
+ */
 private suspend fun togglePostLike(postId: String, currentUserId: String, shouldLike: Boolean) {
     if (currentUserId.isBlank()) error("No hay sesión activa")
     val firestore = FirebaseFirestore.getInstance()
     val likeRef = firestore.collection("posts").document(postId).collection("likes").document(currentUserId)
     val postRef = firestore.collection("posts").document(postId)
-    if (shouldLike) {
-        likeRef.set(mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis())).await()
-        postRef.update("likesCount", FieldValue.increment(1)).await()
-    } else {
-        likeRef.delete().await()
-        postRef.update("likesCount", FieldValue.increment(-1)).await()
-    }
+    firestore.runTransaction { txn ->
+        val alreadyLiked = txn.get(likeRef).exists()
+        when {
+            shouldLike && !alreadyLiked -> {
+                txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
+                txn.update(postRef, "likesCount", FieldValue.increment(1))
+            }
+            !shouldLike && alreadyLiked -> {
+                txn.delete(likeRef)
+                txn.update(postRef, "likesCount", FieldValue.increment(-1))
+            }
+            // shouldLike && alreadyLiked → ya estaba likeado: no-op (el candado)
+            // !shouldLike && !alreadyLiked → no había like: no-op
+        }
+        null
+    }.await()
 }
 
 private fun shareText(context: android.content.Context, title: String, text: String) {
@@ -1457,13 +1478,22 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
 
         scope.launch {
             runCatching {
-                if (newLiked) {
-                    likeRef.set(mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis())).await()
-                    commentRef.update("likesCount", FieldValue.increment(1)).await()
-                } else {
-                    likeRef.delete().await()
-                    commentRef.update("likesCount", FieldValue.increment(-1)).await()
-                }
+                // Transacción idempotente: igual que togglePostLike, verifica el
+                // doc de like antes de mover el contador (1 like por persona).
+                db.runTransaction { txn ->
+                    val alreadyLiked = txn.get(likeRef).exists()
+                    when {
+                        newLiked && !alreadyLiked -> {
+                            txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
+                            txn.update(commentRef, "likesCount", FieldValue.increment(1))
+                        }
+                        !newLiked && alreadyLiked -> {
+                            txn.delete(likeRef)
+                            txn.update(commentRef, "likesCount", FieldValue.increment(-1))
+                        }
+                    }
+                    null
+                }.await()
             }.onFailure {
                 likedCommentIds = if (newLiked) likedCommentIds - comment.id else likedCommentIds + comment.id
             }

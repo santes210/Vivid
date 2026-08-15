@@ -5,9 +5,13 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -23,8 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,16 +39,28 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
+import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.presentation.create.MusicSelectorBottomSheet
 import com.vivid.app.presentation.create.MusicTrack
+import com.vivid.app.theme.VividExpressiveShapes
 import kotlinx.coroutines.delay
 
 /**
- * Crear Story — Material You 3 + Música APK + Dispositivo + Auto-trim 15s
+ * Crear Story — Material You 3 Expressive.
  *
- * - Diseño Material You 3 con colores temáticos por defecto (secondaryContainer, primaryContainer)
- * - Música: del dispositivo (via picker) Y de la librería del APK (assets/music) usando MusicSelectorBottomSheet
- * - Auto-trim a 15s estilo IG
+ * FIX (2026-08-15): la Column no tenía scroll y la preview 9:16 a ancho
+ * completo empujaba música, texto y el botón Publicar FUERA de la pantalla
+ * (por eso "no funcionaba" Publicar: era inalcanzable). Ahora:
+ *   - El botón Publicar vive en un bottomBar fijo: SIEMPRE visible.
+ *   - El contenido hace scroll (verticalScroll).
+ *   - La preview tiene altura contenida (max 420dp) manteniendo 9:16.
+ *   - Formas del sistema expresivo (VividExpressiveShapes), no radios sueltos.
+ *
+ * Lo que ya hacía y se conserva:
+ *   - Música del APK (assets) y del dispositivo + recorte a 15s.
+ *   - Compresión de foto (ImageCompressor) y video (VideoCompressor).
+ *   - expiresAt = 24h; limpieza Firestore+B2 al expirar (cleanExpiredStories).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
@@ -63,7 +81,7 @@ fun CreateStoryScreen(
     var audioFileName by remember { mutableStateOf<String?>(null) }
     var showMusicSheet by remember { mutableStateOf(false) }
 
-    // Trim de audio a 15s (nuevo)
+    // Trim de audio a 15s
     var pendingTrimUri by remember { mutableStateOf<Uri?>(null) }
     var pendingTrimTrack by remember { mutableStateOf<MusicTrack?>(null) }
     var showTrimSheet by remember { mutableStateOf(false) }
@@ -72,6 +90,13 @@ fun CreateStoryScreen(
     val recordedFlow = backStackEntry?.savedStateHandle?.getStateFlow("recordedVideo", "")
     val recordedPathState = recordedFlow?.collectAsState(initial = "")
     val recordedPath = recordedPathState?.value ?: ""
+
+    // Limpieza oportunista: borra stories propias ya expiradas (Firestore + B2)
+    LaunchedEffect(Unit) {
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            viewModel.cleanExpiredStories(uid)
+        }
+    }
 
     LaunchedEffect(recordedPath) {
         if (recordedPath.isNotBlank()) {
@@ -144,13 +169,44 @@ fun CreateStoryScreen(
         }
     }
 
+    val isBusy = state !is CreateStoryUiState.Idle &&
+        state !is CreateStoryUiState.Error &&
+        state !is CreateStoryUiState.Success
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Crear Story", fontWeight = FontWeight.Bold) },
+                title = { Text("Crear story", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                },
+                actions = {
+                    // Chip informativo 24h — expressive, comunica la regla del producto
+                    Surface(
+                        shape = VividExpressiveShapes.ChipSelected,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier.padding(end = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "24 h",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -159,35 +215,148 @@ fun CreateStoryScreen(
                 )
             )
         },
+        // FIX CLAVE: el botón Publicar vive aquí, anclado abajo, SIEMPRE visible.
+        bottomBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 3.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .navigationBarsPadding()
+                ) {
+                    (state as? CreateStoryUiState.Error)?.let { err ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            shape = VividExpressiveShapes.SmallCard,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    err.message,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { viewModel.reset() }) {
+                                    Text("Reintentar", color = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            mediaUri?.let { uri ->
+                                when (mediaType) {
+                                    MediaKind.VIDEO -> {
+                                        // Resolver audio: si es asset del APK, copiar a cache y obtener Uri
+                                        val finalAudioUri = when {
+                                            selectedAudioUri != null -> selectedAudioUri
+                                            selectedTrack?.assetFile != null -> {
+                                                try {
+                                                    val assetPath = selectedTrack!!.assetFile!!
+                                                    val input = context.assets.open(assetPath)
+                                                    val tempFile = java.io.File(
+                                                        context.cacheDir,
+                                                        "story_asset_${System.currentTimeMillis()}_${assetPath.substringAfterLast("/")}"
+                                                    )
+                                                    tempFile.outputStream().use { out -> input.copyTo(out) }
+                                                    input.close()
+                                                    Uri.fromFile(tempFile)
+                                                } catch (e: Exception) { null }
+                                            }
+                                            selectedTrack?.uri != null -> selectedTrack?.uri
+                                            else -> null
+                                        }
+                                        viewModel.publishVideoStory(context, uri, caption, finalAudioUri)
+                                    }
+                                    MediaKind.PHOTO -> viewModel.publishPhotoStory(context, uri, caption)
+                                    null -> {}
+                                }
+                            }
+                        },
+                        enabled = mediaUri != null && !isBusy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = VividExpressiveShapes.PrimaryButton
+                    ) {
+                        if (isBusy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            val label = when (state) {
+                                is CreateStoryUiState.Trimming -> "Recortando 15s…"
+                                is CreateStoryUiState.Compressing -> "Comprimiendo…"
+                                is CreateStoryUiState.MixingAudio -> "Mezclando audio…"
+                                is CreateStoryUiState.Watermarking -> "Marca de agua…"
+                                is CreateStoryUiState.Uploading -> "Subiendo…"
+                                else -> "Publicando…"
+                            }
+                            Text(label)
+                        } else if (state is CreateStoryUiState.Success) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("¡Publicada!", fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(Icons.Default.Send, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Publicar story", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // FIX CLAVE: scroll — antes el contenido se cortaba sin remedio
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(8.dp))
 
+            // ── Preview 9:16 con altura CONTENIDA (antes devoraba la pantalla) ──
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = VividExpressiveShapes.HeroCard,
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Black)
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(9f / 16f)
-                        .clip(RoundedCornerShape(24.dp)),
+                        .heightIn(max = 420.dp)
+                        .aspectRatio(9f / 16f, matchHeightConstraintsFirst = true)
+                        .clip(VividExpressiveShapes.HeroCard),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
                         mediaUri == null -> {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(24.dp)
+                            ) {
                                 Surface(
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = VividExpressiveShapes.SelectedContainerActive,
                                     color = MaterialTheme.colorScheme.secondaryContainer,
                                     modifier = Modifier.size(80.dp)
                                 ) {
@@ -207,25 +376,26 @@ fun CreateStoryScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
-                                    "Las stories duran 24 horas",
+                                    "Dura 24 horas y se borra sola",
                                     color = Color.White.copy(alpha = 0.7f),
-                                    style = MaterialTheme.typography.bodySmall
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
                         mediaType == MediaKind.VIDEO -> VideoPreview(mediaUri!!)
-                        else -> androidx.compose.foundation.Image(
-                            painter = coil.compose.rememberAsyncImagePainter(mediaUri),
+                        else -> Image(
+                            painter = rememberAsyncImagePainter(mediaUri),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            contentScale = ContentScale.Crop
                         )
                     }
 
                     if (mediaType == MediaKind.VIDEO && mediaUri != null) {
                         Surface(
                             color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = VividExpressiveShapes.ChipSelected,
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(12.dp)
@@ -234,9 +404,14 @@ fun CreateStoryScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.ContentCut, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Icon(
+                                    Icons.Default.ContentCut,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
                                 Spacer(Modifier.width(6.dp))
-                                Text("Auto-recorte 15s IG", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                Text("Auto-recorte 15s", color = Color.White, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -257,6 +432,7 @@ fun CreateStoryScreen(
             Spacer(Modifier.height(16.dp))
 
             if (mediaUri == null) {
+                // ── Selección de medio: tiles expresivos ──
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -267,8 +443,10 @@ fun CreateStoryScreen(
                                 videoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
                             } catch (_: Exception) { fallbackVideoLauncher.launch("video/*") }
                         },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = VividExpressiveShapes.SecondaryButton,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -284,47 +462,61 @@ fun CreateStoryScreen(
                                 galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             } catch (_: Exception) { fallbackImageLauncher.launch("image/*") }
                         },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = VividExpressiveShapes.SecondaryButton
                     ) {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("Foto")
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { navController.navigate("camera_video") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = VividExpressiveShapes.PrimaryButton
                 ) {
                     Icon(Icons.Default.Videocam, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Grabar video ahora")
                 }
             } else {
-                // Música: Card Material You 3 que usa MusicSelectorBottomSheet (APK + dispositivo)
+                // ── Música (video): card expresiva con MusicSelectorBottomSheet ──
                 if (mediaType == MediaKind.VIDEO) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
+                        shape = VividExpressiveShapes.MediumCard,
                         colors = CardDefaults.cardColors(
                             containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainerLow
                         ),
-                        border = if (selectedTrack != null) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null
+                        border = if (selectedTrack != null) BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                        ) else null
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = VividExpressiveShapes.AvatarSquircle,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                    Icon(
+                                        Icons.Filled.MusicNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
                             }
                             Spacer(Modifier.width(12.dp))
@@ -332,23 +524,30 @@ fun CreateStoryScreen(
                                 Text(
                                     if (selectedTrack != null) selectedTrack!!.title else "Agregar música",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = if (selectedTrack != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                    color = if (selectedTrack != null) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
                                 )
                                 Text(
-                                    if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}" else "Del dispositivo o de la app",
+                                    if (selectedTrack != null) "${selectedTrack!!.artist} • ${selectedTrack!!.mood}"
+                                    else "Del dispositivo o de la app",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
                                 )
                             }
                             if (selectedTrack != null) {
-                                IconButton(onClick = { selectedTrack = null; selectedAudioUri = null; audioFileName = null }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Quitar")
+                                IconButton(onClick = {
+                                    selectedTrack = null
+                                    selectedAudioUri = null
+                                    audioFileName = null
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Quitar música")
                                 }
                             }
                             FilledTonalButton(
                                 onClick = { showMusicSheet = true },
-                                shape = RoundedCornerShape(12.dp)
+                                shape = VividExpressiveShapes.SegmentedControl
                             ) {
                                 Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                             }
@@ -358,11 +557,18 @@ fun CreateStoryScreen(
                 } else {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = VividExpressiveShapes.SmallCard,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "Para stories con música usa video. Con foto, la música viene pronto.",
@@ -384,8 +590,10 @@ fun CreateStoryScreen(
                             audioFileName = null
                             viewModel.reset()
                         },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = VividExpressiveShapes.SecondaryButton
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -394,8 +602,10 @@ fun CreateStoryScreen(
                     if (mediaType == MediaKind.VIDEO) {
                         Button(
                             onClick = { showMusicSheet = true },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = VividExpressiveShapes.SecondaryButton
                         ) {
                             Icon(Icons.Default.MusicNote, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
@@ -405,7 +615,7 @@ fun CreateStoryScreen(
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = caption,
@@ -414,88 +624,13 @@ fun CreateStoryScreen(
                 placeholder = { Text("Escribe algo…") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 2,
-                shape = RoundedCornerShape(20.dp),
+                shape = VividExpressiveShapes.FieldFocused,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
                 )
             )
 
-            Spacer(Modifier.height(20.dp))
-
-            val isBusy = state !is CreateStoryUiState.Idle && state !is CreateStoryUiState.Error && state !is CreateStoryUiState.Success
-
-            // Determinar la Uri real de audio para el ViewModel:
-            // - Si el track es de la APK (assetFile != null y uri == null), necesitamos copiar asset a cache y pasar Uri del archivo
-            // - Si el track tiene uri (dispositivo), usar esa uri
-            // Para simplificar, CreateStoryViewModel ya soporta audioUri del dispositivo; para assets, necesitamos resolver.
-            // Por ahora, si es asset, lo resolvemos copiando a cache aquí.
-            Button(
-                onClick = {
-                    mediaUri?.let { uri ->
-                        when (mediaType) {
-                            MediaKind.VIDEO -> {
-                                // Resolver audio: si es asset, copiar a cache y obtener Uri
-                                val finalAudioUri = when {
-                                    selectedAudioUri != null -> selectedAudioUri
-                                    selectedTrack?.assetFile != null -> {
-                                        try {
-                                            // Copiar asset a archivo temporal
-                                            val assetPath = selectedTrack!!.assetFile!!
-                                            val input = context.assets.open(assetPath)
-                                            val tempFile = java.io.File(context.cacheDir, "story_asset_${System.currentTimeMillis()}_${assetPath.substringAfterLast("/")}")
-                                            tempFile.outputStream().use { out -> input.copyTo(out) }
-                                            input.close()
-                                            Uri.fromFile(tempFile)
-                                        } catch (e: Exception) { null }
-                                    }
-                                    selectedTrack?.uri != null -> selectedTrack?.uri
-                                    else -> null
-                                }
-                                viewModel.publishVideoStory(context, uri, caption, finalAudioUri)
-                            }
-                            MediaKind.PHOTO -> viewModel.publishPhotoStory(context, uri, caption)
-                            null -> {}
-                        }
-                    }
-                },
-                enabled = mediaUri != null && !isBusy,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                if (isBusy) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                    Spacer(Modifier.width(10.dp))
-                    val label = when (state) {
-                        is CreateStoryUiState.Trimming -> "Recortando 15s…"
-                        is CreateStoryUiState.Compressing -> "Comprimiendo…"
-                        is CreateStoryUiState.MixingAudio -> "Mezclando audio…"
-                        is CreateStoryUiState.Watermarking -> "Marca de agua…"
-                        is CreateStoryUiState.Uploading -> "Subiendo…"
-                        else -> "Subiendo…"
-                    }
-                    Text(label)
-                } else {
-                    Icon(Icons.Default.Send, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Publicar Story", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            (state as? CreateStoryUiState.Error)?.let { err ->
-                Spacer(Modifier.height(12.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                        Spacer(Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Error", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
-                            Text(err.message, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall)
-                        }
-                        TextButton(onClick = { viewModel.reset() }) { Text("Reintentar", color = MaterialTheme.colorScheme.onErrorContainer) }
-                    }
-                }
-            }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -515,11 +650,14 @@ fun CreateStoryScreen(
                     showTrimSheet = true
                     showMusicSheet = false
                 } else if (track.assetFile != null) {
-                    // Asset del APK: copiar a cache y ofrecer recorte también (por si quiere recortar)
+                    // Asset del APK: copiar a cache y ofrecer recorte también
                     try {
                         val assetPath = track.assetFile
                         val input = context.assets.open(assetPath)
-                        val tempFile = java.io.File(context.cacheDir, "story_asset_${System.currentTimeMillis()}_${assetPath.substringAfterLast("/")}")
+                        val tempFile = java.io.File(
+                            context.cacheDir,
+                            "story_asset_${System.currentTimeMillis()}_${assetPath.substringAfterLast("/")}"
+                        )
                         tempFile.outputStream().use { out -> input.copyTo(out) }
                         input.close()
                         val assetUri = Uri.fromFile(tempFile)
@@ -561,11 +699,11 @@ fun CreateStoryScreen(
             },
             onTrimConfirmed = { trimmedUri, startMs, endMs ->
                 selectedTrack = pendingTrimTrack?.copy(
-                    title = "${pendingTrimTrack?.title} (${(endMs - startMs)/1000}s recorte)",
-                    durationLabel = "${(endMs - startMs)/1000}s"
+                    title = "${pendingTrimTrack?.title} (${(endMs - startMs) / 1000}s recorte)",
+                    durationLabel = "${(endMs - startMs) / 1000}s"
                 ) ?: pendingTrimTrack
                 selectedAudioUri = trimmedUri
-                audioFileName = "${pendingTrimTrack?.title} recortado ${startMs/1000}-${endMs/1000}s"
+                audioFileName = "${pendingTrimTrack?.title} recortado ${startMs / 1000}-${endMs / 1000}s"
                 showTrimSheet = false
                 pendingTrimUri = null
                 pendingTrimTrack = null
@@ -589,14 +727,27 @@ private fun VideoPreview(uri: Uri) {
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
-    AndroidView(factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
+    AndroidView(
+        factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player } },
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 @Composable
 private fun ProgressOverlay(label: String, success: Boolean = false) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f)),
+        contentAlignment = Alignment.Center
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (success) Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
+            if (success) Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF4CAF50),
+                modifier = Modifier.size(64.dp)
+            )
             else CircularProgressIndicator(modifier = Modifier.size(64.dp), strokeWidth = 4.dp, color = Color.White)
             Spacer(Modifier.height(12.dp))
             Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)
