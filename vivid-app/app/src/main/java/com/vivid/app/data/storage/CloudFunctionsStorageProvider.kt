@@ -15,24 +15,6 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import android.webkit.MimeTypeMap
 
-/**
- * Implementación SEGURA de [StorageProvider] que usa Firebase Cloud
- * Functions como proxy a Backblaze B2.
- *
- * Por qué esta es la implementación correcta:
- *   - Tu bucket es PRIVADO (no público).
- *   - ExoPlayer necesita URLs firmadas para reproducir desde bucket privado.
- *   - Las claves de B2 viven solo en Cloud Functions, NO en el APK.
- *
- * Flujo:
- *   1. App llama a /uploadReel → recibe uploadUrl + signedDownloadUrl
- *   2. App POST el archivo directo a B2
- *   3. App guarda el signedDownloadUrl en Firestore
- *   4. Antes de que expire (1h), ReelsScreen llama a /signDownload para renovar
- *
- * El cambio a "signed" es transparente: el StorageProvider devuelve
- * URLs que ya vienen firmadas, así que ExoPlayer las usa sin cambios.
- */
 class CloudFunctionsStorageProvider(
     private val functionBaseUrl: String,
     private val okHttp: OkHttpClient = defaultClient()
@@ -48,8 +30,6 @@ class CloudFunctionsStorageProvider(
         val file = File(localFilePath)
         require(file.exists()) { "No existe: $localFilePath" }
 
-        // 1. Pedir uploadUrl + signedDownloadUrl a la Cloud Function.
-        //    El contentType se infiere de la extensión para no romper imágenes/audios.
         onProgress(5)
         val contentType = guessContentType(remoteKey)
         val presign = callFunction("uploadReel", mapOf(
@@ -66,7 +46,6 @@ class CloudFunctionsStorageProvider(
         }
         onProgress(20)
 
-        // 2. POST directo del archivo a B2. La API nativa b2_upload_file NO acepta PUT.
         val putReq = Request.Builder()
             .url(uploadUrl)
             .header("Authorization", uploadAuthToken)
@@ -81,7 +60,6 @@ class CloudFunctionsStorageProvider(
         }
         onProgress(90)
 
-        // 3. Si es un reel, también subir thumbnail (si se generó)
         if (remoteKey.startsWith("reels/")) {
             val thumbKey = presign.optString("thumbnailKey")
             val thumbUploadUrl = presign.optString("thumbnailUploadUrl")
@@ -125,15 +103,9 @@ class CloudFunctionsStorageProvider(
         }
     }
 
-    /**
-     * Renueva una URL firmada. Útil cuando el signedDownloadUrl está por expirar.
-     */
     override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
         renewSignedUrl(remoteKey, ttlSec) ?: ""
 
-    /**
-     * Renueva una URL firmada. Útil cuando el signedDownloadUrl está por expirar.
-     */
     suspend fun renewSignedUrl(remoteKey: String, ttlSec: Int = 3600): String? =
         withContext(Dispatchers.IO) {
             try {
@@ -157,7 +129,7 @@ class CloudFunctionsStorageProvider(
         if (queryParams.isNotEmpty()) {
             urlBuilder.append("?")
             queryParams.forEach { (k, v) -> urlBuilder.append("$k=$v&") }
-            urlBuilder.setLength(urlBuilder.length - 1) // quitar último &
+            urlBuilder.setLength(urlBuilder.length - 1)
         }
 
         val req = Request.Builder()
@@ -189,11 +161,6 @@ class CloudFunctionsStorageProvider(
     private fun b2EncodeFileName(fileName: String): String =
         URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
 
-    /**
-     * Infiere el Content-Type a partir de la extensión del archivo.
-     * Antes esto estaba hardcodeado a "video/mp4", lo que rompía la subida
-     * de imágenes (image/jpeg) y notas de voz (audio/mp4) si se migraba a CF.
-     */
     private fun guessContentType(key: String): String {
         val ext = MimeTypeMap.getFileExtensionFromUrl(key)
         val fromMap = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
