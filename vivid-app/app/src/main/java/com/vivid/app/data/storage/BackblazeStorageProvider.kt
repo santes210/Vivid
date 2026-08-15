@@ -14,6 +14,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -65,7 +66,15 @@ class BackblazeStorageProvider(
         val downloadUrl: String
     )
 
+    @Volatile
     private var cachedSession: Session? = null
+
+    private class B2ApiException(
+        val statusCode: Int,
+        val apiCode: String,
+        operation: String,
+        detail: String
+    ) : IOException("$operation falló ($statusCode/$apiCode): $detail")
 
     override suspend fun uploadFile(
         localFilePath: String,
@@ -73,43 +82,91 @@ class BackblazeStorageProvider(
         onProgress: (Int) -> Unit
     ): String = withContext(Dispatchers.IO) {
         val file = File(localFilePath)
-        require(file.exists()) { "No existe el archivo: $localFilePath" }
+        require(file.exists() && file.isFile && file.length() > 0L) {
+            "No existe el archivo o está vacío: $localFilePath"
+        }
+        require(remoteKey.isNotBlank()) { "La ruta remota está vacía" }
         val sha1 = sha1Hex(file)
 
         Log.d(TAG, "Subiendo ${file.name} (${file.length() / 1024} KB) → $remoteKey")
-
         onProgress(5)
 
-        // 1. Autorizar cuenta
-        val session = cachedSession ?: authorize().also { cachedSession = it }
+        // Los tokens de cuenta B2 caducan como máximo a las 24 horas. Antes se
+        // conservaba el token vencido para siempre y todas las imágenes/audios
+        // fallaban hasta matar la app. Reautorizamos y repetimos una sola vez
+        // cuando cualquier paso devuelve un error de autenticación.
+        var session = getSession()
         onProgress(15)
 
-        // 2. Obtener URL de subida (debe ser fresca para CORS)
-        val (uploadUrl, uploadAuthToken) = getUploadUrl(session)
+        var uploadCredentials = try {
+            getUploadUrl(session)
+        } catch (error: B2ApiException) {
+            if (!error.isAuthenticationFailure()) throw error
+            session = getSession(forceRefresh = true)
+            getUploadUrl(session)
+        }
         onProgress(25)
 
-        // 3. Subir archivo
         val contentType = guessContentType(remoteKey)
-        uploadBinary(uploadUrl, uploadAuthToken, file, sha1, remoteKey, contentType)
+        try {
+            uploadBinary(
+                uploadCredentials.first,
+                uploadCredentials.second,
+                file,
+                sha1,
+                remoteKey,
+                contentType
+            )
+        } catch (error: B2ApiException) {
+            if (!error.isAuthenticationFailure()) throw error
+            session = getSession(forceRefresh = true)
+            uploadCredentials = getUploadUrl(session)
+            uploadBinary(
+                uploadCredentials.first,
+                uploadCredentials.second,
+                file,
+                sha1,
+                remoteKey,
+                contentType
+            )
+        }
         onProgress(95)
 
-        // 4. Generar URL FIRMADA (funciona en bucket privado, TTL 7 días = máx de B2)
-        val signedUrl = authorizeDownloadUrl(session, remoteKey, MAX_SIGNED_TTL_SEC)
+        val signedUrl = try {
+            authorizeDownloadUrl(session, remoteKey, MAX_SIGNED_TTL_SEC)
+        } catch (error: B2ApiException) {
+            if (!error.isAuthenticationFailure()) throw error
+            session = getSession(forceRefresh = true)
+            authorizeDownloadUrl(session, remoteKey, MAX_SIGNED_TTL_SEC)
+        }
+        check(signedUrl.isNotBlank()) { "B2 no devolvió una URL de descarga" }
+
         onProgress(100)
-        Log.d(TAG, "Subida completada: $signedUrl")
+        Log.d(TAG, "Subida completada: $remoteKey")
         signedUrl
     }
 
     override suspend fun deleteFile(remoteKey: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val session = cachedSession ?: authorize().also { cachedSession = it }
-            val encodedKey = b2EncodeFileName(remoteKey)
-            val fileId = findFileId(session, encodedKey)
-            if (fileId == null) {
+            var session = getSession()
+            val file = try {
+                findFile(session, remoteKey)
+            } catch (error: B2ApiException) {
+                if (!error.isAuthenticationFailure()) throw error
+                session = getSession(forceRefresh = true)
+                findFile(session, remoteKey)
+            }
+            if (file == null) {
                 Log.w(TAG, "deleteFile: no existe $remoteKey en el bucket")
                 return@withContext false
             }
-            deleteVersion(session, encodedKey, fileId)
+            try {
+                deleteVersion(session, file.first, file.second)
+            } catch (error: B2ApiException) {
+                if (!error.isAuthenticationFailure()) throw error
+                session = getSession(forceRefresh = true)
+                deleteVersion(session, file.first, file.second)
+            }
             Log.d(TAG, "deleteFile OK: $remoteKey")
             true
         } catch (e: Exception) {
@@ -119,30 +176,33 @@ class BackblazeStorageProvider(
     }
 
     /**
-     * Localiza el fileId de un archivo por su nombre (b2_list_file_names).
-     * B2 guarda el nombre URL-encoded (igual que lo subimos con X-Bz-File-Name),
-     * así que el prefijo debe ir en la misma forma codificada.
+     * Localiza el nombre real y el fileId. En el JSON de B2 el prefijo NO va
+     * URL-encoded; la codificación solo corresponde al header X-Bz-File-Name.
      */
-    private fun findFileId(session: Session, encodedKey: String): String? {
+    private fun findFile(session: Session, remoteKey: String): Pair<String, String>? {
         val payload = JSONObject().apply {
             put("bucketId", bucketId)
-            put("fileNamePrefix", encodedKey)
+            put("fileNamePrefix", remoteKey)
             put("maxFileCount", 1)
         }.toString().toRequestBody(JSON_MEDIA)
 
         val req = Request.Builder()
-            .url("${session.apiUrl}/b2api/v2/b2_list_file_names")
+            .url("${session.apiUrl}/b2api/$API_VERSION/b2_list_file_names")
             .header("Authorization", session.authToken)
             .post(payload)
             .build()
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("b2_list_file_names falló (${resp.code}): $body")
+            if (!resp.isSuccessful) throw apiException("b2_list_file_names", resp.code, body)
             val obj = json.parseToJsonElement(body).jsonObject
             val files = obj["files"]!!.jsonArray
             if (files.isEmpty()) return null
-            return files.first().jsonObject["fileId"]?.jsonPrimitive?.content
+            val first = files.first().jsonObject
+            val fileName = first["fileName"]?.jsonPrimitive?.content ?: return null
+            val fileId = first["fileId"]?.jsonPrimitive?.content ?: return null
+            if (fileName != remoteKey) return null
+            return fileName to fileId
         }
     }
 
@@ -154,14 +214,14 @@ class BackblazeStorageProvider(
         }.toString().toRequestBody(JSON_MEDIA)
 
         val req = Request.Builder()
-            .url("${session.apiUrl}/b2api/v2/b2_delete_file_version")
+            .url("${session.apiUrl}/b2api/$API_VERSION/b2_delete_file_version")
             .header("Authorization", session.authToken)
             .post(payload)
             .build()
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("b2_delete_file_version falló (${resp.code}): $body")
+            if (!resp.isSuccessful) throw apiException("b2_delete_file_version", resp.code, body)
         }
     }
 
@@ -169,25 +229,54 @@ class BackblazeStorageProvider(
     // Pasos del protocolo B2
     // ----------------------------------------------------------------------
 
+    private fun getSession(forceRefresh: Boolean = false): Session {
+        if (!forceRefresh) cachedSession?.let { return it }
+        return synchronized(this) {
+            if (!forceRefresh) cachedSession?.let { return@synchronized it }
+            authorize().also { cachedSession = it }
+        }
+    }
+
     private fun authorize(): Session {
         val basic = "Basic " + android.util.Base64.encodeToString(
             "$keyId:$applicationKey".toByteArray(),
             android.util.Base64.NO_WRAP
         )
         val req = Request.Builder()
-            .url("https://api.backblazeb2.com/b2api/v2/b2_authorize_account")
+            // v4 soporta las claves actuales multi-bucket y también las claves
+            // clásicas. v2 rechaza claves creadas por la consola moderna de B2.
+            .url("https://api.backblazeb2.com/b2api/$API_VERSION/b2_authorize_account")
             .header("Authorization", basic)
             .get()
             .build()
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("b2_authorize_account falló (${resp.code}): $body")
+            if (!resp.isSuccessful) throw apiException("b2_authorize_account", resp.code, body)
             val obj = json.parseToJsonElement(body).jsonObject
+            val storageApi = obj["apiInfo"]
+                ?.jsonObject
+                ?.get("storageApi")
+                ?.jsonObject
+
+            // v3/v4 agrupan apiUrl y downloadUrl dentro de apiInfo.storageApi.
+            // Los fallbacks conservan compatibilidad con respuestas v2.
+            val apiUrl = storageApi?.get("apiUrl")?.jsonPrimitive?.content
+                ?: obj["apiUrl"]?.jsonPrimitive?.content
+            val downloadUrl = storageApi?.get("downloadUrl")?.jsonPrimitive?.content
+                ?: obj["downloadUrl"]?.jsonPrimitive?.content
+            val authToken = obj["authorizationToken"]?.jsonPrimitive?.content
+
             return Session(
-                apiUrl = obj["apiUrl"]!!.jsonPrimitive.content,
-                authToken = obj["authorizationToken"]!!.jsonPrimitive.content,
-                downloadUrl = obj["downloadUrl"]!!.jsonPrimitive.content
+                apiUrl = requireNotNull(apiUrl?.takeIf { it.isNotBlank() }) {
+                    "Respuesta B2 sin apiUrl"
+                },
+                authToken = requireNotNull(authToken?.takeIf { it.isNotBlank() }) {
+                    "Respuesta B2 sin authorizationToken"
+                },
+                downloadUrl = requireNotNull(downloadUrl?.takeIf { it.isNotBlank() }) {
+                    "Respuesta B2 sin downloadUrl"
+                }
             )
         }
     }
@@ -198,17 +287,17 @@ class BackblazeStorageProvider(
         }.toString().toRequestBody(JSON_MEDIA)
 
         val req = Request.Builder()
-            .url("${session.apiUrl}/b2api/v2/b2_get_upload_url")
+            .url("${session.apiUrl}/b2api/$API_VERSION/b2_get_upload_url")
             .header("Authorization", session.authToken)
             .post(payload)
             .build()
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("b2_get_upload_url falló (${resp.code}): $body")
+            if (!resp.isSuccessful) throw apiException("b2_get_upload_url", resp.code, body)
             val obj = json.parseToJsonElement(body).jsonObject
             return obj["uploadUrl"]!!.jsonPrimitive.content to
-                    obj["authorizationToken"]!!.jsonPrimitive.content
+                obj["authorizationToken"]!!.jsonPrimitive.content
         }
     }
 
@@ -221,15 +310,13 @@ class BackblazeStorageProvider(
      */
     override suspend fun signDownloadUrl(remoteKey: String, ttlSec: Int): String =
         withContext(Dispatchers.IO) {
+            val session = getSession()
             try {
-                val session = cachedSession ?: authorize().also { cachedSession = it }
                 authorizeDownloadUrl(session, remoteKey, ttlSec)
-            } catch (e: Exception) {
-                // Si falla por token expirado, limpia cache y reintenta una vez
-                Log.w(TAG, "signDownloadUrl falló, re-autorizando: ${e.message}")
-                cachedSession = null
-                val freshSession = authorize().also { cachedSession = it }
-                authorizeDownloadUrl(freshSession, remoteKey, ttlSec)
+            } catch (error: B2ApiException) {
+                if (!error.isAuthenticationFailure()) throw error
+                Log.w(TAG, "Token B2 vencido al firmar; reautorizando")
+                authorizeDownloadUrl(getSession(forceRefresh = true), remoteKey, ttlSec)
             }
         }
 
@@ -250,7 +337,7 @@ class BackblazeStorageProvider(
         }.toString().toRequestBody(JSON_MEDIA)
 
         val req = Request.Builder()
-            .url("${session.apiUrl}/b2api/v2/b2_get_download_authorization")
+            .url("${session.apiUrl}/b2api/$API_VERSION/b2_get_download_authorization")
             .header("Authorization", session.authToken)
             .post(payload)
             .build()
@@ -258,8 +345,7 @@ class BackblazeStorageProvider(
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                // Si es 401/403, la sesión expiró — el llamador reintentará con authorize()
-                error("b2_get_download_authorization falló (${resp.code}): $body")
+                throw apiException("b2_get_download_authorization", resp.code, body)
             }
             val obj = json.parseToJsonElement(body).jsonObject
             val token = obj["authorizationToken"]!!.jsonPrimitive.content
@@ -301,9 +387,25 @@ class BackblazeStorageProvider(
 
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("b2_upload_file falló (${resp.code}): $body")
+            if (!resp.isSuccessful) throw apiException("b2_upload_file", resp.code, body)
             Log.d(TAG, "b2_upload_file OK (${file.length()} bytes)")
         }
+    }
+
+    private fun apiException(operation: String, statusCode: Int, body: String): B2ApiException {
+        val parsed = runCatching { JSONObject(body) }.getOrNull()
+        val code = parsed?.optString("code")?.takeIf { it.isNotBlank() } ?: "unknown"
+        val detail = parsed?.optString("message")?.takeIf { it.isNotBlank() }
+            ?: "Respuesta no disponible"
+        return B2ApiException(statusCode, code, operation, detail)
+    }
+
+    private fun B2ApiException.isAuthenticationFailure(): Boolean {
+        return statusCode == 401 || apiCode in setOf(
+            "bad_auth_token",
+            "expired_auth_token",
+            "unauthorized"
+        )
     }
 
     private fun guessContentType(key: String): String = when {
@@ -338,6 +440,7 @@ class BackblazeStorageProvider(
 
     companion object {
         private const val TAG = "BackblazeStorage"
+        private const val API_VERSION = "v4"
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         // TTL máximo de B2 para URLs firmadas = 7 días (604800s)

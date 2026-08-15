@@ -83,6 +83,8 @@ fun ChatScreen(
     val isOtherTyping: Boolean = viewModel.isOtherTyping.collectAsState().value
     val isRecording: Boolean = viewModel.isRecording.collectAsState().value
     val recDuration: Long = viewModel.recordingDurationMs.collectAsState().value
+    val userMessage: String? = viewModel.userMessage.collectAsState().value
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var messageText by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
@@ -104,12 +106,20 @@ fun ChatScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) viewModel.startVoiceRecording()
+        else viewModel.onMicrophonePermissionDenied()
     }
 
     val listState = rememberLazyListState()
 
     LaunchedEffect(chatId, receiverId, otherUserName) {
         viewModel.openChat(chatId, receiverId, otherUserName)
+    }
+
+    LaunchedEffect(userMessage) {
+        userMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.consumeUserMessage(message)
+        }
     }
 
     LaunchedEffect(
@@ -131,6 +141,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 navigationIcon = {
@@ -284,7 +295,13 @@ fun ChatScreen(
                                         UploadBubble(upload = item.upload, onRetry = { viewModel.retryImageUpload(chatId, receiverId, item.upload.localId) }, onDismiss = { viewModel.dismissImageUpload(item.upload.localId) })
                                     }
                                     is MessageListItem.Voice -> {
-                                        VoiceUploadBubble(upload = item.upload, onDismiss = { viewModel.dismissVoiceUpload(item.upload.localId) })
+                                        VoiceUploadBubble(
+                                            upload = item.upload,
+                                            onRetry = {
+                                                viewModel.retryVoiceUpload(chatId, receiverId, item.upload.localId)
+                                            },
+                                            onDismiss = { viewModel.dismissVoiceUpload(item.upload.localId) }
+                                        )
                                     }
                                     is MessageListItem.ChatMessage -> {
                                         val message = item.message
@@ -890,16 +907,47 @@ private fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: ()
 }
 
 @Composable
-private fun VoiceUploadBubble(upload: VoiceUpload, onDismiss: () -> Unit) {
+private fun VoiceUploadBubble(
+    upload: VoiceUpload,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Filled.Mic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
                 Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(text = if (upload.phase == ImageUpload.Phase.FAILED) "No se pudo enviar la voz" else "Subiendo nota de voz… ${upload.progress}%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (upload.phase == ImageUpload.Phase.UPLOADING) { Spacer(Modifier.height(6.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.width(160.dp).height(6.dp).clip(RoundedCornerShape(3.dp))) }
-                    if (upload.phase == ImageUpload.Phase.FAILED) { TextButton(onClick = onDismiss) { Text("Descartar") } }
+                Column(modifier = Modifier.widthIn(max = 240.dp)) {
+                    Text(
+                        text = if (upload.phase == ImageUpload.Phase.FAILED) {
+                            upload.error ?: "No se pudo enviar la voz"
+                        } else {
+                            "Subiendo nota de voz… ${upload.progress}%"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (upload.phase == ImageUpload.Phase.UPLOADING) {
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { upload.progress / 100f },
+                            modifier = Modifier.width(160.dp).height(6.dp).clip(RoundedCornerShape(3.dp))
+                        )
+                    }
+                    if (upload.phase == ImageUpload.Phase.FAILED) {
+                        Row(modifier = Modifier.align(Alignment.End)) {
+                            TextButton(onClick = onDismiss) { Text("Descartar") }
+                            TextButton(onClick = onRetry) { Text("Reintentar") }
+                        }
+                    }
                 }
             }
         }
