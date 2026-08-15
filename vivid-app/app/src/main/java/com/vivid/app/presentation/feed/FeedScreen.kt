@@ -45,6 +45,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.report.ReportHelper
 import com.vivid.app.presentation.stories.StoriesTray
 import com.vivid.app.theme.LocalVividAnimationsEnabled
@@ -114,6 +115,9 @@ fun FeedScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val feedViewModel: FeedViewModel = hiltViewModel()
+    val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
+    val blockedUsersState by blockedUsersViewModel.state.collectAsState()
+    val blockedUserIds = blockedUsersState.userIds
 
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -160,8 +164,14 @@ fun FeedScreen(
         isLoading = false
     }
 
-    DisposableEffect(currentUserId, likedPostIds, retryKey) {
-        if (currentUserId.isBlank()) {
+    // Al bloquear, retira inmediatamente cualquier página ya cargada. Al
+    // desbloquear, el DisposableEffect inferior vuelve a consultar el feed.
+    LaunchedEffect(blockedUserIds) {
+        posts = posts.filterNot { it.userId in blockedUserIds }
+    }
+
+    DisposableEffect(currentUserId, likedPostIds, blockedUserIds, blockedUsersState.isLoaded, retryKey) {
+        if (currentUserId.isBlank() || !blockedUsersState.isLoaded) {
             onDispose { }
         } else {
             isLoading = true
@@ -180,6 +190,8 @@ fun FeedScreen(
                     val mapped = snap.documents.mapNotNull { doc ->
                         try {
                             val data = doc.data ?: return@mapNotNull null
+                            val authorId = data["userId"] as? String ?: ""
+                            if (authorId in blockedUserIds) return@mapNotNull null
                             val isLiked = when {
                                 currentUserId.isBlank() -> false
                                 likedPostIds != null -> doc.id in likedPostIds!!
@@ -187,7 +199,7 @@ fun FeedScreen(
                             }
                             PostData(
                                 id = doc.id,
-                                userId = data["userId"] as? String ?: "",
+                                userId = authorId,
                                 username = data["username"] as? String ?: "usuario",
                                 userProfilePicture = data["userAvatar"] as? String
                                     ?: data["userProfilePicture"] as? String ?: "",
@@ -233,7 +245,13 @@ fun FeedScreen(
         if (shouldLoadMore.value && !isLoadingMore && hasMore && lastVisibleDoc != null) {
             isLoadingMore = true
             val result = runCatching {
-                loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, feedViewModel)
+                loadMorePostsFromFirebase(
+                    currentUserId,
+                    lastVisibleDoc,
+                    likedPostIds,
+                    blockedUserIds,
+                    feedViewModel
+                )
             }.getOrElse { FeedPageResult(emptyList(), null) }
             if (result.posts.isNotEmpty()) {
                 // Evita duplicados si el snapshot ya trae esos docs
@@ -1091,6 +1109,7 @@ private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
 private suspend fun loadInitialPostsFromFirebase(
     currentUserId: String,
     likedPostIds: Set<String>?,
+    blockedUserIds: Set<String>,
     feedViewModel: FeedViewModel
 ): FeedPageResult = withContext(Dispatchers.IO) {
     val firestore = FirebaseFirestore.getInstance()
@@ -1102,11 +1121,13 @@ private suspend fun loadInitialPostsFromFirebase(
 
     val lastDoc = snapshot.documents.lastOrNull()
     val posts = coroutineScope {
-        snapshot.documents.map { doc ->
-            async {
-                mapPostDoc(doc, currentUserId, likedPostIds, feedViewModel)
-            }
-        }.awaitAll().filterNotNull()
+        snapshot.documents
+            .filterNot { it.getString("userId") in blockedUserIds }
+            .map { doc ->
+                async {
+                    mapPostDoc(doc, currentUserId, likedPostIds, feedViewModel)
+                }
+            }.awaitAll().filterNotNull()
     }
     FeedPageResult(posts, lastDoc)
 }
@@ -1115,26 +1136,41 @@ private suspend fun loadMorePostsFromFirebase(
     currentUserId: String,
     lastDoc: com.google.firebase.firestore.DocumentSnapshot?,
     likedPostIds: Set<String>?,
+    blockedUserIds: Set<String>,
     feedViewModel: FeedViewModel
 ): FeedPageResult = withContext(Dispatchers.IO) {
     if (lastDoc == null) return@withContext FeedPageResult(emptyList(), null)
     val firestore = FirebaseFirestore.getInstance()
-    val snapshot = firestore.collection("posts")
-        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-        .startAfter(lastDoc)
-        .limit(20)
-        .get()
-        .await()
+    var cursor = lastDoc
+    val visiblePosts = mutableListOf<PostData>()
+    var sourcePageWasFull: Boolean
 
-    val newLastDoc = snapshot.documents.lastOrNull() ?: lastDoc
-    val posts = coroutineScope {
-        snapshot.documents.map { doc ->
-            async {
-                mapPostDoc(doc, currentUserId, likedPostIds, feedViewModel)
-            }
-        }.awaitAll().filterNotNull()
-    }
-    FeedPageResult(posts, newLastDoc)
+    // Si una página contiene muchos posts bloqueados, sigue avanzando hasta
+    // completar una página visible o agotar Firestore. De otro modo, un único
+    // bloqueo podía cortar la paginación prematuramente.
+    do {
+        val snapshot = firestore.collection("posts")
+            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .startAfter(cursor)
+            .limit(20)
+            .get()
+            .await()
+        sourcePageWasFull = snapshot.documents.size >= 20
+        cursor = snapshot.documents.lastOrNull() ?: break
+
+        val mapped = coroutineScope {
+            snapshot.documents
+                .filterNot { it.getString("userId") in blockedUserIds }
+                .map { doc ->
+                    async {
+                        mapPostDoc(doc, currentUserId, likedPostIds, feedViewModel)
+                    }
+                }.awaitAll().filterNotNull()
+        }
+        visiblePosts += mapped
+    } while (visiblePosts.size < 20 && sourcePageWasFull)
+
+    FeedPageResult(visiblePosts, cursor)
 }
 
 private suspend fun mapPostDoc(
