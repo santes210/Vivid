@@ -58,6 +58,20 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────
+    //  Likes (collection group)
+    // ─────────────────────────────────────────────────
+    // El feed y la hoja de comentarios cargan "qué ya likeé yo" con UNA
+    // query de collectionGroup("likes").whereEqualTo("userId", uid).
+    // Las queries de collectionGroup NO se autorizan con los match de ruta
+    // específica (posts/{id}/likes, reels/{id}/likes, ...): Firestore exige
+    // un match de grupo /{path=**}/likes. Sin esto, la query fallaba con
+    // PERMISSION_DENIED en silencio, el corazón salía siempre apagado y
+    // cada tap volvía a sumar +1 al contador (likes infinitos).
+    match /{path=**}/likes/{likeId} {
+      allow read: if signedIn();
+    }
+
+    // ─────────────────────────────────────────────────
     //  Usuarios
     // ─────────────────────────────────────────────────
     match /users/{userId} {
