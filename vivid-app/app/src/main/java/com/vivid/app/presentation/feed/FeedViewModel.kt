@@ -109,7 +109,21 @@ class FeedViewModel @Inject constructor(
                 .get()
                 .await()
                 .documents
-                .mapNotNull { it.id }
+                // Un like vive en posts/{postId}/likes/{uid}, así que el ID del
+                // documento es el UID, no el postId. El ID del post es el del
+                // abuelo (parent = colección "likes", parent.parent = el post).
+                //
+                // Antes se devolvía `it.id` (el UID), así que el feed comparaba
+                // postId contra un set de UIDs: nunca coincidía y el corazón
+                // aparecía siempre apagado aunque el like sí se guardara.
+                //
+                // El filtro por path evita mezclar los likes de comentarios
+                // (posts/{id}/comments/{id}/likes/{uid}), que caen en la misma
+                // consulta de collectionGroup.
+                .mapNotNull { doc ->
+                    val parent = doc.reference.parent.parent ?: return@mapNotNull null
+                    if (parent.parent?.id == "posts") parent.id else null
+                }
                 .toSet()
         } catch (e: Exception) {
             null
