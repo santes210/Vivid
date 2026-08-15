@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -44,11 +45,13 @@ fun StoriesTray(
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
+    // ViewModel para limpieza con borrado de B2 (fix 2026-08-09) - sin try-catch porque hiltViewModel es @Composable
     val storyViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
     DisposableEffect(currentUserId) {
         var registration: ListenerRegistration? = null
         if (currentUserId.isNotBlank()) {
+            // Limpieza con B2 (borra Firestore + archivos de B2)
             storyViewModel.cleanExpiredStories(currentUserId)
         }
         registration = db.collection("stories")
@@ -99,6 +102,9 @@ fun StoriesRow(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Acción principal "Tu historia". Si el usuario ya tiene una story
+        // activa, el click abre esa story (siempre se ve como no vista para él);
+        // si no tiene, abre la pantalla de crear.
         item(key = "create_story") {
             val ownGroup = groups.firstOrNull { it.userId == FirebaseAuth.getInstance().currentUser?.uid }
             CreateStoryItem(
@@ -109,6 +115,7 @@ fun StoriesRow(
                 }
             )
         }
+        // Solo mostramos los grupos de OTROS usuarios (la propia ya salió arriba)
         items(groups.filter { it.userId != FirebaseAuth.getInstance().currentUser?.uid }, key = { it.userId }) { group ->
             StoryGroupItem(group = group, onClick = { onStoryClick(group.stories.first()) })
         }
@@ -117,6 +124,13 @@ fun StoriesRow(
 
 @Composable
 private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
+    // Los colores del tema SE LEEN FUERA del Canvas (contexto @Composable).
+    val primary = MaterialTheme.colorScheme.primary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val surfaceHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
@@ -126,34 +140,33 @@ private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             if (hasActiveStory) {
+                // Si ya tiene story, mostramos anillo con gradiente primario→tertiario estilo IG
                 Canvas(modifier = Modifier.size(64.dp)) {
                     val strokeWidth = 3.dp.toPx()
                     drawCircle(
                         brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.tertiary
-                            )
+                            colors = listOf(primary, tertiary)
                         ),
                         radius = size.minDimension / 2 - strokeWidth,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
                 }
             } else {
+                // Anillo "crear" tenue
                 Canvas(modifier = Modifier.size(64.dp)) {
                     val strokeWidth = 2.dp.toPx()
                     drawCircle(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                        color = outlineColor,
                         radius = size.minDimension / 2 - strokeWidth,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
                 }
             }
+            // Insignia "+" en la esquina inferior derecha
             Box(modifier = Modifier.size(64.dp)) {
                 Surface(
                     shape = CircleShape,
-                    color = if (hasActiveStory) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = if (hasActiveStory) primary else surfaceHigh,
                     modifier = Modifier
                         .size(20.dp)
                         .align(Alignment.BottomEnd)
@@ -162,8 +175,7 @@ private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
                         Icon(
                             Icons.Default.Add,
                             contentDescription = "Crear historia",
-                            tint = if (hasActiveStory) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.primary,
+                            tint = if (hasActiveStory) onPrimary else primary,
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -216,6 +228,9 @@ private fun StorySegmentsRing(
     activeColor: Color = MaterialTheme.colorScheme.primary,
     trackColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
 ) {
+    // tertiary se lee fuera del Canvas (no se puede leer el tema dentro de DrawScope)
+    val tertiary = MaterialTheme.colorScheme.tertiary
+
     Canvas(modifier = modifier) {
         val strokeWidth = 4.dp.toPx()
         val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
@@ -224,6 +239,9 @@ private fun StorySegmentsRing(
         val gap = 6f
         val segmentSweep = ((360f - gap * segments) / segments).coerceAtLeast(12f)
 
+        // Dos pasadas: PRIMERO el track (fondo gris) en todos los segmentos,
+        // DESPUÉS el color activo. Antes se pintaban ambos en el mismo bucle,
+        // lo que provocaba que el activo tapara al track y todos lucieran llenos.
         for (index in 0 until segments) {
             val start = -90f + index * (segmentSweep + gap)
             drawArc(
@@ -231,21 +249,24 @@ private fun StorySegmentsRing(
                 startAngle = start,
                 sweepAngle = segmentSweep,
                 useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                topLeft = Offset(topLeftX, topLeftY),
                 size = arcSize,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
         }
+        // Para la bandeja de entrada (feed) todas las stories de otro usuario
+        // se muestran como "con contenido": anillo completo con gradiente
+        // (estilo IG). La vista detallada (viewer) tiene su propio progreso.
         for (index in 0 until segments) {
             val start = -90f + index * (segmentSweep + gap)
             drawArc(
                 brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(activeColor, MaterialTheme.colorScheme.tertiary)
+                    colors = listOf(activeColor, tertiary)
                 ),
                 startAngle = start,
                 sweepAngle = segmentSweep,
                 useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                topLeft = Offset(topLeftX, topLeftY),
                 size = arcSize,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
