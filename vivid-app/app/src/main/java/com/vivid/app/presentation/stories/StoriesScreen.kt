@@ -44,13 +44,11 @@ fun StoriesTray(
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // ViewModel para limpieza con borrado de B2 (fix 2026-08-09) - sin try-catch porque hiltViewModel es @Composable
     val storyViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
     DisposableEffect(currentUserId) {
         var registration: ListenerRegistration? = null
         if (currentUserId.isNotBlank()) {
-            // Limpieza con B2 (borra Firestore + archivos de B2)
             storyViewModel.cleanExpiredStories(currentUserId)
         }
         registration = db.collection("stories")
@@ -101,19 +99,24 @@ fun StoriesRow(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Acción principal "Tu historia"
         item(key = "create_story") {
-            CreateStoryItem(onClick = onCreateStory)
+            val ownGroup = groups.firstOrNull { it.userId == FirebaseAuth.getInstance().currentUser?.uid }
+            CreateStoryItem(
+                hasActiveStory = ownGroup != null,
+                onClick = {
+                    if (ownGroup != null) onStoryClick(ownGroup.stories.first())
+                    else onCreateStory()
+                }
+            )
         }
-        items(groups, key = { it.userId }) { group ->
+        items(groups.filter { it.userId != FirebaseAuth.getInstance().currentUser?.uid }, key = { it.userId }) { group ->
             StoryGroupItem(group = group, onClick = { onStoryClick(group.stories.first()) })
         }
     }
 }
 
 @Composable
-private fun CreateStoryItem(onClick: () -> Unit) {
-    val ringColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
@@ -122,27 +125,48 @@ private fun CreateStoryItem(onClick: () -> Unit) {
             modifier = Modifier.size(68.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Anillo "crear" diferenciado (dashed look de "Tu historia")
-            Canvas(modifier = Modifier.size(64.dp)) {
-                val strokeWidth = 2.dp.toPx()
-                drawCircle(
-                    color = ringColor,
-                    radius = size.minDimension / 2 - strokeWidth,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-            }
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.size(56.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Crear historia",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp)
+            if (hasActiveStory) {
+                Canvas(modifier = Modifier.size(64.dp)) {
+                    val strokeWidth = 3.dp.toPx()
+                    drawCircle(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
+                            )
+                        ),
+                        radius = size.minDimension / 2 - strokeWidth,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
+                }
+            } else {
+                Canvas(modifier = Modifier.size(64.dp)) {
+                    val strokeWidth = 2.dp.toPx()
+                    drawCircle(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                        radius = size.minDimension / 2 - strokeWidth,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+                }
+            }
+            Box(modifier = Modifier.size(64.dp)) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (hasActiveStory) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.BottomEnd)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Crear historia",
+                            tint = if (hasActiveStory) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
@@ -193,7 +217,7 @@ private fun StorySegmentsRing(
     trackColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
 ) {
     Canvas(modifier = modifier) {
-        val strokeWidth = 5.dp.toPx()
+        val strokeWidth = 4.dp.toPx()
         val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
         val topLeftX = strokeWidth / 2
         val topLeftY = strokeWidth / 2
@@ -211,8 +235,13 @@ private fun StorySegmentsRing(
                 size = arcSize,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
+        }
+        for (index in 0 until segments) {
+            val start = -90f + index * (segmentSweep + gap)
             drawArc(
-                color = activeColor,
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(activeColor, MaterialTheme.colorScheme.tertiary)
+                ),
                 startAngle = start,
                 sweepAngle = segmentSweep,
                 useCenter = false,
