@@ -26,7 +26,7 @@ import com.vivid.app.data.local.entity.UserEntity
         StoryEntity::class,
         ReelEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class VividDatabase : RoomDatabase() {
@@ -106,6 +106,20 @@ abstract class VividDatabase : RoomDatabase() {
                         cachedAt INTEGER NOT NULL DEFAULT 0
                     )
                 """.trimIndent())
+            }
+        }
+        /**
+         * v4 → v5: caché de mensajes/chats.
+         * - messages: columna reaction (emoji del mensaje)
+         * - chats: columnas lastMessageSenderId, lastMessageType, avatarBase64, cachedAt
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN reaction TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE chats ADD COLUMN lastMessageSenderId TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE chats ADD COLUMN lastMessageType TEXT NOT NULL DEFAULT 'text'")
+                db.execSQL("ALTER TABLE chats ADD COLUMN avatarBase64 TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE chats ADD COLUMN cachedAt INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

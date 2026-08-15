@@ -31,7 +31,8 @@ object DatabaseModule {
             .addMigrations(
                 VividDatabase.MIGRATION_1_2,
                 VividDatabase.MIGRATION_2_3,
-                VividDatabase.MIGRATION_3_4
+                VividDatabase.MIGRATION_3_4,
+                VividDatabase.MIGRATION_4_5
             )
             .fallbackToDestructiveMigrationOnDowngrade()
             .fallbackToDestructiveMigration()

@@ -12,6 +12,15 @@ interface ChatDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateChat(chat: ChatEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChats(chats: List<ChatEntity>)
+
     @Query("DELETE FROM chats WHERE chatId = :chatId")
     suspend fun deleteChat(chatId: String)
+
+    @Query("DELETE FROM chats")
+    suspend fun clearAllChats()
+
+    @Query("SELECT MAX(cachedAt) FROM chats")
+    suspend fun getLastCachedAt(): Long?
 }

@@ -129,6 +129,8 @@ object VividCacheManager {
         database.postDao().clearPosts()
         database.storyDao().clearStories()
         database.reelDao().clearReels()
+        database.messageDao().clearAllMessages()
+        database.chatDao().clearAllChats()
         database.userDao().clearAllUsers()
 
         // 2. Caché de disco de Coil

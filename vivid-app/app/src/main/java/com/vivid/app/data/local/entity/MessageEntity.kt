@@ -18,5 +18,6 @@ data class MessageEntity(
     val voiceUrl: String = "",
     val voiceKey: String = "",
     val voiceDurationMs: Long = 0L,
-    val replyToStoryId: String = ""
+    val replyToStoryId: String = "",
+    val reaction: String = ""
 )
