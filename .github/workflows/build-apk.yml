@@ -20,6 +20,9 @@ jobs:
       GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC"
       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
 
+      # URL pública de Cloudflare Worker.
+      VIVID_PUSH_WORKER_URL: ${{ vars.VIVID_PUSH_WORKER_URL }}
+
       # Gradle utiliza estas variables para firmar el APK.
       ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/vivid-release.jks
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.VIVID_KEYSTORE_PASSWORD }}
@@ -30,11 +33,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate Worker URL
+        shell: bash
+        run: |
+          if [ -z "$VIVID_PUSH_WORKER_URL" ]; then
+            echo "::error::Falta la Repository Variable VIVID_PUSH_WORKER_URL."
+            echo "::error::El APK release no debe publicarse sin la URL del Worker."
+            exit 1
+          fi
+
+          if [[ "$VIVID_PUSH_WORKER_URL" != https://* ]]; then
+            echo "::error::VIVID_PUSH_WORKER_URL debe comenzar con https://"
+            exit 1
+          fi
+
+          if [[ "$VIVID_PUSH_WORKER_URL" == */notify ]]; then
+            echo "::error::VIVID_PUSH_WORKER_URL no debe terminar en /notify."
+            echo "::error::Usa solamente la URL base del Worker."
+            exit 1
+          fi
+
+          echo "Cloudflare Worker configurado correctamente."
+
       - name: Setup JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -43,6 +68,7 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
+
           sdkmanager \
             "platforms;android-35" \
             "build-tools;35.0.0" \
@@ -60,7 +86,11 @@ jobs:
              [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || \
              [ -z "$ANDROID_KEY_ALIAS" ] || \
              [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "::error::Faltan los secrets VIVID_KEYSTORE_BASE64, VIVID_KEYSTORE_PASSWORD, VIVID_KEY_ALIAS o VIVID_KEY_PASSWORD."
+            echo "::error::Faltan los secrets de firma:"
+            echo "::error::VIVID_KEYSTORE_BASE64"
+            echo "::error::VIVID_KEYSTORE_PASSWORD"
+            echo "::error::VIVID_KEY_ALIAS"
+            echo "::error::VIVID_KEY_PASSWORD"
             exit 1
           fi
 
@@ -69,7 +99,7 @@ jobs:
             > "$ANDROID_KEYSTORE_PATH"
 
           if [ ! -s "$ANDROID_KEYSTORE_PATH" ]; then
-            echo "::error::El keystore decodificado esta vacio."
+            echo "::error::El keystore decodificado está vacío."
             exit 1
           fi
 
@@ -104,11 +134,13 @@ jobs:
             -quit)"
 
           if [ -z "$APK_PATH" ]; then
-            echo "::error::No se genero un APK release firmado."
+            echo "::error::No se generó un APK release firmado."
+
             find vivid-app/app/build/outputs \
               -maxdepth 5 \
               -type f \
               -print || true
+
             exit 1
           fi
 
@@ -132,11 +164,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # ── Esquemas de Room (exportSchema=true + room.schemaLocation) ─────
-      # Cada build genera los JSON de app/schemas/ (v1..v6) que documentan
-      # la evolución de la base de datos. Vale commitearlos a mano para
-      # validar migraciones con tests; mientras tanto quedan disponibles
-      # como artefacto en cada corrida de este workflow.
+      # Cada build genera los esquemas de Room.
       - name: Check Room schemas
         shell: bash
         run: |

@@ -2,10 +2,13 @@ name: Build Vivid APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -18,33 +21,59 @@ jobs:
       GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC"
       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
 
+      # URL pública del Cloudflare Worker. Se configura en:
+      # Settings → Secrets and variables → Actions → Variables.
+      VIVID_PUSH_WORKER_URL: ${{ vars.VIVID_PUSH_WORKER_URL }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate Worker URL
+        shell: bash
+        run: |
+          if [ -z "$VIVID_PUSH_WORKER_URL" ]; then
+            echo "::warning::No está configurada la variable VIVID_PUSH_WORKER_URL."
+            echo "::warning::El APK se compilará, pero no enviará solicitudes de notificaciones push."
+          elif [[ "$VIVID_PUSH_WORKER_URL" != https://* ]]; then
+            echo "::error::VIVID_PUSH_WORKER_URL debe comenzar con https://"
+            exit 1
+          else
+            echo "Cloudflare Worker configurado correctamente."
+          fi
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "platform-tools"
 
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build Debug APK
         working-directory: vivid-app
+        shell: bash
         run: |
           chmod +x gradlew
           ./gradlew --version
-          ./gradlew clean assembleDebug --no-daemon --max-workers=1 --stacktrace
+
+          ./gradlew clean assembleDebug \
+            --no-daemon \
+            --max-workers=1 \
+            --stacktrace
 
       - name: Upload APK
         if: success()
@@ -52,4 +81,5 @@ jobs:
         with:
           name: vivid-debug-apk
           path: vivid-app/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
           retention-days: 30
