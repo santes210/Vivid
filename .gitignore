@@ -9,6 +9,8 @@ app/src/main/java/com/vivid/app/di/BuildConfigSecrets.kt
 *.jks
 
 # Build outputs
+node_modules/
+.wrangler/
 /build
 /app/build
 **/build/

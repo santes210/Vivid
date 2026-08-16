@@ -15,18 +15,24 @@ import com.vivid.app.R
 class VividMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        val title = remoteMessage.notification?.title ?: "Vivid"
-        val body = remoteMessage.notification?.body ?: "Nueva notificación"
+        // El Worker envía mensajes data-only para que este servicio controle
+        // igual el comportamiento en primer y segundo plano.
+        val title = remoteMessage.data["title"] ?: remoteMessage.notification?.title ?: "Vivid"
+        val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: "Nueva notificación"
         val type = remoteMessage.data["type"] ?: "general"
         val chatId = remoteMessage.data["chatId"]
         val reelId = remoteMessage.data["reelId"]
+        val postId = remoteMessage.data["postId"]
         val fromUserId = remoteMessage.data["fromUserId"]
 
         when (type) {
             "message" -> showMessageNotification(title, body, chatId)
             "reel_like",
             "reel_comment" -> showReelNotification(title, body, reelId)
-            "new_follower" -> showFollowerNotification(title, body, fromUserId)
+            "post_like",
+            "post_comment" -> showPostNotification(title, body, postId)
+            "new_follower",
+            "follow_request" -> showFollowerNotification(title, body, fromUserId)
             else -> showGeneralNotification(title, body)
         }
     }
@@ -87,6 +93,30 @@ class VividMessagingService : FirebaseMessagingService() {
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(requestCode, notification)
+    }
+
+    private fun showPostNotification(title: String, body: String, postId: String?) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("openPost", true)
+            putExtra("postId", postId ?: "")
+        }
+        val requestCode = (postId ?: "post").hashCode()
+        val pendingIntent = PendingIntent.getActivity(
+            this, requestCode, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notification = NotificationCompat.Builder(this, "general_channel")
+            .setSmallIcon(R.drawable.ic_notification_bell)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(requestCode, notification)
     }
 
     private fun showFollowerNotification(title: String, body: String, fromUserId: String?) {

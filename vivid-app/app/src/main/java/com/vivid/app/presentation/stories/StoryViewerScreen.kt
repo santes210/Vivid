@@ -1,5 +1,7 @@
 package com.vivid.app.presentation.stories
 
+import com.vivid.app.util.PushSender
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -371,6 +373,7 @@ fun StoryViewerRoute(
                                                         "replyToStoryId" to currentStory.id
                                                     )
                                                 ).await()
+                                                PushSender.message(chatId, msgId)
                                                 replyText = ""
                                                 snackbarHostState.showSnackbar("Respuesta enviada ✓")
                                             } catch (e: Exception) {

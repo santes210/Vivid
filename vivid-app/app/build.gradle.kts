@@ -29,6 +29,13 @@ ksp {
 // Estas constantes se inyectan en BuildConfig para que
 // StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
 val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
+// URL pública del Worker, por ejemplo https://vivid-push.<cuenta>.workers.dev.
+// Se inyecta sin guardar credenciales en el APK:
+//   ./gradlew assembleRelease -PvividPushWorkerUrl=https://...
+val PUSH_WORKER_URL_VALUE = providers.gradleProperty("vividPushWorkerUrl")
+    .orElse(providers.environmentVariable("VIVID_PUSH_WORKER_URL"))
+    .orElse("")
+    .get()
 
 // En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
 // Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
@@ -73,6 +80,7 @@ android {
 
         // Inyecta CF_BASE_URL en BuildConfig (accesible desde Kotlin/Java)
         buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+        buildConfigField("String", "PUSH_WORKER_URL", "\"$PUSH_WORKER_URL_VALUE\"")
     }
 
     signingConfigs {
@@ -89,6 +97,7 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+        buildConfigField("String", "PUSH_WORKER_URL", "\"$PUSH_WORKER_URL_VALUE\"")
         }
         release {
             isMinifyEnabled = false
@@ -98,6 +107,7 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
+        buildConfigField("String", "PUSH_WORKER_URL", "\"$PUSH_WORKER_URL_VALUE\"")
         }
     }
 
@@ -143,6 +153,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -174,10 +185,6 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
 
     implementation(libs.androidx.datastore.preferences)
-
-    // Shizuku (opcional) — whitelist de batería para notificaciones persistentes
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
 
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
