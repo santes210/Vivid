@@ -41,11 +41,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
         run: |
           for name in \
             CLOUDFLARE_API_TOKEN \
             CLOUDFLARE_ACCOUNT_ID \
-            FIREBASE_SERVICE_ACCOUNT_JSON
+            FIREBASE_SERVICE_ACCOUNT_JSON \
+            B2_KEY_ID \
+            B2_APPLICATION_KEY
           do
             if [ -z "${!name}" ]; then
               echo "::error::Falta el Repository Secret $name"
@@ -56,18 +60,87 @@ jobs:
       # Primero crea o actualiza el Worker. El código no utiliza el secreto
       # hasta que recibe una petición, así que puede desplegarse antes.
       - name: Deploy Worker
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npm run deploy
+        run: |
+          # La salida de wrangler incluye la URL publica del Worker.
+          npm run deploy 2>&1 | tee deploy.log
 
-      # Guarda el JSON dentro de Cloudflare como secreto cifrado.
-      # Nunca se incorpora al repositorio ni al APK.
-      - name: Upload Firebase service account secret
+          URL="$(grep -oE 'https://[a-zA-Z0-9._-]+\.workers\.dev' deploy.log | head -1)"
+          echo "worker_url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Guarda las credenciales dentro de Cloudflare como secretos cifrados.
+      # Nunca se incorporan al repositorio ni al APK.
+      - name: Upload Worker secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
         run: |
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" \
             | npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+
+          # Claves de Backblaze B2. Solo existen en GitHub Secrets y dentro de
+          # Cloudflare: nunca llegan al APK ni al repositorio.
+          printf '%s' "$B2_KEY_ID" \
+            | npx wrangler secret put B2_KEY_ID
+
+          printf '%s' "$B2_APPLICATION_KEY" \
+            | npx wrangler secret put B2_APPLICATION_KEY
+
+      - name: Verificar /health y mostrar la URL
+        env:
+          WORKER_URL: ${{ steps.deploy.outputs.worker_url }}
+        run: |
+          if [ -z "$WORKER_URL" ]; then
+            echo "::warning::No se pudo detectar la URL automaticamente."
+            echo "Buscala en el paso 'Deploy Worker' de arriba."
+            exit 0
+          fi
+
+          echo "Comprobando $WORKER_URL/health ..."
+          # El Worker recien desplegado puede tardar unos segundos en propagarse.
+          for intento in 1 2 3 4 5; do
+            RESPUESTA="$(curl -fsS "$WORKER_URL/health" || true)"
+            if [ -n "$RESPUESTA" ]; then break; fi
+            echo "Reintentando en 5s (intento $intento/5)..."
+            sleep 5
+          done
+
+          echo "Respuesta: $RESPUESTA"
+
+          # Escribe un resumen visible en la pagina del workflow, comodo desde
+          # el movil sin tener que abrir los logs.
+          {
+            echo "## Worker desplegado"
+            echo ""
+            echo "**URL del Worker:**"
+            echo ""
+            echo '```'
+            echo "$WORKER_URL"
+            echo '```'
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if echo "$RESPUESTA" | grep -q '"storage":true'; then
+            {
+              echo "Almacenamiento B2: **configurado correctamente**"
+              echo ""
+              echo "Siguiente paso: copia la URL de arriba en la variable"
+              echo "\`VIVID_WORKER_URL\` (Settings -> Secrets and variables ->"
+              echo "Actions -> Variables) y lanza el workflow del APK."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "Almacenamiento B2: **NO configurado**"
+              echo ""
+              echo "Faltan los secrets \`B2_KEY_ID\` y/o \`B2_APPLICATION_KEY\`."
+              echo "Anadelos en Settings -> Secrets and variables -> Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::El Worker responde pero sin las claves de B2."
+            exit 1
+          fi
