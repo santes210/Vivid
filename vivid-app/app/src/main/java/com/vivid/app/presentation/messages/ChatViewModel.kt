@@ -234,18 +234,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        messagesListener?.remove()
-        reactionsListener?.remove()
-        readReceiptsListener?.remove()
-        typingListener?.remove()
-        messagesListener = null
-        reactionsListener = null
-        readReceiptsListener = null
-        typingListener = null
-    }
-
     private fun handleMessageEvent(
         chatId: String,
         event: ChatRepository.MessageChange
@@ -632,9 +620,11 @@ class ChatViewModel @Inject constructor(
 
     override fun onCleared() {
         messagesListener?.remove()
+        reactionsListener?.remove()
         readReceiptsListener?.remove()
         typingListener?.remove()
         messagesListener = null
+        reactionsListener = null
         readReceiptsListener = null
         typingListener = null
         voiceRecorder?.stopRecording(cancel = true)

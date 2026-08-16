@@ -84,10 +84,14 @@ object VideoCacheManager {
      * fallara el lookup y se re-descargara el video completo en cada sesión.
      * Ignorando el query, el mismo archivo cacheado se reutiliza mientras su
      * contenido no cambie (las claves B2 son inmutables por path).
+     *
+     * Se corta el string a mano en vez de usar Uri.Builder.clearQuery(),
+     * que solo existe desde API 30 (minSdk es 26).
      */
     private val strippedQueryCacheKeyFactory = androidx.media3.datasource.cache.CacheKeyFactory { uri ->
-        runCatching { uri.buildUpon().clearQuery().fragment(null).build().toString() }
-            .getOrDefault(uri.toString())
+        val raw = uri.toString()
+        val queryIndex = raw.indexOf('?')
+        if (queryIndex >= 0) raw.substring(0, queryIndex) else raw
     }
 
     /** Crea una MediaSource con caché para [uri]. */
