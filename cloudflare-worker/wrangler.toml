@@ -5,9 +5,30 @@ workers_dev = true
 
 # No escribas credenciales aquí. Antes de desplegar ejecuta:
 #   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+#   npx wrangler secret put B2_KEY_ID
+#   npx wrangler secret put B2_APPLICATION_KEY
+#
 # El JSON debe pertenecer a una service account con acceso de lectura a
 # Firestore y permiso cloudmessaging.messages.create.
+#
+# La application key de B2 necesita estas capacidades:
+#   listBuckets, listFiles, readFiles, writeFiles, deleteFiles
+#   y, para acotar las subidas por usuario, también writeKeys + listKeys.
 
 [vars]
 # Debe coincidir con project_id dentro de FIREBASE_SERVICE_ACCOUNT_JSON.
 FIREBASE_PROJECT_ID = "verigram-c58a6"
+
+# Identificadores del bucket de Backblaze B2. NO son secretos: sin la
+# application key no sirven de nada.
+B2_BUCKET_ID = "94c488b2a624f22d98eb0b10"
+B2_BUCKET_NAME = "VividGrem"
+
+# Dominio propio delante de B2 para aprovechar la Bandwidth Alliance
+# (egress gratis + caché de Cloudflare). Déjalo vacío para usar el
+# downloadUrl nativo de Backblaze.
+# MEDIA_BASE_URL = "https://media.tudominio.com"
+
+# Pon "false" solo para depurar: desactiva la creación de application keys
+# temporales acotadas al prefijo del usuario en cada subida.
+B2_RESTRICT_UPLOAD_KEYS = "true"

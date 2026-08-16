@@ -15,6 +15,12 @@ package com.vivid.app.data.storage
  *   2. Devolver la URL pública (o firmada) desde donde ExoPlayer
  *      pueda reproducir el video.
  */
+/**
+ * TTL máximo que admite Backblaze B2 para una URL firmada: 7 días.
+ * (b2_get_download_authorization rechaza valores mayores.)
+ */
+const val MAX_SIGNED_TTL_SEC: Int = 604_800
+
 interface StorageProvider {
 
     /**
