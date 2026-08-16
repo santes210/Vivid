@@ -1,3 +1,5 @@
+import { handleStorageRoute } from "./storage.js";
+
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const encoder = new TextEncoder();
@@ -10,8 +12,34 @@ export default {
     if (request.method === "OPTIONS") return corsResponse(null, 204);
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "vivid-push" });
+      return json({
+        ok: true,
+        service: "vivid-push",
+        storage: Boolean(env.B2_KEY_ID && env.B2_APPLICATION_KEY && env.B2_BUCKET_ID)
+      });
     }
+
+    // ---- Broker de almacenamiento Backblaze B2 ----
+    if (url.pathname.startsWith("/storage/")) {
+      try {
+        const projectId = env.FIREBASE_PROJECT_ID;
+        const serviceAccount = parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT_JSON, projectId);
+        const response = await handleStorageRoute(request, url.pathname, {
+          env,
+          json,
+          HttpError,
+          readJson,
+          authenticate: (req) => authenticateFirebaseUser(req, projectId),
+          getDocument: (path) => getDocument(serviceAccount, projectId, path)
+        });
+        return response ?? json({ error: "Not found" }, 404);
+      } catch (error) {
+        console.error("storage failed", error);
+        const status = error instanceof HttpError ? error.status : 500;
+        return json({ error: status >= 500 ? "Temporary storage error" : error.message }, status);
+      }
+    }
+
     if (request.method !== "POST" || url.pathname !== "/notify") {
       return json({ error: "Not found" }, 404);
     }

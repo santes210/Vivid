@@ -11,7 +11,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.data.local.entity.ChatEntity
-import com.vivid.app.data.storage.BackblazeStorageProvider
+import com.vivid.app.data.storage.MAX_SIGNED_TTL_SEC
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.domain.repository.ChatRepository
 import com.vivid.app.util.ImageCompressor
@@ -518,7 +518,7 @@ class ChatViewModel @Inject constructor(
             try {
                 val freshUrl = storage.signDownloadUrl(
                     imageKey,
-                    BackblazeStorageProvider.MAX_SIGNED_TTL_SEC
+                    MAX_SIGNED_TTL_SEC
                 )
                 check(freshUrl.isNotBlank()) { "No se pudo renovar la imagen" }
                 firestore.collection("chats")
@@ -539,7 +539,7 @@ class ChatViewModel @Inject constructor(
         if (voiceKey.isBlank()) return
         viewModelScope.launch {
             try {
-                val freshUrl = storage.signDownloadUrl(voiceKey, BackblazeStorageProvider.MAX_SIGNED_TTL_SEC)
+                val freshUrl = storage.signDownloadUrl(voiceKey, MAX_SIGNED_TTL_SEC)
                 check(freshUrl.isNotBlank()) { "No se pudo renovar el audio" }
                 firestore.collection("chats").document(chatId)
                     .collection("messages").document(messageId)

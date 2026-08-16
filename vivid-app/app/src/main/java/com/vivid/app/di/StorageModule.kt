@@ -1,7 +1,9 @@
 package com.vivid.app.di
 
-import com.vivid.app.data.storage.BackblazeStorageProvider
+import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.BuildConfig
 import com.vivid.app.data.storage.StorageProvider
+import com.vivid.app.data.storage.WorkerStorageProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -11,15 +13,13 @@ import javax.inject.Singleton
 /**
  * Proveedor de [StorageProvider].
  *
- * Usa BackblazeStorageProvider en MODO DIRECTO con credenciales embebidas.
- * Funciona con bucket PRIVADO (genera URLs firmadas, no necesita bucket
- * público ni tarjeta de crédito en Backblaze).
+ * MODO SEGURO: la app no contiene ninguna credencial de Backblaze B2.
+ * Las claves viven como secretos cifrados dentro del Cloudflare Worker, que
+ * autentica cada petición con el ID token de Firebase del usuario.
  *
- * Las claves vienen de BuildConfigSecrets.kt.
- *
- * Para migrar a MODO SEGURO: desplegar la Cloud Function de
- * /cloud-function y cambiar la implementación aquí a
- * CloudFunctionsStorageProvider(BuildConfig.CF_BASE_URL).
+ * La URL del Worker se inyecta en tiempo de compilación:
+ *   ./gradlew assembleRelease -PvividWorkerUrl=https://vivid-push.<cuenta>.workers.dev
+ * o mediante la variable de entorno VIVID_WORKER_URL en GitHub Actions.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -27,12 +27,14 @@ object StorageModule {
 
     @Provides
     @Singleton
-    fun provideStorageProvider(): StorageProvider {
-        return BackblazeStorageProvider(
-            keyId = BuildConfigSecrets.B2_KEY_ID,
-            applicationKey = BuildConfigSecrets.B2_APPLICATION_KEY,
-            bucketId = BuildConfigSecrets.B2_BUCKET_ID,
-            bucketName = BuildConfigSecrets.B2_BUCKET_NAME
+    fun provideStorageProvider(auth: FirebaseAuth): StorageProvider {
+        check(BuildConfig.WORKER_URL.isNotBlank()) {
+            "WORKER_URL no está configurada. Compila con -PvividWorkerUrl=https://... " +
+                "o define VIVID_WORKER_URL en el entorno."
+        }
+        return WorkerStorageProvider(
+            workerBaseUrl = BuildConfig.WORKER_URL,
+            auth = auth
         )
     }
 }

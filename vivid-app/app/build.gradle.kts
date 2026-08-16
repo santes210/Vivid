@@ -24,18 +24,25 @@ ksp {
 }
 
 // =========================================================
-//  CREDENCIALES EMBEBIDAS (modo inseguro, decidiste aceptarlo)
+//  CONFIGURACIÓN DEL BACKEND (sin credenciales en el APK)
 // =========================================================
-// Estas constantes se inyectan en BuildConfig para que
-// StorageModule.kt pueda leerlas con `BuildConfig.CF_BASE_URL`.
-val CF_BASE_URL_VALUE = "https://us-central1-TU_PROYECTO.cloudfunctions.net"
+// El Cloudflare Worker actúa como backend único: envía las notificaciones push
+// y hace de broker con Backblaze B2. Las claves de B2 viven como secretos
+// cifrados dentro del Worker, NUNCA dentro del APK.
+//
 // URL pública del Worker, por ejemplo https://vivid-push.<cuenta>.workers.dev.
-// Se inyecta sin guardar credenciales en el APK:
-//   ./gradlew assembleRelease -PvividPushWorkerUrl=https://...
-val PUSH_WORKER_URL_VALUE = providers.gradleProperty("vividPushWorkerUrl")
+//   ./gradlew assembleRelease -PvividWorkerUrl=https://...
+// o con la variable de entorno VIVID_WORKER_URL en GitHub Actions.
+//
+// Se acepta el nombre antiguo (vividPushWorkerUrl / VIVID_PUSH_WORKER_URL) para
+// no romper configuraciones existentes.
+val WORKER_URL_VALUE = providers.gradleProperty("vividWorkerUrl")
+    .orElse(providers.environmentVariable("VIVID_WORKER_URL"))
+    .orElse(providers.gradleProperty("vividPushWorkerUrl"))
     .orElse(providers.environmentVariable("VIVID_PUSH_WORKER_URL"))
     .orElse("")
     .get()
+    .trimEnd('/')
 
 // En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
 // Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
@@ -78,9 +85,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
-        // Inyecta CF_BASE_URL en BuildConfig (accesible desde Kotlin/Java)
-        buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
-        buildConfigField("String", "PUSH_WORKER_URL", "\"$PUSH_WORKER_URL_VALUE\"")
+        // Una sola fuente de verdad para la URL del Worker. PUSH_WORKER_URL se
+        // mantiene como alias para el código de notificaciones ya existente.
+        buildConfigField("String", "WORKER_URL", "\"$WORKER_URL_VALUE\"")
+        buildConfigField("String", "PUSH_WORKER_URL", "\"$WORKER_URL_VALUE\"")
     }
 
     signingConfigs {
@@ -95,9 +103,9 @@ android {
     }
 
     buildTypes {
+        // Los buildConfigField viven en defaultConfig: aplican a todos los
+        // buildTypes sin repetirse.
         debug {
-            buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
-        buildConfigField("String", "PUSH_WORKER_URL", "\"$PUSH_WORKER_URL_VALUE\"")
         }
         release {
             isMinifyEnabled = false
@@ -106,8 +114,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "CF_BASE_URL", "\"$CF_BASE_URL_VALUE\"")
-        buildConfigField("String", "PUSH_WORKER_URL", "\"$PUSH_WORKER_URL_VALUE\"")
         }
     }
 

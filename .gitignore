@@ -4,9 +4,18 @@
 
 # Credenciales locales
 local.properties
-app/src/main/java/com/vivid/app/di/BuildConfigSecrets.kt
 *.keystore
 *.jks
+
+# Cualquier archivo de secretos, en cualquier subcarpeta.
+# OJO: un patron con barras se ancla a la raiz del repo, por eso el
+# antiguo "app/src/main/.../BuildConfigSecrets.kt" NO coincidia con la
+# ruta real "vivid-app/app/src/main/...".
+**/BuildConfigSecrets.kt
+
+# NOTA: vivid-app/app/google-services.json SI esta versionado a proposito,
+# porque el build lo necesita y no contiene secretos de servidor. Si algun
+# dia quieres sacarlo del repo, inyectalo en CI desde un secret base64.
 
 # Build outputs
 node_modules/
@@ -35,3 +44,10 @@ secrets.properties
 # Generados automáticamente; el workflow build-apk.yml los sube como
 # artefacto para poder commitearlos manualmente si se quieren versionar.
 vivid-app/app/schemas/
+
+# Entorno local del sandbox / maquina de desarrollo (no pertenecen al repo)
+.sdkman/
+.bashrc
+.zshrc
+.wget-hsts
+uploads/
