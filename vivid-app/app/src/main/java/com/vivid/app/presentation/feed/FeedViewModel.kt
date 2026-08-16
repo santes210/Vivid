@@ -133,17 +133,28 @@ class FeedViewModel @Inject constructor(
     /**
      * Guarda los posts visibles en la caché Room (con timestamp de caché).
      * Se llama cuando el feed recibe datos de Firestore.
+     *
+     * Regla de preservación: si en Room ya vive una URL re-firmada (el feed
+     * la regeneró cuando la anterior venció) y el documento de Firestore
+     * todavía trae la URL vieja, se conserva la de Room. Así la URL firme
+     * sobrevive a los re-cacheos y el disco caché de Coil/ExoPlayer sigue
+     * pegando entre sesiones. Las URLs de post NO se editan después de
+     * publicar, así que no hay riesgo de conservar una URL desactualizada.
      */
     suspend fun cachePosts(posts: List<PostData>) {
         if (posts.isEmpty()) return
         val now = System.currentTimeMillis()
+        val existingById = runCatching { postDao.getPostsOnce() }
+            .getOrDefault(emptyList())
+            .associateBy { it.id }
         postDao.insertPosts(posts.map { post ->
+            val existing = existingById[post.id]
             PostEntity(
                 id = post.id,
                 userId = post.userId,
                 username = post.username,
                 userProfilePicture = post.userProfilePicture,
-                imageUrl = post.imageUrl,
+                imageUrl = preferResignedUrl(post.imageUrl, existing?.imageUrl),
                 imageBase64 = post.imageBase64,
                 caption = post.caption,
                 likesCount = post.likesCount,
@@ -151,17 +162,47 @@ class FeedViewModel @Inject constructor(
                 timestamp = post.timestamp,
                 isLiked = post.isLiked,
                 storageKey = post.storageKey,
-                videoUrl = post.videoUrl,
-                thumbnailUrl = post.thumbnailUrl,
+                videoUrl = preferResignedUrl(post.videoUrl, existing?.videoUrl),
+                thumbnailUrl = preferResignedUrl(post.thumbnailUrl, existing?.thumbnailUrl),
                 isVideo = post.isVideo,
                 musicTitle = post.musicTitle,
                 musicArtist = post.musicArtist,
                 musicAssetFile = post.musicAssetFile,
-                musicUrl = post.musicUrl,
+                musicUrl = preferResignedUrl(post.musicUrl, existing?.musicUrl),
                 musicStorageKey = post.musicStorageKey,
                 cachedAt = now
             )
         })
+    }
+
+    /**
+     * Si el caché tiene una URL distinta a la del documento (la re-firmada
+     * localmente) y no está vacía, se queda con la del caché.
+     */
+    private fun preferResignedUrl(incoming: String, cached: String?): String {
+        if (cached.isNullOrBlank()) return incoming
+        if (incoming.isBlank()) return cached
+        return if (cached != incoming) cached else incoming
+    }
+
+    /** Borra un post del caché Room (post borrado en el servidor). */
+    suspend fun deleteCachedPost(postId: String) {
+        postDao.deletePost(postId)
+    }
+
+    /** Persiste la URL de imagen re-firmada para la próxima sesión. */
+    suspend fun saveResignedImageUrl(postId: String, url: String) {
+        postDao.updateImageUrl(postId, url)
+    }
+
+    /** Persiste la URL de música re-firmada para la próxima sesión. */
+    suspend fun saveResignedMusicUrl(postId: String, url: String) {
+        postDao.updateMusicUrl(postId, url)
+    }
+
+    /** Persiste la URL de video re-firmada para la próxima sesión. */
+    suspend fun saveResignedVideoUrl(postId: String, url: String) {
+        postDao.updateVideoUrl(postId, url)
     }
 
     /**

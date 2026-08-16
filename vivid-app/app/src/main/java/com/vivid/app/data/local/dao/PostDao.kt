@@ -27,6 +27,21 @@ interface PostDao {
     @Query("UPDATE posts SET likesCount = :likesCount, isLiked = :isLiked WHERE id = :postId")
     suspend fun updateLike(postId: String, likesCount: Int, isLiked: Boolean)
 
+    @Query("DELETE FROM posts WHERE id = :postId")
+    suspend fun deletePost(postId: String)
+
+    /** Persiste la URL firmada re-generada (al expirar la anterior). */
+    @Query("UPDATE posts SET imageUrl = :url WHERE id = :postId")
+    suspend fun updateImageUrl(postId: String, url: String)
+
+    /** Persiste la URL firmada de música re-generada (al expirar la anterior). */
+    @Query("UPDATE posts SET musicUrl = :url WHERE id = :postId")
+    suspend fun updateMusicUrl(postId: String, url: String)
+
+    /** Persiste la URL firmada de video re-generada (al expirar la anterior). */
+    @Query("UPDATE posts SET videoUrl = :url WHERE id = :postId")
+    suspend fun updateVideoUrl(postId: String, url: String)
+
     @Query("DELETE FROM posts")
     suspend fun clearPosts()
 

@@ -15,6 +15,14 @@ hilt {
     enableAggregatingTask = false
 }
 
+// Room exporta el esquema JSON a app/schemas/ en cada build.
+// Commitear esos archivos permite validar migraciones con tests
+// (MigrationTestHelper) antes de que un usuario sufra un crash por
+// un cambio de esquema sin migración.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // =========================================================
 //  CREDENCIALES EMBEBIDAS (modo inseguro, decidiste aceptarlo)
 // =========================================================

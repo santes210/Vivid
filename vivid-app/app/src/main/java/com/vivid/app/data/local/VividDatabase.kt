@@ -26,8 +26,11 @@ import com.vivid.app.data.local.entity.UserEntity
         StoryEntity::class,
         ReelEntity::class
     ],
-    version = 5,
-    exportSchema = false
+    version = 6,
+    // Exportar el esquema JSON en cada build (app/schemas/) permite validar
+    // migraciones con MigrationTestHelper y detectar cambios accidentales
+    // de esquema ANTES de que un usuario con datos viejos sufra un crash.
+    exportSchema = true
 )
 abstract class VividDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
@@ -120,6 +123,17 @@ abstract class VividDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE chats ADD COLUMN lastMessageType TEXT NOT NULL DEFAULT 'text'")
                 db.execSQL("ALTER TABLE chats ADD COLUMN avatarBase64 TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE chats ADD COLUMN cachedAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        /**
+         * v5 → v6: expiración de la URL firmada de cada reel.
+         * Permite reutilizar la URL firmada cacheadada mientras siga vigente
+         * (evita re-firmar con B2 en cada apertura de la app) y conservar el
+         * acierto del caché de video de ExoPlayer entre sesiones.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reels ADD COLUMN videoUrlExpiresAt INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

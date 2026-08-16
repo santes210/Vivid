@@ -220,7 +220,8 @@ private fun EmptyReelsState(onCreateReel: () -> Unit) {
 @Composable
 private fun ReelPage(
     reel: Reel,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    viewModel: ReelsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
@@ -242,6 +243,30 @@ private fun ReelPage(
             repeatMode = ExoPlayer.REPEAT_MODE_ALL
             prepare()
         }
+    }
+
+    // URL firmada vencida → error de reproducción → pedir una firma nueva.
+    // refreshReelUrl cambia reel.videoUrl, el remember() recrea el player y
+    // la reproducción continúa con la URL fresca (cacheadada en Room).
+    var resignAttempted by remember(reel.id) { mutableStateOf(false) }
+    DisposableEffect(exoPlayer, reel.id, reel.storageKey) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (!resignAttempted && reel.storageKey.isNotBlank()) {
+                    resignAttempted = true
+                    scope.launch {
+                        val refreshed = viewModel.refreshReelUrl(reel.id)
+                        if (!refreshed) {
+                            // Si no se pudo re-firmar (sin red), permite
+                            // reintentarlo en el siguiente error.
+                            resignAttempted = false
+                        }
+                    }
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
     }
 
     var isLiked by remember(reel.id) { mutableStateOf(false) }

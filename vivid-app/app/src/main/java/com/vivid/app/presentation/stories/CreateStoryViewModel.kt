@@ -272,6 +272,18 @@ class CreateStoryViewModel @Inject constructor(
      */
     suspend fun cacheStories(stories: List<Story>) {
         if (stories.isEmpty()) return
+        // Dedupe: StoriesTray se recompone al navegar entre pestañas y
+        // re-fetchea las mismas stories. Antes cada recomposición reescribía
+        // toda la tabla; ahora se compara contra lo ya cacheado y solo se
+        // escribe si el conjunto cambió (story nueva, borrada o vencida).
+        val existing = storyDao.getStoriesOnce().associateBy { it.id }
+        val incomingById = stories.associateBy { it.id }
+        val unchanged = existing.keys == incomingById.keys && incomingById.all { (id, story) ->
+            val cached = existing[id] ?: return@all false
+            cached.expiresAt == story.expiresAt && cached.createdAt == story.createdAt
+        }
+        if (unchanged) return
+
         val now = System.currentTimeMillis()
         storyDao.insertStories(stories.map { story ->
             StoryEntity(
