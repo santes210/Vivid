@@ -20,8 +20,8 @@ jobs:
       GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC"
       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
 
-      # URL pública de Cloudflare Worker.
-      VIVID_PUSH_WORKER_URL: ${{ vars.VIVID_PUSH_WORKER_URL }}
+      # URL pública del Cloudflare Worker (push + broker de Backblaze B2).
+      VIVID_WORKER_URL: ${{ vars.VIVID_WORKER_URL || vars.VIVID_PUSH_WORKER_URL }}
 
       # Gradle utiliza estas variables para firmar el APK.
       ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/vivid-release.jks
@@ -36,20 +36,19 @@ jobs:
       - name: Validate Worker URL
         shell: bash
         run: |
-          if [ -z "$VIVID_PUSH_WORKER_URL" ]; then
-            echo "::error::Falta la Repository Variable VIVID_PUSH_WORKER_URL."
-            echo "::error::El APK release no debe publicarse sin la URL del Worker."
+          if [ -z "$VIVID_WORKER_URL" ]; then
+            echo "::error::Falta la Repository Variable VIVID_WORKER_URL."
+            echo "::error::Sin ella el APK no puede subir ni mostrar archivos."
             exit 1
           fi
 
-          if [[ "$VIVID_PUSH_WORKER_URL" != https://* ]]; then
-            echo "::error::VIVID_PUSH_WORKER_URL debe comenzar con https://"
+          if [[ "$VIVID_WORKER_URL" != https://* ]]; then
+            echo "::error::VIVID_WORKER_URL debe comenzar con https://"
             exit 1
           fi
 
-          if [[ "$VIVID_PUSH_WORKER_URL" == */notify ]]; then
-            echo "::error::VIVID_PUSH_WORKER_URL no debe terminar en /notify."
-            echo "::error::Usa solamente la URL base del Worker."
+          if [[ "$VIVID_WORKER_URL" == */notify || "$VIVID_WORKER_URL" == */storage/* ]]; then
+            echo "::error::VIVID_WORKER_URL debe ser solo la URL base del Worker."
             exit 1
           fi
 
