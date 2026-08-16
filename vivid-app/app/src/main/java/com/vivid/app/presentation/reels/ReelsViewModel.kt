@@ -51,6 +51,16 @@ class ReelsViewModel @Inject constructor(
     private var lastDoc: DocumentSnapshot? = null
     private val pageSize = 15
 
+    /** TTL de las URLs firmadas de B2 (7 días). */
+    private val signedUrlTtlMs = 7L * 24L * 60L * 60L * 1000L
+
+    /**
+     * Una URL firmada cacheada solo se reutiliza si le quedan más de 24 h.
+     * Si está por vencer, se pide una nueva para que el usuario no sufra el
+     * corte de reproducción a mitad de sesión.
+     */
+    private val reuseThresholdMs = 24L * 60L * 60L * 1000L
+
     init {
         loadInitial()
     }
@@ -110,14 +120,18 @@ class ReelsViewModel @Inject constructor(
                 _reels.value = fresh
                 _hasMore.value = publicSnapshot.size() >= pageSize
 
-                // Persistir en caché Room
+                // Persistir en caché Room + purgar reels que ya no existen
+                // en el servidor (borrados o cuya privacidad cambió).
                 if (fresh.isNotEmpty()) {
                     cacheReels(fresh)
+                    purgeDeletedReels(fresh.map { it.id }.toSet())
                 }
             } catch (e: Exception) {
-                // Si falla la red pero hay caché, la dejamos visible
+                // Si falla la red pero hay caché (aunque esté vencida),
+                // mostrarla: mejor contenido viejo que pantalla vacía.
                 if (_reels.value.isEmpty()) {
-                    _reels.value = emptyList()
+                    val stale = runCatching { reelDao.getReelsOnce() }.getOrDefault(emptyList())
+                    _reels.value = if (stale.isNotEmpty()) cachedEntitiesToData(stale) else emptyList()
                     _hasMore.value = false
                 }
             } finally {
@@ -143,6 +157,7 @@ class ReelsViewModel @Inject constructor(
                 username = reel.username,
                 userAvatar = reel.userAvatar,
                 videoUrl = reel.videoUrl,
+                videoUrlExpiresAt = reel.videoUrlExpiresAt,
                 thumbnailUrl = reel.thumbnailUrl,
                 caption = reel.caption,
                 likes = reel.likes,
@@ -167,9 +182,63 @@ class ReelsViewModel @Inject constructor(
                 likes = entity.likes,
                 commentsCount = entity.commentsCount,
                 userAvatar = entity.userAvatar,
-                storageKey = entity.storageKey
+                storageKey = entity.storageKey,
+                videoUrlExpiresAt = entity.videoUrlExpiresAt
             )
         }
+
+    /**
+     * Purga del caché Room los reels que ya no existen en Firestore (borrados
+     * por su autor o inaccesibles por cambio de privacidad). Evita "fantasmas"
+     * que se quedaban en la DB para siempre.
+     *
+     * Usa una query `whereIn(documentId)` (1 lectura por cada 30 ids) SOLO
+     * para los ids cacheados que no aparecieron en la carga fresca.
+     */
+    private suspend fun purgeDeletedReels(visibleIds: Set<String>) {
+        runCatching {
+            val cachedIds = reelDao.getReelsOnce().map { it.id }
+            val missing = cachedIds.filter { it !in visibleIds }
+            if (missing.isEmpty()) return@runCatching
+            val stillExists = missing.chunked(30).flatMap { chunk ->
+                runCatching {
+                    firestore.collection("reels")
+                        .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
+                        .get()
+                        .await()
+                        .documents
+                        .map { it.id }
+                }.getOrDefault(emptyList())
+            }.toSet()
+            val gone = missing.filter { it !in stillExists }
+            if (gone.isNotEmpty()) {
+                reelDao.deleteReels(gone)
+            }
+        }
+    }
+
+    /**
+     * Re-firma la URL del reel después de un error de reproducción
+     * (típicamente URL vencida) y actualiza estado + caché Room.
+     * El cambio de `videoUrl` hace que ReelsScreen recree el ExoPlayer.
+     */
+    suspend fun refreshReelUrl(reelId: String): Boolean {
+        val reel = _reels.value.find { it.id == reelId } ?: return false
+        if (reel.storageKey.isBlank()) return false
+        return try {
+            val freshUrl = storage.signDownloadUrl(reel.storageKey)
+            check(freshUrl.isNotBlank()) { "URL firmada vacía" }
+            val updated = reel.copy(
+                videoUrl = freshUrl,
+                videoUrlExpiresAt = System.currentTimeMillis() + signedUrlTtlMs
+            )
+            _reels.value = _reels.value.map { if (it.id == reelId) updated else it }
+            cacheReels(listOf(updated))
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     fun loadMore() {
         if (_isLoadingMore.value || !_hasMore.value) return
@@ -195,6 +264,9 @@ class ReelsViewModel @Inject constructor(
                     val newOnes = mapped.filter { it.id !in existingIds }
                     if (newOnes.isNotEmpty()) {
                         _reels.value = _reels.value + newOnes
+                        // Las páginas siguientes también entran al caché Room:
+                        // al reabrir la app el scroll conserva lo ya visto.
+                        cacheReels(newOnes)
                     }
                     _hasMore.value = snapshot.documents.size >= pageSize
                 }
@@ -212,23 +284,59 @@ class ReelsViewModel @Inject constructor(
     }
 
     private suspend fun mapDocs(docs: List<DocumentSnapshot>): List<Reel> = coroutineScope {
+        // URLs firmadas cacheadas en Room por storageKey. Si una sigue vigente
+        // (le quedan >24h), se reutiliza: NO se llama a B2 en cada carga y la
+        // URL estable permite que el caché de video de ExoPlayer pegue entre
+        // sesiones (el CacheKeyFactory ya ignora el query de autorización).
+        val cachedByKey = runCatching { reelDao.getReelsOnce() }
+            .getOrDefault(emptyList())
+            .filter { it.storageKey.isNotBlank() }
+            .associateBy { it.storageKey }
+
         docs.mapNotNull { doc ->
             async {
                 try {
                     val storageKey = doc.getString("storageKey").orEmpty()
                     val savedUrl = doc.getString("videoUrl").orEmpty()
-                    val thumbSaved = doc.getString("thumbnailUrl").orEmpty()
-                    val thumbKey = if (storageKey.isNotBlank() && thumbSaved.isBlank()) null else null
+                    val now = System.currentTimeMillis()
+                    val cached = cachedByKey[storageKey]
+                    // `usable` se reutiliza como guarda de null: su tipo
+                    // no-null permite acceder a las propiedades sin !!
+                    val usable = cached?.takeIf {
+                        it.videoUrl.isNotBlank() &&
+                            it.videoUrlExpiresAt > now + reuseThresholdMs
+                    }
 
-                    // Regenerar URL firmada fresca desde storageKey (expira 7d)
-                    // Si falla, usa la guardada
-                    val videoUrl = if (storageKey.isNotBlank()) {
-                        try { storage.signDownloadUrl(storageKey) } catch (_: Exception) { savedUrl }
-                    } else savedUrl
-
-                    // Thumbnail también puede estar en B2 con key separado, intentar re-firmar si es necesario
-                    // Si thumbnailUrl ya es http y no es de B2, lo dejamos
-                    val thumbnailUrl = doc.getString("thumbnailUrl").orEmpty()
+                    val videoUrl: String
+                    val expiresAt: Long
+                    when {
+                        storageKey.isBlank() -> {
+                            videoUrl = savedUrl
+                            expiresAt = cached?.videoUrlExpiresAt ?: 0L
+                        }
+                        usable != null -> {
+                            // Reutilizar la URL firmada cacheada (estable → hit de caché)
+                            videoUrl = usable.videoUrl
+                            expiresAt = usable.videoUrlExpiresAt
+                        }
+                        else -> {
+                            // URL guardada en Firestore vencida/por vencer o sin caché:
+                            // pedir una firma fresca a B2. Si falla (sin red),
+                            // degradar a la URL guardada.
+                            val freshSigned = try {
+                                storage.signDownloadUrl(storageKey)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            if (freshSigned != null) {
+                                videoUrl = freshSigned
+                                expiresAt = now + signedUrlTtlMs
+                            } else {
+                                videoUrl = savedUrl
+                                expiresAt = 0L
+                            }
+                        }
+                    }
 
                     if (videoUrl.isBlank()) return@async null
 
@@ -236,7 +344,7 @@ class ReelsViewModel @Inject constructor(
                         id = doc.id,
                         userId = doc.getString("userId").orEmpty(),
                         videoUrl = videoUrl,
-                        thumbnailUrl = thumbnailUrl,
+                        thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
                         username = doc.getString("username") ?: "usuario",
                         caption = doc.getString("caption").orEmpty(),
                         likes = doc.getLong("likes")?.toInt() ?: 0,
@@ -244,7 +352,8 @@ class ReelsViewModel @Inject constructor(
                         userAvatar = doc.getString("userAvatar").orEmpty(),
                         storageKey = storageKey,
                         timestamp = doc.getLong("timestamp") ?: 0L,
-                        isPrivate = doc.getBoolean("isPrivate") ?: false
+                        isPrivate = doc.getBoolean("isPrivate") ?: false,
+                        videoUrlExpiresAt = expiresAt
                     )
                 } catch (_: Exception) {
                     null

@@ -186,39 +186,59 @@ class ChatRepository @Inject constructor(
     }
 
     /**
-     * Backfill único: trae los últimos mensajes del chat (limitado) y los
-     * guarda en Room. Se usa cuando la caché está vacía o caducó (7 días).
+     * Backfill único: trae los mensajes del chat en PÁGINAS y los guarda en
+     * Room. Se usa cuando la caché está vacía o caducó (7 días).
+     *
+     * Antes solo traía los últimos 200 mensajes: tras caducar la caché, el
+     * historial anterior desaparecía de la vista. Ahora pagina hacia atrás
+     * (startAfter) hasta agotar el historial o [maxPages] páginas, lo que
+     * ocurra primero (tope de seguridad contra chats gigantes).
      */
-    suspend fun backfillMessages(chatId: String, limit: Int = 200) {
+    suspend fun backfillMessages(
+        chatId: String,
+        pageSize: Int = 300,
+        maxPages: Int = 10
+    ) {
         if (chatId.isBlank()) return
-        val snapshot = firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(limit.toLong())
-            .get()
-            .await()
-        val entities = snapshot.documents.mapNotNull { doc ->
-            val msg = documentToMessage(doc)
-            if (msg.id.isBlank()) return@mapNotNull null
-            MessageEntity(
-                id = msg.id,
-                chatId = chatId,
-                senderId = msg.senderId,
-                text = msg.text,
-                timestamp = msg.timestamp,
-                isRead = msg.isRead,
-                isDelivered = msg.isDelivered,
-                type = msg.type,
-                imageUrl = msg.imageUrl,
-                imageKey = msg.imageKey,
-                voiceUrl = msg.voiceUrl,
-                voiceKey = msg.voiceKey,
-                voiceDurationMs = msg.voiceDurationMs,
-                replyToStoryId = msg.replyToStoryId,
-                reaction = msg.reaction
-            )
+        val entities = mutableListOf<MessageEntity>()
+        var lastDoc: com.google.firebase.firestore.DocumentSnapshot? = null
+
+        for (page in 0 until maxPages) {
+            var query = firestore.collection("chats")
+                .document(chatId)
+                .collection("messages")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+            if (lastDoc != null) query = query.startAfter(lastDoc)
+
+            val snapshot = query.limit(pageSize.toLong()).get().await()
+            if (snapshot.documents.isEmpty()) break
+
+            snapshot.documents.forEach { doc ->
+                val msg = documentToMessage(doc)
+                if (msg.id.isBlank()) return@forEach
+                entities += MessageEntity(
+                    id = msg.id,
+                    chatId = chatId,
+                    senderId = msg.senderId,
+                    text = msg.text,
+                    timestamp = msg.timestamp,
+                    isRead = msg.isRead,
+                    isDelivered = msg.isDelivered,
+                    type = msg.type,
+                    imageUrl = msg.imageUrl,
+                    imageKey = msg.imageKey,
+                    voiceUrl = msg.voiceUrl,
+                    voiceKey = msg.voiceKey,
+                    voiceDurationMs = msg.voiceDurationMs,
+                    replyToStoryId = msg.replyToStoryId,
+                    reaction = msg.reaction
+                )
+            }
+
+            if (snapshot.documents.size < pageSize) break
+            lastDoc = snapshot.documents.last()
         }
+
         if (entities.isNotEmpty()) {
             messageDao.insertMessages(entities)
         }
@@ -688,6 +708,62 @@ class ChatRepository @Inject constructor(
     }
 
     /**
+     * Listener de REACCIONES (complementa al sync incremental).
+     *
+     * En modo incremental el listener principal solo ve mensajes con
+     * `timestamp > últimoCacheado`; una reacción sobre un mensaje VIEJO no
+     * cae en esa query y antes se perdía para siempre. Esta query escucha
+     * todos los mensajes con reacción (ADDED/MODIFIED) y, cuando el doc sale
+     * de la query (REMOVED), distingue entre "reacción quitada" y "mensaje
+     * borrado" con una lectura puntual del doc.
+     */
+    fun listenToReactions(
+        chatId: String,
+        onMessageEvent: (MessageChange) -> Unit,
+        onError: (Exception) -> Unit = {}
+    ): ListenerRegistration {
+        return firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .whereNotEqualTo("reaction", "")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+                snapshot?.documentChanges?.forEach { change ->
+                    val doc = change.document
+                    when (change.type) {
+                        DocumentChange.Type.ADDED,
+                        DocumentChange.Type.MODIFIED -> {
+                            val msg = documentToMessage(doc)
+                            persistMessage(chatId, msg)
+                            onMessageEvent(MessageChange.Upsert(msg))
+                        }
+
+                        DocumentChange.Type.REMOVED -> {
+                            // El doc dejó de cumplir la query: o le quitaron
+                            // la reacción o el mensaje fue borrado.
+                            repositoryScope.launch {
+                                val stillExists = runCatching {
+                                    doc.reference.get().await().exists()
+                                }.getOrDefault(true)
+                                if (stillExists) {
+                                    val msg = documentToMessage(doc).copy(reaction = "")
+                                    persistMessage(chatId, msg)
+                                    onMessageEvent(MessageChange.Upsert(msg))
+                                } else {
+                                    messageDao.deleteMessage(doc.id)
+                                    onMessageEvent(MessageChange.Removed(doc.id))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    /**
      * Listeners de read receipts (SYNC LIGERO).
      *
      * Escucha los mensajes NO LEÍDOS del chat (query de un solo campo, sin
@@ -763,7 +839,10 @@ class ChatRepository @Inject constructor(
                     unreadCount = unreadCount,
                     lastMessageSenderId = lastSenderId,
                     lastMessageType = lastMessageType,
-                    avatarBase64 = avatarBase64
+                    avatarBase64 = avatarBase64,
+                    // Antes quedaba en 0 y isChatCacheFresh() siempre daba
+                    // "vencido". Ahora la vigencia de 7 días funciona.
+                    cachedAt = System.currentTimeMillis()
                 )
             )
         }

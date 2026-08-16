@@ -32,8 +32,13 @@ object DatabaseModule {
                 VividDatabase.MIGRATION_1_2,
                 VividDatabase.MIGRATION_2_3,
                 VividDatabase.MIGRATION_3_4,
-                VividDatabase.MIGRATION_4_5
+                VividDatabase.MIGRATION_4_5,
+                VividDatabase.MIGRATION_5_6
             )
+            // OJO: el fallback destructivo borra TODO el caché local ante una
+            // migración desconocida. Es aceptable para contenido cacheable,
+            // pero perder el historial de chats ofende; con exportSchema=true
+            // y tests de migración se puede eliminar este fallback.
             .fallbackToDestructiveMigrationOnDowngrade()
             .fallbackToDestructiveMigration()
             .build()

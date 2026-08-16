@@ -91,6 +91,7 @@ class ChatViewModel @Inject constructor(
 
     private var loadedChatId: String? = null
     private var messagesListener: ListenerRegistration? = null
+    private var reactionsListener: ListenerRegistration? = null
     private var typingListener: ListenerRegistration? = null
     private var typingJob: Job? = null
     private var recordingTickerJob: Job? = null
@@ -161,6 +162,8 @@ class ChatViewModel @Inject constructor(
 
         messagesListener?.remove()
         readReceiptsListener?.remove()
+        reactionsListener?.remove()
+        reactionsListener = null
 
         // ── Estrategia de caché (para que el servidor no lea todo el historial) ──
         // Caché vacía → sync completo (backfill del historial).
@@ -213,8 +216,34 @@ class ChatViewModel @Inject constructor(
                         Log.w(TAG, "Listener de read receipts rechazado: ${error.message}")
                     }
                 )
+
+                // En modo incremental el listener principal no ve reacciones
+                // sobre mensajes viejos; este listener las cubre (y también
+                // los borrados de mensajes antiguos).
+                reactionsListener?.remove()
+                reactionsListener = chatRepository.listenToReactions(
+                    chatId = chatId,
+                    onMessageEvent = { event -> handleMessageEvent(chatId, event) },
+                    onError = { error ->
+                        // Se degrada silenciosamente: solo se pierde el refresh
+                        // de reacciones, los mensajes siguen funcionando.
+                        Log.w(TAG, "Listener de reacciones rechazado: ${error.message}")
+                    }
+                )
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        messagesListener?.remove()
+        reactionsListener?.remove()
+        readReceiptsListener?.remove()
+        typingListener?.remove()
+        messagesListener = null
+        reactionsListener = null
+        readReceiptsListener = null
+        typingListener = null
     }
 
     private fun handleMessageEvent(

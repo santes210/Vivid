@@ -28,3 +28,8 @@ app/src/main/java/com/vivid/app/di/BuildConfigSecrets.kt
 secrets.properties
 *.env
 .env.local
+
+# Esquemas JSON exportados por Room en cada build.
+# Generados automáticamente; el workflow build-apk.yml los sube como
+# artefacto para poder commitearlos manualmente si se quieren versionar.
+vivid-app/app/schemas/

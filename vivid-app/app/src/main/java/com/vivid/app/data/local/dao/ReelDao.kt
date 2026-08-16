@@ -24,6 +24,12 @@ interface ReelDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertReel(reel: ReelEntity)
 
+    @Query("DELETE FROM reels WHERE id = :reelId")
+    suspend fun deleteReel(reelId: String)
+
+    @Query("DELETE FROM reels WHERE id IN (:reelIds)")
+    suspend fun deleteReels(reelIds: List<String>)
+
     @Query("DELETE FROM reels")
     suspend fun clearReels()
 

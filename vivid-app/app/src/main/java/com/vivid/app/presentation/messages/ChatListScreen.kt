@@ -47,6 +47,7 @@ data class ChatPreview(
     val otherUserName: String,
     val lastMessage: String,
     val lastMessageSenderId: String = "",
+    val lastMessageType: String = "text",
     val timestamp: Long,
     val avatarUrl: String = "",
     val avatarBase64: String = "",
@@ -93,6 +94,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                     otherUserName = entity.otherUserName,
                     lastMessage = entity.lastMessage,
                     lastMessageSenderId = entity.lastMessageSenderId,
+                    lastMessageType = entity.lastMessageType,
                     timestamp = entity.lastMessageTimestamp,
                     avatarUrl = entity.otherUserAvatar,
                     avatarBase64 = entity.avatarBase64,
@@ -155,6 +157,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                                 else -> ""
                             },
                             lastMessageSenderId = lastSenderId,
+                            lastMessageType = lastMessageType ?: "text",
                             timestamp = doc.getLong("lastTimestamp") ?: 0L,
                             avatarUrl = participantAvatars?.get(otherUserId) as? String ?: "",
                             avatarBase64 = participantAvatarBase64s?.get(otherUserId) as? String ?: "",
@@ -177,8 +180,11 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                                     lastMessageTimestamp = p.timestamp,
                                     unreadCount = p.unreadCount,
                                     lastMessageSenderId = p.lastMessageSenderId,
-                                    lastMessageType = "text",
-                                    avatarBase64 = p.avatarBase64
+                                    lastMessageType = p.lastMessageType,
+                                    avatarBase64 = p.avatarBase64,
+                                    // Antes quedaba en 0 → isChatCacheFresh()
+                                    // siempre reportaba caché vencido.
+                                    cachedAt = System.currentTimeMillis()
                                 )
                             }
                             chatDao.insertChats(entities)

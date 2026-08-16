@@ -75,6 +75,21 @@ object VideoCacheManager {
         url.startsWith("http://", ignoreCase = true) ||
             url.startsWith("https://", ignoreCase = true)
 
+    /**
+     * Clave de caché que ignora el query string.
+     *
+     * Backblaze B2 emite un token de autorización NUEVO cada vez que se firma
+     * una URL (`.../file/bucket/key?Authorization=...`). Con la clave por
+     * defecto (URL completa), el token distinto hacía que el SimpleCache
+     * fallara el lookup y se re-descargara el video completo en cada sesión.
+     * Ignorando el query, el mismo archivo cacheado se reutiliza mientras su
+     * contenido no cambie (las claves B2 son inmutables por path).
+     */
+    private val strippedQueryCacheKeyFactory = androidx.media3.datasource.cache.CacheKeyFactory { uri ->
+        runCatching { uri.buildUpon().clearQuery().fragment(null).build().toString() }
+            .getOrDefault(uri.toString())
+    }
+
     /** Crea una MediaSource con caché para [uri]. */
     fun buildCachedMediaSource(context: Context, uri: String): MediaSource {
         val cache = getCache(context)
@@ -86,6 +101,7 @@ object VideoCacheManager {
 
         val cacheDataSourceFactory = CacheDataSource.Factory()
             .setCache(cache)
+            .setCacheKeyFactory(strippedQueryCacheKeyFactory)
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 

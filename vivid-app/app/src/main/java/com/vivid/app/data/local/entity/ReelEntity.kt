@@ -10,6 +10,11 @@ data class ReelEntity(
     val username: String,
     val userAvatar: String = "",
     val videoUrl: String = "",
+    /**
+     * Momento (epoch ms) en que expira la URL firmada guardada en [videoUrl].
+     * 0 = desconocido (no reutilizar, re-firmar en la próxima carga).
+     */
+    val videoUrlExpiresAt: Long = 0L,
     val thumbnailUrl: String = "",
     val caption: String = "",
     val likes: Int = 0,

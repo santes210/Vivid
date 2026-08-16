@@ -101,6 +101,9 @@ private data class FeedPageResult(
     val lastDoc: com.google.firebase.firestore.DocumentSnapshot?
 )
 
+/** Mínimo entre escrituras completas del caché de posts en Room (60 s). */
+private const val FEED_CACHE_WRITE_INTERVAL_MS = 60_000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
@@ -138,6 +141,23 @@ fun FeedScreen(
 
     // Posts cuyo storageKey ya se intentó re-firmar tras un error 403 (evita loops)
     var refreshAttemptedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // URLs re-firmadas localmente (postId → URL fresca). Se inicializan desde
+    // el caché Room para que la sesión actual reutilice lo re-firmado antes y
+    // se actualizan cada vez que una URL vence y se regenera.
+    var resignedImageUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var resignedMusicUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var resignedVideoUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    // Caché vencida (>7 días) guardada SOLO como respaldo: si la red falla,
+    // se muestra esto en lugar de una pantalla vacía/error.
+    var stalePosts by remember { mutableStateOf<List<PostData>>(emptyList()) }
+
+    // Throttle de escritura en Room: el listener dispara publishVisiblePosts()
+    // con cada like de cualquier usuario; reescribir todo el caché en cada
+    // evento era churn innecesario.
+    var lastCacheWriteAt by remember { mutableLongStateOf(0L) }
+
     val listState = rememberLazyListState()
 
     var followRequestsCount by remember { mutableIntStateOf(0) }
@@ -164,14 +184,31 @@ fun FeedScreen(
         isLoading = false
     }
 
-    // ── Caché Room (offline / arranque rápido): si hay posts cacheados de
-    // menos de 7 días, mostrarlos al instante mientras Firestore responde.
+    // ── Caché Room (offline / arranque rápido) ──
+    // Si hay posts cacheados de menos de 7 días, se muestran al instante
+    // mientras Firestore responde. Si la caché está vencida se guarda como
+    // respaldo (stalePosts) para el caso de fallo de red, en vez de mostrar
+    // pantalla vacía. También recupera las URLs re-firmadas de la sesión
+    // anterior para no re-descargar imágenes ya cacheadas por Coil.
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
             runCatching {
                 val cached = feedViewModel.getCachedPosts()
-                if (cached.isNotEmpty() && feedViewModel.isPostCacheFresh()) {
-                    posts = feedViewModel.cachedPostsToData(cached)
+                if (cached.isNotEmpty()) {
+                    resignedImageUrls = cached
+                        .filter { it.imageUrl.isNotBlank() }
+                        .associate { it.id to it.imageUrl }
+                    resignedMusicUrls = cached
+                        .filter { it.musicUrl.isNotBlank() }
+                        .associate { it.id to it.musicUrl }
+                    resignedVideoUrls = cached
+                        .filter { it.videoUrl.isNotBlank() }
+                        .associate { it.id to it.videoUrl }
+                    if (feedViewModel.isPostCacheFresh()) {
+                        posts = feedViewModel.cachedPostsToData(cached)
+                    } else {
+                        stalePosts = feedViewModel.cachedPostsToData(cached)
+                    }
                 }
             }
         }
@@ -216,10 +253,15 @@ fun FeedScreen(
                             userProfilePicture = data["userAvatar"] as? String
                                 ?: data["userProfilePicture"] as? String ?: "",
                             caption = data["caption"] as? String ?: "",
-                            imageUrl = data["imageUrl"] as? String ?: "",
+                            // Preferir la URL re-firmada localmente (si existe):
+                            // es más nueva que la del doc y mantiene estable la
+                            // clave del caché de Coil/ExoPlayer.
+                            imageUrl = resignedImageUrls[doc.id]
+                                ?: data["imageUrl"] as? String ?: "",
                             imageBase64 = data["imageBase64"] as? String ?: "",
                             storageKey = data["storageKey"] as? String ?: "",
-                            videoUrl = data["videoUrl"] as? String ?: "",
+                            videoUrl = resignedVideoUrls[doc.id]
+                                ?: data["videoUrl"] as? String ?: "",
                             thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
                             isVideo = data["isVideo"] as? Boolean ?: false,
                             likesCount = (data["likesCount"] as? Long)?.toInt() ?: 0,
@@ -229,7 +271,8 @@ fun FeedScreen(
                             musicTitle = data["musicTitle"] as? String ?: "",
                             musicArtist = data["musicArtist"] as? String ?: "",
                             musicAssetFile = data["musicAssetFile"] as? String ?: "",
-                            musicUrl = data["musicUrl"] as? String ?: "",
+                            musicUrl = resignedMusicUrls[doc.id]
+                                ?: data["musicUrl"] as? String ?: "",
                             musicStorageKey = data["musicStorageKey"] as? String ?: ""
                         )
                     } catch (_: Exception) { null }
@@ -237,12 +280,17 @@ fun FeedScreen(
                 isLoading = false
 
                 // Persistir en caché Room (para arranque rápido y offline).
-                // Firestore ya manda solo lo visible; la caché se renueva cada
-                // vez que llega data fresca.
+                // Con throttling: cada like de cualquier usuario dispara este
+                // bloque; reescribir el caché completo en cada evento era
+                // trabajo de más para SQLite sin beneficio visible.
                 if (posts.isNotEmpty()) {
-                    scope.launch {
-                        feedViewModel.cachePosts(posts)
-                        com.vivid.app.util.VividCacheManager.markPostsCached(context)
+                    val nowMs = System.currentTimeMillis()
+                    if (nowMs - lastCacheWriteAt >= FEED_CACHE_WRITE_INTERVAL_MS) {
+                        lastCacheWriteAt = nowMs
+                        scope.launch {
+                            feedViewModel.cachePosts(posts)
+                            com.vivid.app.util.VividCacheManager.markPostsCached(context)
+                        }
                     }
                 }
             }
@@ -259,9 +307,22 @@ fun FeedScreen(
                         lastVisibleDoc = snap.documents.lastOrNull()
                         hasMore = snap.size() >= 20
                         publishVisiblePosts()
+                        // Un post que SALE de la query fue borrado (o cambió de
+                        // privacidad): purgar el caché Room para no dejar
+                        // "fantasmas" que ya no existen en el servidor.
+                        snap.documentChanges.forEach { change ->
+                            if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                                scope.launch { feedViewModel.deleteCachedPost(change.document.id) }
+                            }
+                        }
                     } else if (err != null && pages.isEmpty()) {
                         isLoading = false
-                        isError = true
+                        // Sin red y sin datos frescos: mostrar la caché vencida
+                        // como respaldo en vez de una pantalla vacía/error.
+                        if (posts.isEmpty() && stalePosts.isNotEmpty()) {
+                            posts = stalePosts
+                        }
+                        isError = posts.isEmpty()
                     }
                 }
 
@@ -275,6 +336,11 @@ fun FeedScreen(
                         if (snap != null) {
                             pages["private_$index"] = snap.documents
                             publishVisiblePosts()
+                            snap.documentChanges.forEach { change ->
+                                if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                                    scope.launch { feedViewModel.deleteCachedPost(change.document.id) }
+                                }
+                            }
                         }
                     }
             }
@@ -489,6 +555,10 @@ fun FeedScreen(
                                             posts = posts.map {
                                                 if (it.id == post.id) it.copy(imageUrl = freshUrl) else it
                                             }
+                                            // Guardar la URL fresca en memoria y en
+                                            // Room para que sobreviva a la sesión.
+                                            resignedImageUrls = resignedImageUrls + (post.id to freshUrl)
+                                            feedViewModel.saveResignedImageUrl(post.id, freshUrl)
                                         }
                                     }
                                 }
@@ -501,6 +571,22 @@ fun FeedScreen(
                                             posts = posts.map {
                                                 if (it.id == post.id) it.copy(musicUrl = freshUrl) else it
                                             }
+                                            resignedMusicUrls = resignedMusicUrls + (post.id to freshUrl)
+                                            feedViewModel.saveResignedMusicUrl(post.id, freshUrl)
+                                        }
+                                    }
+                                }
+                            },
+                            onVideoUrlExpired = {
+                                val vKey = post.storageKey
+                                if (vKey.isNotBlank()) {
+                                    scope.launch {
+                                        feedViewModel.refreshSignedUrl(vKey)?.let { freshUrl ->
+                                            posts = posts.map {
+                                                if (it.id == post.id) it.copy(videoUrl = freshUrl) else it
+                                            }
+                                            resignedVideoUrls = resignedVideoUrls + (post.id to freshUrl)
+                                            feedViewModel.saveResignedVideoUrl(post.id, freshUrl)
                                         }
                                     }
                                 }
@@ -788,7 +874,8 @@ private fun PostCard(
     onShare: () -> Unit,
     onReportPost: (String, String, String) -> Unit = { _, _, _ -> },
     onImageUrlExpired: () -> Unit = {},
-    onMusicUrlExpired: () -> Unit = {}
+    onMusicUrlExpired: () -> Unit = {},
+    onVideoUrlExpired: () -> Unit = {}
 ) {
     // Sin tarjeta elevada: el contenido vive sobre la superficie con separación tonal.
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -837,7 +924,11 @@ private fun PostCard(
             // ── Contenido multimedia ──
             Box(modifier = Modifier.fillMaxWidth().clickable { onOpenPost() }) {
                 when {
-                    post.isVideo && post.videoUrl.isNotBlank() -> PostVideoPlayer(videoUrl = post.videoUrl, thumbnailUrl = post.thumbnailUrl)
+                    post.isVideo && post.videoUrl.isNotBlank() -> PostVideoPlayer(
+                        videoUrl = post.videoUrl,
+                        thumbnailUrl = post.thumbnailUrl,
+                        onUrlExpired = onVideoUrlExpired
+                    )
                     else -> PostImage(
                         imageBase64 = post.imageBase64,
                         imageUrl = post.imageUrl,
@@ -1142,9 +1233,14 @@ private fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
 
 // ── Helpers ──
 @Composable
-private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
+private fun PostVideoPlayer(
+    videoUrl: String,
+    thumbnailUrl: String,
+    onUrlExpired: () -> Unit = {}
+) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var isReady by remember { mutableStateOf(false) }
+    var expiredReported by remember(videoUrl) { mutableStateOf(false) }
     val player = remember(videoUrl) {
         ExoPlayer.Builder(ctx).build().apply {
             // Caché local: los videos de B2 no se re-descargan en cada visita
@@ -1156,7 +1252,22 @@ private fun PostVideoPlayer(videoUrl: String, thumbnailUrl: String) {
             prepare()
         }
     }
-    DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(player) {
+        // URL firmada vencida → avisar para re-firmar (una sola vez por URL).
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (!expiredReported) {
+                    expiredReported = true
+                    onUrlExpired()
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
 
     Box(Modifier.fillMaxWidth().height(380.dp).background(Color.Black)) {
         if (!isReady && thumbnailUrl.isNotBlank()) {
