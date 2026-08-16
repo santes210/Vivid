@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.vivid.app.MainActivity
@@ -26,7 +27,7 @@ class VividMessagingService : FirebaseMessagingService() {
         val fromUserId = remoteMessage.data["fromUserId"]
 
         when (type) {
-            "message" -> showMessageNotification(title, body, chatId)
+            "message" -> showMessageNotification(title, body, chatId, fromUserId)
             "reel_like",
             "reel_comment" -> showReelNotification(title, body, reelId)
             "post_like",
@@ -43,26 +44,74 @@ class VividMessagingService : FirebaseMessagingService() {
         com.vivid.app.util.PushNotificationHelper.registerTokenForCurrentUser()
     }
 
-    private fun showMessageNotification(title: String, body: String, chatId: String?) {
+    private fun showMessageNotification(
+        title: String,
+        body: String,
+        chatId: String?,
+        fromUserId: String?
+    ) {
+        val safeChatId = chatId ?: ""
+        val safeFromUserId = fromUserId ?: ""
+
+        // Intent principal: abrir el chat al tocar la notificación
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("openChat", true)
-            putExtra("chatId", chatId ?: "")
+            putExtra("chatId", safeChatId)
         }
-
-        val requestCode = (chatId ?: "msg").hashCode()
-        val pendingIntent = PendingIntent.getActivity(
+        val requestCode = (safeChatId.ifBlank { "msg" }).hashCode()
+        val openChatPendingIntent = PendingIntent.getActivity(
             this, requestCode, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+
+        // --- Acción: Marcar como leído ---
+        val markReadIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_MARK_READ
+            putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
+        }
+        val markReadPendingIntent = PendingIntent.getBroadcast(
+            this,
+            requestCode xor 0x1000, // requestCode diferente para evitar colisión
+            markReadIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // --- Acción: Responder (con RemoteInput) ---
+        val replyIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_REPLY
+            putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
+            putExtra(NotificationActionReceiver.EXTRA_RECEIVER_ID, safeFromUserId)
+        }
+        val replyPendingIntent = PendingIntent.getBroadcast(
+            this,
+            requestCode xor 0x2000, // requestCode diferente
+            replyIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
+            .setLabel("Responder")
+            .build()
+
+        val replyAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_notification_bell, // fallback; Android muestra el ícono de respuesta automáticamente
+            "Responder",
+            replyPendingIntent
+        )
+            .addRemoteInput(remoteInput)
+            .build()
 
         val notification = NotificationCompat.Builder(this, "messages_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(openChatPendingIntent)
+            .addAction(R.drawable.ic_notification_bell, "Marcar leído", markReadPendingIntent)
+            .addAction(replyAction)
             .build()
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
