@@ -213,7 +213,7 @@ async function resolveAndValidateEvent(sa, projectId, actorUid, input) {
       title = `Mensaje de @${actorName}`;
       body = messagePreview(message);
       preference = "notifyDirectMessages";
-      data = { type, chatId, fromUserId: actorUid };
+      data = { type, chatId, fromUserId: actorUid, receiverId: targetUid };
       break;
     }
     default:
