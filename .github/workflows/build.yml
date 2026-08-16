@@ -21,9 +21,9 @@ jobs:
       GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -XX:+UseParallelGC"
       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
 
-      # URL pública del Cloudflare Worker. Se configura en:
+      # URL pública del Cloudflare Worker (push + broker de Backblaze B2).
       # Settings → Secrets and variables → Actions → Variables.
-      VIVID_PUSH_WORKER_URL: ${{ vars.VIVID_PUSH_WORKER_URL }}
+      VIVID_WORKER_URL: ${{ vars.VIVID_WORKER_URL || vars.VIVID_PUSH_WORKER_URL }}
 
     steps:
       - name: Checkout code
@@ -32,11 +32,11 @@ jobs:
       - name: Validate Worker URL
         shell: bash
         run: |
-          if [ -z "$VIVID_PUSH_WORKER_URL" ]; then
-            echo "::warning::No está configurada la variable VIVID_PUSH_WORKER_URL."
-            echo "::warning::El APK se compilará, pero no enviará solicitudes de notificaciones push."
-          elif [[ "$VIVID_PUSH_WORKER_URL" != https://* ]]; then
-            echo "::error::VIVID_PUSH_WORKER_URL debe comenzar con https://"
+          if [ -z "$VIVID_WORKER_URL" ]; then
+            echo "::warning::No está configurada la variable VIVID_WORKER_URL."
+            echo "::warning::El APK compilará, pero fallará al subir o ver archivos."
+          elif [[ "$VIVID_WORKER_URL" != https://* ]]; then
+            echo "::error::VIVID_WORKER_URL debe comenzar con https://"
             exit 1
           else
             echo "Cloudflare Worker configurado correctamente."
