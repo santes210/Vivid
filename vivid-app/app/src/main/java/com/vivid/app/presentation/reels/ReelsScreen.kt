@@ -45,6 +45,7 @@ import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.util.SettingsManager
+import com.vivid.app.util.PushSender
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -773,7 +774,7 @@ private fun ReelCommentsSheet(
                         scope.launch {
                             runCatching {
                                 val userDoc = firestore.collection("users").document(currentUserId).get().await()
-                                firestore.collection("reels").document(reel.id).collection("comments").add(
+                                val commentRef = firestore.collection("reels").document(reel.id).collection("comments").add(
                                     mapOf(
                                         "userId" to currentUserId,
                                         "username" to (userDoc.getString("username") ?: "yo"),
@@ -786,6 +787,7 @@ private fun ReelCommentsSheet(
                                 firestore.collection("reels").document(reel.id)
                                     .update("comments", FieldValue.increment(1))
                                     .await()
+                                PushSender.reelComment(reel.id, commentRef.id)
                             }.onSuccess {
                                 commentText = ""
                                 onCommentAdded()
@@ -879,20 +881,23 @@ private suspend fun setReelLike(reelId: String, currentUserId: String, shouldLik
     val firestore = FirebaseFirestore.getInstance()
     val likeRef = firestore.collection("reels").document(reelId).collection("likes").document(currentUserId)
     val reelRef = firestore.collection("reels").document(reelId)
-    firestore.runTransaction { txn ->
+    val created = firestore.runTransaction { txn ->
         val alreadyLiked = txn.get(likeRef).exists()
         when {
             shouldLike && !alreadyLiked -> {
                 txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
                 txn.update(reelRef, "likes", FieldValue.increment(1))
+                true
             }
             !shouldLike && alreadyLiked -> {
                 txn.delete(likeRef)
                 txn.update(reelRef, "likes", FieldValue.increment(-1))
+                false
             }
+            else -> false
         }
-        null
     }.await()
+    if (created) PushSender.reelLike(reelId)
 }
 
 private fun shareReel(context: android.content.Context, reel: Reel) {

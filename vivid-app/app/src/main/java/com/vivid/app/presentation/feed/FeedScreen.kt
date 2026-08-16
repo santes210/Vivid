@@ -1,5 +1,7 @@
 package com.vivid.app.presentation.feed
 
+import com.vivid.app.util.PushSender
+
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -1428,22 +1430,23 @@ private suspend fun togglePostLike(postId: String, currentUserId: String, should
     val firestore = FirebaseFirestore.getInstance()
     val likeRef = firestore.collection("posts").document(postId).collection("likes").document(currentUserId)
     val postRef = firestore.collection("posts").document(postId)
-    firestore.runTransaction { txn ->
+    val created = firestore.runTransaction { txn ->
         val alreadyLiked = txn.get(likeRef).exists()
         when {
             shouldLike && !alreadyLiked -> {
                 txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
                 txn.update(postRef, "likesCount", FieldValue.increment(1))
+                true
             }
             !shouldLike && alreadyLiked -> {
                 txn.delete(likeRef)
                 txn.update(postRef, "likesCount", FieldValue.increment(-1))
+                false
             }
-            // shouldLike && alreadyLiked → ya estaba likeado: no-op (el candado)
-            // !shouldLike && !alreadyLiked → no había like: no-op
+            else -> false
         }
-        null
     }.await()
+    if (created) PushSender.postLike(postId)
 }
 
 private fun shareText(context: android.content.Context, title: String, text: String) {
@@ -1863,11 +1866,12 @@ private fun PostCommentsSheet(post: PostData, onDismiss: () -> Unit) {
                                         commentData["replyToUsername"] = targetReplyToUser
                                     }
 
-                                    db.collection("posts").document(post.id)
+                                    val createdComment = db.collection("posts").document(post.id)
                                         .collection("comments").add(commentData).await()
 
                                     db.collection("posts").document(post.id)
                                         .update("commentsCount", FieldValue.increment(1)).await()
+                                    PushSender.postComment(post.id, createdComment.id)
 
                                     commentText = ""
                                     replyingTo = null

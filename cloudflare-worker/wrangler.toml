@@ -1,0 +1,13 @@
+name = "vivid-push"
+main = "src/index.js"
+compatibility_date = "2026-08-16"
+workers_dev = true
+
+# No escribas credenciales aquí. Antes de desplegar ejecuta:
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+# El JSON debe pertenecer a una service account con acceso de lectura a
+# Firestore y permiso cloudmessaging.messages.create.
+
+[vars]
+# Debe coincidir con project_id dentro de FIREBASE_SERVICE_ACCOUNT_JSON.
+FIREBASE_PROJECT_ID = "verigram-c58a6"

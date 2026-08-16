@@ -5,11 +5,8 @@
  * NOTA: Las Cloud Functions requieren plan Blaze (pay-as-you-go).
  * Si estás en Spark (gratuito), solo se desplegarán las reglas de Firestore.
  *
- * Las notificaciones push se manejan localmente desde el APK
- * mediante LocalNotificationWatcher.kt (sin necesidad de Cloud Functions).
- *
- * Cuando actives Blaze, descomenta los triggers al final del archivo
- * y ejecuta: firebase deploy --only functions
+ * Las notificaciones push sin Blaze se envían mediante cloudflare-worker/.
+ * Este archivo conserva únicamente el proxy B2 existente.
  */
 
 const functions = require("firebase-functions");
@@ -182,9 +179,8 @@ exports.deleteFile = functions.https.onRequest((req, res) => {
  * ════════════════════════════════════════════════════
  * TRIGGERS DE NOTIFICACIONES PUSH (requieren Blaze)
  * ════════════════════════════════════════════════════
- * Descomenta esta sección cuando actives el plan Blaze.
- * Mientras tanto, las notificaciones funcionan localmente
- * desde el APK (LocalNotificationWatcher.kt).
+ * Alternativa futura si se activa Blaze. La implementación actual sin Blaze
+ * vive en cloudflare-worker/ y la app la invoca mediante WorkManager.
 
 const admin = require("firebase-admin");
 admin.initializeApp();

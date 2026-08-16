@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.vivid.app.util.PushSender
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -155,6 +156,7 @@ class FollowRepository @Inject constructor(
         )
 
         batch.commit().await()
+        PushSender.newFollower(targetUserId)
     }
 
     suspend fun unfollowUser(targetUserId: String) {
@@ -242,6 +244,7 @@ class FollowRepository @Inject constructor(
             )
         )
         batch.commit().await()
+        PushSender.followRequest(targetUserId)
     }
 
     suspend fun cancelFollowRequest(targetUserId: String) {

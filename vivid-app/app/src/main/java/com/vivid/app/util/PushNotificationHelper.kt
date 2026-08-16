@@ -16,11 +16,10 @@ import kotlinx.coroutines.tasks.await
  * Flujo:
  *   1. Al iniciar sesión → registerTokenForCurrentUser()
  *   2. Guarda el token en /users/{uid}/fcmTokens/{token}
- *   3. Las Cloud Functions (onReelLike, onMessageCreated, etc.)
- *      leen estos tokens para enviar pushes FCM.
+ *   3. El Cloudflare Worker valida la acción y lee estos tokens para enviar FCM.
  *
- * ⚠️  Para que las notificaciones funcionen, las Cloud Functions DEBEN
- *     estar desplegadas en Firebase. Sin ellas, nadie envía los pushes.
+ * Para que las notificaciones funcionen, PUSH_WORKER_URL debe estar configurada
+ * en el build y el Worker debe tener su service account como secret.
  */
 object PushNotificationHelper {
 
@@ -47,20 +46,10 @@ object PushNotificationHelper {
                 val token = FirebaseMessaging.getInstance().token.await()
                 Log.i(TAG, "✅ Token FCM obtenido: ${token.take(25)}...")
 
-                // 2. Limpiar tokens viejos de este dispositivo (evita duplicados)
-                val oldTokens = db.collection("users").document(uid)
-                    .collection("fcmTokens")
-                    .whereEqualTo("platform", "android")
-                    .get().await()
+                // Se conservan los tokens de otros dispositivos. El Worker elimina
+                // únicamente los que FCM marque como inválidos o no registrados.
 
-                for (doc in oldTokens.documents) {
-                    if (doc.id != token) {
-                        doc.reference.delete().await()
-                        Log.d(TAG, "🗑️ Token antiguo eliminado: ${doc.id.take(20)}...")
-                    }
-                }
-
-                // 3. Guardar el token actual en Firestore
+                // 2. Guardar el token actual en Firestore
                 db.collection("users").document(uid)
                     .collection("fcmTokens")
                     .document(token)

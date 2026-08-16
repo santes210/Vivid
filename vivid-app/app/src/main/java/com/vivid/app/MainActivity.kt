@@ -12,14 +12,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.domain.repository.ensureCurrentUserContentPrivacy
 import com.vivid.app.navigation.VividNavigation
-import com.vivid.app.notifications.NotificationForegroundService
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividTheme
 import com.vivid.app.util.PushNotificationHelper
@@ -31,10 +32,10 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private var pendingChatId: String? = null
-    private var pendingReelId: String? = null
-    private var pendingProfileUserId: String? = null
-    private var pendingPostId: String? = null
+    private var pendingChatId: String? by mutableStateOf(null)
+    private var pendingReelId: String? by mutableStateOf(null)
+    private var pendingProfileUserId: String? by mutableStateOf(null)
+    private var pendingPostId: String? by mutableStateOf(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -44,7 +45,7 @@ class MainActivity : ComponentActivity() {
 
         readNotificationExtras(intent)
 
-        // ── Auth listener: token FCM + Foreground Service para notificaciones ──
+        // ── Auth listener: registra el token FCM de la sesión ──
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             if (auth.currentUser != null) {
                 val userId = auth.currentUser?.uid.orEmpty()
@@ -54,14 +55,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Token FCM (para cuando actives Blaze en el futuro)
                 PushNotificationHelper.registerTokenForCurrentUser()
 
-                // Iniciar Foreground Service que mantiene vivo el watcher de notificaciones
-                // + intenta whitelist de batería vía Shizuku si está disponible
-                NotificationForegroundService.start(applicationContext)
-            } else {
-                NotificationForegroundService.stop(applicationContext)
             }
         }
 
@@ -86,10 +81,10 @@ class MainActivity : ComponentActivity() {
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
 
-            val deepLinkChatId = remember { pendingChatId }
-            val deepLinkReelId = remember { pendingReelId }
-            val deepLinkProfileUserId = remember { pendingProfileUserId }
-            val deepLinkPostId = remember { pendingPostId }
+            val deepLinkChatId = pendingChatId
+            val deepLinkReelId = pendingReelId
+            val deepLinkProfileUserId = pendingProfileUserId
+            val deepLinkPostId = pendingPostId
 
             VividTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 CompositionLocalProvider(
@@ -148,6 +143,9 @@ class MainActivity : ComponentActivity() {
         }
         if (intent.getBooleanExtra("openProfile", false)) {
             pendingProfileUserId = intent.getStringExtra("profileUserId")
+        }
+        if (intent.getBooleanExtra("openPost", false)) {
+            pendingPostId = intent.getStringExtra("postId")
         }
     }
 }

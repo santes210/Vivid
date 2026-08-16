@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
+import com.vivid.app.util.PushSender
 import com.vivid.app.util.SettingsManager
 import javax.inject.Inject
 
@@ -16,6 +17,7 @@ class VividApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         SettingsManager.init(this)
+        PushSender.initialize(this)
     }
 
     override fun newImageLoader(): ImageLoader = imageLoader

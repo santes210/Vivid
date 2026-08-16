@@ -13,6 +13,7 @@ import com.vivid.app.data.local.entity.ChatEntity
 import com.vivid.app.data.local.entity.MessageEntity
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.presentation.messages.Message
+import com.vivid.app.util.PushSender
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -452,6 +453,7 @@ class ChatRepository @Inject constructor(
             transaction.set(messageRef, messageData)
             null
         }.await()
+        PushSender.message(chatId, messageId)
     }
 
     suspend fun deleteMessage(chatId: String, message: Message) {
