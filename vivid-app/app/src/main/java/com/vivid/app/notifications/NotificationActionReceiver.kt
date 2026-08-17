@@ -1,15 +1,22 @@
 package com.vivid.app.notifications
 
+import android.app.NotificationManager
 import android.app.RemoteInput
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.vivid.app.domain.repository.ChatRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import com.vivid.app.domain.repository.ChatRepository
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+import kotlin.coroutines.resume
 
 @AndroidEntryPoint
 class NotificationActionReceiver : BroadcastReceiver() {
@@ -21,48 +28,113 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                when (intent.action) {
-                    ACTION_MARK_READ -> handleMarkAsRead(intent)
-                    ACTION_REPLY -> handleReply(intent)
+                // ── TOPE DURO anti-ANR ────────────────────────────────────────
+                // La ventana del sistema para un BroadcastReceiver es ~10s. Aquí
+                // todo el trabajo (espera de sesión + Firestore) queda acotado a
+                // 8s, así pendingResult.finish() SIEMPRE se llama a tiempo y la
+                // app nunca muestra "Vivid isn't responding" (ANR).
+                withTimeoutOrNull(WORK_TIMEOUT_MS) {
+                    // ── FIX: esperar la sesión ────────────────────────────────
+                    // Al tocar una acción de notificación, Android puede arrancar
+                    // el proceso desde cero. FirebaseAuth restaura el usuario de
+                    // forma ASÍNCRONA, así que currentUser puede ser null al
+                    // principio y sendMessage()/markMessagesAsRead() regresaban
+                    // sin hacer nada.
+                    val user = awaitCurrentUser(timeoutMs = AUTH_WAIT_MS)
+                    if (user == null) {
+                        Log.w(TAG, "Sin usuario autenticado; se ignora la acción ${intent.action}")
+                        return@withTimeoutOrNull
+                    }
+
+                    when (intent.action) {
+                        ACTION_MARK_READ -> handleMarkAsRead(context, intent)
+                        ACTION_REPLY -> handleReply(context, intent)
+                        else -> Log.w(TAG, "Acción desconocida: ${intent.action}")
+                    }
                 }
-            } catch (e: Exception) {
-                // La acción falló silenciosamente — no mostrarle un error al usuario
-                // porque él ya cerró la notificación y no espera una respuesta.
-                android.util.Log.w("NotificationAction", "Error procesando acción", e)
+            } catch (t: Throwable) {
+                // Throwable (no solo Exception): aunque algo raro ocurra, finish()
+                // se llama en finally y no hay ANR.
+                Log.w(TAG, "Error procesando acción ${intent.action}", t)
             } finally {
                 pendingResult.finish()
             }
         }
     }
 
-    /**
-     * Marca todos los mensajes del chat como leídos.
-     * El chatId viene en los extras del Intent.
-     */
-    private suspend fun handleMarkAsRead(intent: Intent) {
+    /** Marca el chat como leído y retira la notificación. */
+    private suspend fun handleMarkAsRead(context: Context, intent: Intent) {
         val chatId = intent.getStringExtra(EXTRA_CHAT_ID) ?: return
-        if (chatId.isBlank()) return
-        chatRepository.markMessagesAsRead(chatId)
+        if (chatId.isBlank()) {
+            Log.w(TAG, "MarkAsRead sin chatId")
+            return
+        }
+
+        chatRepository.markChatAsRead(chatId)
+        dismissNotification(context, chatId)
+        Log.i(TAG, "Chat $chatId marcado como leído")
     }
 
-    /**
-     * Responde al mensaje desde la notificación.
-     * El texto viene del RemoteInput, y el receptor es el fromUserId
-     * (el usuario que envió el mensaje original, que recibirá la respuesta).
-     */
-    private suspend fun handleReply(intent: Intent) {
+    /** Envía la respuesta y deja el chat como leído. */
+    private suspend fun handleReply(context: Context, intent: Intent) {
         val chatId = intent.getStringExtra(EXTRA_CHAT_ID) ?: return
         val receiverId = intent.getStringExtra(EXTRA_RECEIVER_ID) ?: return
-        if (chatId.isBlank() || receiverId.isBlank()) return
+        if (chatId.isBlank() || receiverId.isBlank()) {
+            Log.w(TAG, "Reply incompleta (chatId=$chatId, receiverId=$receiverId)")
+            return
+        }
 
         val results = RemoteInput.getResultsFromIntent(intent)
         val replyText = results?.getString(KEY_REPLY_TEXT)?.trim() ?: return
-        if (replyText.isBlank()) return
+        if (replyText.isBlank()) {
+            Log.w(TAG, "Reply sin texto")
+            return
+        }
 
         chatRepository.sendMessage(chatId, replyText, receiverId)
+        // Responder también marca el chat como leído (comportamiento estándar).
+        chatRepository.markChatAsRead(chatId)
+        dismissNotification(context, chatId)
+        Log.i(TAG, "Respuesta enviada a chat $chatId")
+    }
+
+    private fun dismissNotification(context: Context, chatId: String) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(chatId.hashCode())
+    }
+
+    /**
+     * FirebaseAuth restaura el usuario de forma asíncrona al arrancar el proceso.
+     * Espera (con tope de tiempo) hasta que currentUser esté disponible.
+     */
+    private suspend fun awaitCurrentUser(timeoutMs: Long): FirebaseUser? {
+        val auth = FirebaseAuth.getInstance()
+        auth.currentUser?.let { return it }
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                    firebaseAuth.currentUser?.let { user ->
+                        firebaseAuth.removeAuthStateListener(listener)
+                        // Overload con onCancellation: si el timeout ya canceló la
+                        // continuación, no lanza excepción (carrera inofensiva).
+                        cont.resume(user) {}
+                    }
+                }
+                auth.addAuthStateListener(listener)
+                cont.invokeOnCancellation { auth.removeAuthStateListener(listener) }
+            }
+        }
     }
 
     companion object {
+        private const val TAG = "NotificationAction"
+
+        /** Tope total del trabajo del receiver: < ventana de 10s del sistema. */
+        private const val WORK_TIMEOUT_MS = 8_000L
+
+        /** Espera máxima a que FirebaseAuth restaure la sesión (suele ser < 1s). */
+        private const val AUTH_WAIT_MS = 3_000L
+
         const val ACTION_REPLY = "com.vivid.app.ACTION_REPLY"
         const val ACTION_MARK_READ = "com.vivid.app.ACTION_MARK_READ"
 
