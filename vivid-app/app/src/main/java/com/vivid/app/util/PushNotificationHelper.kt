@@ -2,13 +2,17 @@ package com.vivid.app.util
 
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 /**
  * Helper para registrar el token FCM del dispositivo en Firestore.
@@ -32,15 +36,23 @@ object PushNotificationHelper {
      * Suscribe el dispositivo actual a push notifications.
      * Se llama desde MainActivity.addAuthStateListener (cada login)
      * y desde VividMessagingService.onNewToken (cuando FCM renueva el token).
+     *
+     * FIX: cuando FCM renueva el token (típico tras reinstalar la app), el
+     * proceso arranca en frío y FirebaseAuth restaura la sesión de forma
+     * ASÍNCRONA: currentUser puede ser null al principio. Antes esto hacía que
+     * el token NUEVO nunca se registrara y las notificaciones dejaran de
+     * llegar (el Worker solo encuentra tokens viejos/inválidos). Ahora se
+     * espera a la sesión (máx 3s) antes de registrarlo.
      */
     fun registerTokenForCurrentUser() {
-        val uid = auth.currentUser?.uid
-        if (uid == null) {
-            Log.w(TAG, "registerTokenForCurrentUser: no hay usuario autenticado, abortando")
-            return
-        }
-
         scope.launch {
+            val uid = auth.currentUser?.uid
+                ?: awaitCurrentUser(timeoutMs = 3_000)?.uid
+                ?: run {
+                    Log.w(TAG, "registerTokenForCurrentUser: sin sesión tras espera, abortando")
+                    return@launch
+                }
+
             try {
                 // 1. Obtener el token FCM actual
                 val token = FirebaseMessaging.getInstance().token.await()
@@ -87,6 +99,27 @@ object PushNotificationHelper {
                 Log.i(TAG, "Token eliminado para usuario $uid")
             } catch (e: Exception) {
                 Log.e(TAG, "Error eliminando token", e)
+            }
+        }
+    }
+
+    /**
+     * FirebaseAuth restaura el usuario de forma asíncrona al arrancar el proceso.
+     * Espera (con tope de tiempo) hasta que currentUser esté disponible.
+     */
+    private suspend fun awaitCurrentUser(timeoutMs: Long): FirebaseUser? {
+        val auth = FirebaseAuth.getInstance()
+        auth.currentUser?.let { return it }
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                    firebaseAuth.currentUser?.let { user ->
+                        firebaseAuth.removeAuthStateListener(listener)
+                        cont.resume(user) {}
+                    }
+                }
+                auth.addAuthStateListener(listener)
+                cont.invokeOnCancellation { auth.removeAuthStateListener(listener) }
             }
         }
     }
