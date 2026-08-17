@@ -112,10 +112,15 @@ object PushNotificationHelper {
         auth.currentUser?.let { return it }
         return withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine { cont ->
-                val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-                    firebaseAuth.currentUser?.let { user ->
-                        firebaseAuth.removeAuthStateListener(listener)
-                        cont.resume(user) {}
+                // Objeto anónimo (no SAM lambda): dentro podemos usar `this`
+                // para auto-remover el listener sin referenciar la variable
+                // antes de inicializarla (compila siempre).
+                val listener = object : FirebaseAuth.AuthStateListener {
+                    override fun onAuthStateChanged(firebaseAuth: FirebaseAuth) {
+                        firebaseAuth.currentUser?.let { user ->
+                            firebaseAuth.removeAuthStateListener(this)
+                            cont.resume(user) {}
+                        }
                     }
                 }
                 auth.addAuthStateListener(listener)
