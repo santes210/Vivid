@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -15,26 +16,40 @@ import com.vivid.app.R
 
 class VividMessagingService : FirebaseMessagingService() {
 
+    companion object {
+        private const val TAG = "VividMessaging"
+    }
+
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         // El Worker envía mensajes data-only para que este servicio controle
         // igual el comportamiento en primer y segundo plano.
         val title = remoteMessage.data["title"] ?: remoteMessage.notification?.title ?: "Vivid"
         val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: "Nueva notificación"
         val type = remoteMessage.data["type"] ?: "general"
-        val chatId = remoteMessage.data["chatId"]
-        val reelId = remoteMessage.data["reelId"]
-        val postId = remoteMessage.data["postId"]
-        val fromUserId = remoteMessage.data["fromUserId"]
 
-        when (type) {
-            "message" -> showMessageNotification(title, body, chatId, fromUserId)
-            "reel_like",
-            "reel_comment" -> showReelNotification(title, body, reelId)
-            "post_like",
-            "post_comment" -> showPostNotification(title, body, postId)
-            "new_follower",
-            "follow_request" -> showFollowerNotification(title, body, fromUserId)
-            else -> showGeneralNotification(title, body)
+        try {
+            val chatId = remoteMessage.data["chatId"]
+            val reelId = remoteMessage.data["reelId"]
+            val postId = remoteMessage.data["postId"]
+            val fromUserId = remoteMessage.data["fromUserId"]
+
+            when (type) {
+                "message" -> showMessageNotification(title, body, chatId, fromUserId)
+                "reel_like",
+                "reel_comment" -> showReelNotification(title, body, reelId)
+                "post_like",
+                "post_comment" -> showPostNotification(title, body, postId)
+                "new_follower",
+                "follow_request" -> showFollowerNotification(title, body, fromUserId)
+                else -> showGeneralNotification(title, body)
+            }
+        } catch (e: Exception) {
+            // NUNCA dejar que una notificación tire el proceso: si algo falla al
+            // construir la notificación específica, se muestra una genérica. Si el
+            // proceso muriera aquí, el mensaje FCM se perdería y el usuario vería
+            // "Vivid se detuvo" + notificaciones que nunca llegan.
+            Log.w(TAG, "Error construyendo notificación type=$type", e)
+            runCatching { showGeneralNotification(title, body) }
         }
     }
 
@@ -65,44 +80,7 @@ class VividMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // --- Acción: Marcar como leído ---
-        val markReadIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionReceiver.ACTION_MARK_READ
-            putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
-        }
-        val markReadPendingIntent = PendingIntent.getBroadcast(
-            this,
-            requestCode xor 0x1000, // requestCode diferente para evitar colisión
-            markReadIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        // --- Acción: Responder (con RemoteInput) ---
-        val replyIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionReceiver.ACTION_REPLY
-            putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
-            putExtra(NotificationActionReceiver.EXTRA_RECEIVER_ID, safeFromUserId)
-        }
-        val replyPendingIntent = PendingIntent.getBroadcast(
-            this,
-            requestCode xor 0x2000, // requestCode diferente
-            replyIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
-            .setLabel("Responder")
-            .build()
-
-        val replyAction = NotificationCompat.Action.Builder(
-            R.drawable.ic_notification_bell, // fallback; Android muestra el ícono de respuesta automáticamente
-            "Responder",
-            replyPendingIntent
-        )
-            .addRemoteInput(remoteInput)
-            .build()
-
-        val notification = NotificationCompat.Builder(this, "messages_channel")
+        val builder = NotificationCompat.Builder(this, "messages_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
             .setContentTitle(title)
             .setContentText(body)
@@ -110,12 +88,56 @@ class VividMessagingService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openChatPendingIntent)
-            .addAction(R.drawable.ic_notification_bell, "Marcar leído", markReadPendingIntent)
-            .addAction(replyAction)
-            .build()
+
+        // ── Acciones opcionales ──────────────────────────────────────────
+        // Se construyen aisladas: si algo falla aquí, la notificación base
+        // (abrir chat) se muestra igual. Así un error en las acciones NUNCA
+        // puede impedir que la notificación llegue al usuario.
+        if (safeChatId.isNotBlank() && safeFromUserId.isNotBlank()) {
+            runCatching {
+                // Acción: Marcar como leído (broadcast al receiver)
+                val markReadIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+                    action = NotificationActionReceiver.ACTION_MARK_READ
+                    putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
+                }
+                val markReadPendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    requestCode xor 0x1000, // requestCode diferente para evitar colisión
+                    markReadIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                builder.addAction(R.drawable.ic_notification_bell, "Marcar leído", markReadPendingIntent)
+
+                // Acción: Responder (broadcast + RemoteInput al receiver)
+                val replyIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+                    action = NotificationActionReceiver.ACTION_REPLY
+                    putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
+                    putExtra(NotificationActionReceiver.EXTRA_RECEIVER_ID, safeFromUserId)
+                }
+                val replyPendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    requestCode xor 0x2000, // requestCode diferente
+                    replyIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
+                    .setLabel("Responder")
+                    .build()
+                val replyAction = NotificationCompat.Action.Builder(
+                    R.drawable.ic_notification_bell,
+                    "Responder",
+                    replyPendingIntent
+                )
+                    .addRemoteInput(remoteInput)
+                    .build()
+                builder.addAction(replyAction)
+            }.onFailure { e ->
+                Log.w(TAG, "No se pudieron añadir acciones a la notificación de mensaje", e)
+            }
+        }
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(requestCode, notification)
+        manager.notify(requestCode, builder.build())
     }
 
     private fun showReelNotification(title: String, body: String, reelId: String?) {
