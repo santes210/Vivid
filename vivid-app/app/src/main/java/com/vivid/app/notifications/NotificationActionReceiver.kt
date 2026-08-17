@@ -112,12 +112,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
         auth.currentUser?.let { return it }
         return withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine { cont ->
-                val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-                    firebaseAuth.currentUser?.let { user ->
-                        firebaseAuth.removeAuthStateListener(listener)
-                        // Overload con onCancellation: si el timeout ya canceló la
-                        // continuación, no lanza excepción (carrera inofensiva).
-                        cont.resume(user) {}
+                // Objeto anónimo (no SAM lambda): dentro podemos usar `this`
+                // para auto-remover el listener sin referenciar la variable
+                // antes de inicializarla (compila siempre).
+                val listener = object : FirebaseAuth.AuthStateListener {
+                    override fun onAuthStateChanged(firebaseAuth: FirebaseAuth) {
+                        firebaseAuth.currentUser?.let { user ->
+                            firebaseAuth.removeAuthStateListener(this)
+                            // Overload con onCancellation: si el timeout ya canceló la
+                            // continuación, no lanza excepción (carrera inofensiva).
+                            cont.resume(user) {}
+                        }
                     }
                 }
                 auth.addAuthStateListener(listener)
