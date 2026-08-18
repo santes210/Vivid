@@ -871,182 +871,48 @@ fun SettingsScreen(
 
     // --- MODALES Y DIÁLOGOS ---
     if (showHelpDialog) {
-        AlertDialog(
-            onDismissRequest = { showHelpDialog = false },
-            title = {
-                Text(
-                    "Centro de Ayuda",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Column {
-                    Text("¿Tienes algún problema con Vivid? Estamos aquí para ayudarte con soporte directo.")
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "Puedes contactar directamente al desarrollador enviando un correo a:",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        "poncho2010santes@gmail.com",
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    val opened = composeEmail(
-                        context = context,
-                        to = "poncho2010santes@gmail.com",
-                        subject = "Soporte Vivid App M3"
-                    )
-                    if (!opened) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("No se encontró una app de correo instalada.")
-                        }
-                    }
-                    showHelpDialog = false
-                }) {
-                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Enviar Correo")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showHelpDialog = false }) {
-                    Text("Cerrar")
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+        HelpDialog(
+            context = context,
+            onDismiss = { showHelpDialog = false },
+            onEmailFailed = { scope.launch { snackbarHostState.showSnackbar("No se encontró una app de correo instalada.") } }
         )
     }
 
     if (showThemeDialog) {
-        AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            title = { Text("Tema de la aplicación", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-            text = {
-                Column {
-                    listOf("Sistema", "Oscuro", "Claro").forEach { themeOption ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    SettingsManager.setThemeOption(context, themeOption)
-                                    showThemeDialog = false
-                                    scope.launch { snackbarHostState.showSnackbar("Tema cambiado a $themeOption") }
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedThemeOption == themeOption,
-                                onClick = {
-                                    SettingsManager.setThemeOption(context, themeOption)
-                                    showThemeDialog = false
-                                    scope.launch { snackbarHostState.showSnackbar("Tema cambiado a $themeOption") }
-                                }
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(themeOption, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showThemeDialog = false }) { Text("Cerrar") }
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+        ThemeDialog(
+            context = context,
+            selectedThemeOption = selectedThemeOption,
+            onDismiss = { showThemeDialog = false },
+            onThemeChanged = { scope.launch { snackbarHostState.showSnackbar("Tema cambiado a $it") } }
         )
     }
 
     if (showDownloadQualityDialog) {
-        AlertDialog(
-            onDismissRequest = { showDownloadQualityDialog = false },
-            title = { Text("Calidad de descarga", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-            text = {
-                Column {
-                    listOf("Alta (HD)", "Media (Equilibrada)", "Baja (Ahorro de datos)").forEach { qualityOption ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    SettingsManager.setDownloadQuality(context, qualityOption)
-                                    showDownloadQualityDialog = false
-                                    scope.launch { snackbarHostState.showSnackbar("Calidad de descarga configurada en $qualityOption") }
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = downloadQualityOption == qualityOption,
-                                onClick = {
-                                    SettingsManager.setDownloadQuality(context, qualityOption)
-                                    showDownloadQualityDialog = false
-                                    scope.launch { snackbarHostState.showSnackbar("Calidad de descarga configurada en $qualityOption") }
-                                }
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(qualityOption, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showDownloadQualityDialog = false }) { Text("Cerrar") }
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+        DownloadQualityDialog(
+            context = context,
+            downloadQualityOption = downloadQualityOption,
+            onDismiss = { showDownloadQualityDialog = false },
+            onQualityChanged = { scope.launch { snackbarHostState.showSnackbar("Calidad de descarga configurada en $it") } }
         )
     }
 
     infoDialog?.let { dialog ->
-        AlertDialog(
-            onDismissRequest = { infoDialog = null },
-            title = { Text(dialog.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-            text = { Text(dialog.message, style = MaterialTheme.typography.bodyLarge) },
-            confirmButton = {
-                TextButton(onClick = { infoDialog = null }) { Text("Entendido") }
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
-        )
+        InfoDialog(dialog = dialog, onDismiss = { infoDialog = null })
     }
 
     if (showSignOutDialog) {
-        AlertDialog(
-            onDismissRequest = { showSignOutDialog = false },
-            title = { Text("¿Cerrar sesión?", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
-            text = { Text("Tendrás que volver a iniciar sesión para entrar a Vivid.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        com.vivid.app.util.PushNotificationHelper.unregisterToken()
-                        auth.signOut()
-                        showSignOutDialog = false
-                        onBack()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Cerrar Sesión", color = MaterialTheme.colorScheme.onError)
-                }
+        SignOutDialog(
+            onConfirm = {
+                com.vivid.app.util.PushNotificationHelper.unregisterToken()
+                auth.signOut()
+                showSignOutDialog = false
+                onBack()
             },
-            dismissButton = {
-                TextButton(onClick = { showSignOutDialog = false }) {
-                    Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            onDismiss = { showSignOutDialog = false }
         )
     }
 }
+
 
 @Composable
 fun SettingsCardGroup(

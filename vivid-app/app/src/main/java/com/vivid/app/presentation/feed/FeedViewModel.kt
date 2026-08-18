@@ -2,12 +2,15 @@ package com.vivid.app.presentation.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.local.dao.PostDao
 import com.vivid.app.data.local.entity.PostEntity
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRepository
+import com.vivid.app.util.PushSender
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,37 +24,219 @@ class FeedViewModel @Inject constructor(
     private val storage: StorageProvider,
     private val postDao: PostDao,
     private val firestore: FirebaseFirestore,
-    private val followRepository: FollowRepository
+    private val followRepository: FollowRepository,
+    private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    // Caché Room (feature futura de offline). La carga Firestore→Room se
-    // hace bajo demanda; FeedScreen muestra sus propios datos en vivo.
+    // Room cache (future offline feature). Firestore→Room loading is
+    // on-demand; FeedScreen shows its own live data.
     val posts: StateFlow<List<PostEntity>> = postDao.getAllPosts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // NOTA: aquí vivía un likePost() que solo incrementaba likesCount sin
-    // escribir el doc en posts/{id}/likes/{uid}. Nadie lo llamaba, pero era
-    // una bomba de tiempo: sin el doc de like, el corazón nunca aparece
-    // encendido y cada tap suma +1 infinito. El like real es
-    // FeedScreen.togglePostLike(), que escribe doc + contador juntos.
+    val currentUserId: String get() = auth.currentUser?.uid.orEmpty()
 
-    fun toggleFollowUser(targetUserId: String, onResult: (String?) -> Unit) {
+    // ── Post like (idempotent, transactional) ──
+
+    /**
+     * Idempotent like: 1 like per user, enforced by a Firestore transaction.
+     *
+     * The transaction READS the doc posts/{id}/likes/{uid} and only touches
+     * the counter when the state actually changes. Liking twice does not add
+     * two; removing a non-existent like does not subtract.
+     */
+    fun togglePostLike(
+        postId: String,
+        currentUserId: String,
+        shouldLike: Boolean,
+        onSuccess: () -> Unit = {},
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        if (currentUserId.isBlank()) {
+            onFailure(IllegalStateException("No active session"))
+            return
+        }
         viewModelScope.launch {
             runCatching {
-                followRepository.toggleFollow(targetUserId)
-            }.onSuccess { action ->
-                val msg = when (action) {
-                    FollowActionResult.FOLLOWED -> "Ahora sigues a esta cuenta."
-                    FollowActionResult.UNFOLLOWED -> "Dejaste de seguir esta cuenta."
-                    FollowActionResult.REQUESTED -> "Solicitud de seguimiento enviada."
-                    FollowActionResult.REQUEST_CANCELLED -> "Solicitud cancelada."
-                }
-                onResult(msg)
-            }.onFailure { e ->
-                onResult(e.message ?: "No se pudo actualizar el seguimiento.")
+                val likeRef = firestore.collection("posts").document(postId)
+                    .collection("likes").document(currentUserId)
+                val postRef = firestore.collection("posts").document(postId)
+                val created = firestore.runTransaction { txn ->
+                    val alreadyLiked = txn.get(likeRef).exists()
+                    when {
+                        shouldLike && !alreadyLiked -> {
+                            txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
+                            txn.update(postRef, "likesCount", FieldValue.increment(1))
+                            true
+                        }
+                        !shouldLike && alreadyLiked -> {
+                            txn.delete(likeRef)
+                            txn.update(postRef, "likesCount", FieldValue.increment(-1))
+                            false
+                        }
+                        else -> false
+                    }
+                }.await()
+                if (created) PushSender.postLike(postId)
+            }.onSuccess { onSuccess() }
+                .onFailure { onFailure(it as? Exception ?: Exception(it)) }
+        }
+    }
+
+    // ── Comment like (idempotent, transactional) ──
+
+    fun toggleCommentLike(
+        postId: String,
+        commentId: String,
+        currentUserId: String,
+        shouldLike: Boolean,
+        onSuccess: () -> Unit = {},
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        if (currentUserId.isBlank()) return
+        viewModelScope.launch {
+            runCatching {
+                val commentRef = firestore.collection("posts").document(postId)
+                    .collection("comments").document(commentId)
+                val likeRef = commentRef.collection("likes").document(currentUserId)
+                firestore.runTransaction { txn ->
+                    val alreadyLiked = txn.get(likeRef).exists()
+                    when {
+                        shouldLike && !alreadyLiked -> {
+                            txn.set(likeRef, mapOf("userId" to currentUserId, "timestamp" to System.currentTimeMillis()))
+                            txn.update(commentRef, "likesCount", FieldValue.increment(1))
+                        }
+                        !shouldLike && alreadyLiked -> {
+                            txn.delete(likeRef)
+                            txn.update(commentRef, "likesCount", FieldValue.increment(-1))
+                        }
+                    }
+                    null
+                }.await()
+            }.onSuccess { onSuccess() }
+                .onFailure { onFailure(it as? Exception ?: Exception(it)) }
+        }
+    }
+
+    // ── Add comment ──
+
+    fun addComment(
+        postId: String,
+        text: String,
+        parentId: String? = null,
+        replyToUsername: String = "",
+        onSuccess: () -> Unit = {},
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        val userId = currentUserId
+        if (userId.isBlank() || text.isBlank()) return
+        viewModelScope.launch {
+            runCatching {
+                val userDoc = firestore.collection("users").document(userId).get().await()
+                val commentData = hashMapOf<String, Any>(
+                    "userId" to userId,
+                    "username" to (userDoc.getString("username") ?: "user"),
+                    "text" to text.trim(),
+                    "timestamp" to System.currentTimeMillis(),
+                    "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""),
+                    "avatarBase64" to (userDoc.getString("avatarBase64") ?: ""),
+                    "likesCount" to 0,
+                    "isEdited" to false
+                )
+                if (!parentId.isNullOrBlank()) commentData["parentId"] = parentId
+                if (replyToUsername.isNotBlank()) commentData["replyToUsername"] = replyToUsername
+
+                val createdComment = firestore.collection("posts").document(postId)
+                    .collection("comments").add(commentData).await()
+                firestore.collection("posts").document(postId)
+                    .update("commentsCount", FieldValue.increment(1)).await()
+                PushSender.postComment(postId, createdComment.id)
+            }.onSuccess { onSuccess() }
+                .onFailure { onFailure(it as? Exception ?: Exception(it)) }
+        }
+    }
+
+    // ── Edit comment ──
+
+    fun editComment(
+        postId: String,
+        commentId: String,
+        newText: String,
+        onComplete: (Exception?) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                firestore.collection("posts").document(postId)
+                    .collection("comments").document(commentId)
+                    .update(
+                        mapOf(
+                            "text" to newText.trim(),
+                            "isEdited" to true,
+                            "editedAt" to System.currentTimeMillis()
+                        )
+                    ).await()
+            }.onSuccess { onComplete(null) }
+                .onFailure { onComplete(it as? Exception ?: Exception(it)) }
+        }
+    }
+
+    // ── Delete comment ──
+
+    fun deleteComment(
+        postId: String,
+        commentId: String,
+        onComplete: (Exception?) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                firestore.collection("posts").document(postId)
+                    .collection("comments").document(commentId).delete().await()
+                firestore.collection("posts").document(postId)
+                    .update("commentsCount", FieldValue.increment(-1)).await()
+            }.onSuccess { onComplete(null) }
+                .onFailure { onComplete(it as? Exception ?: Exception(it)) }
+        }
+    }
+
+    // ── Edit post caption ──
+
+    fun editPostCaption(postId: String, newCaption: String) {
+        viewModelScope.launch {
+            runCatching {
+                firestore.collection("posts").document(postId)
+                    .update("caption", newCaption.trim())
             }
         }
     }
+
+    // ── Delete post ──
+
+    fun deletePost(
+        postId: String,
+        storageKey: String,
+        onSuccess: () -> Unit = {},
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                if (storageKey.isNotBlank()) deleteRemoteFile(storageKey)
+                firestore.collection("posts").document(postId).delete().await()
+            }.onSuccess { onSuccess() }
+                .onFailure { onFailure(it as? Exception ?: Exception(it)) }
+        }
+    }
+
+    // ── Follow ──
+
+    fun toggleFollowUser(targetUserId: String, onResult: (FollowActionResult?) -> Unit) {
+        viewModelScope.launch {
+            runCatching {
+                followRepository.toggleFollow(targetUserId)
+            }.onSuccess { action -> onResult(action) }
+                .onFailure { onResult(null) }
+        }
+    }
+
+    // ── Save/unsave post ──
 
     fun toggleSavePost(
         postId: String,
@@ -65,27 +250,21 @@ class FeedViewModel @Inject constructor(
                 val savedRef = firestore.collection("users").document(currentUserId)
                     .collection("savedPosts").document(postId)
                 if (shouldSave) {
-                    savedRef.set(mapOf(
-                        "postId" to postId,
-                        "savedAt" to System.currentTimeMillis()
-                    )).await()
+                    savedRef.set(mapOf("postId" to postId, "savedAt" to System.currentTimeMillis())).await()
                 } else {
                     savedRef.delete().await()
                 }
             }.onSuccess {
-                onResult(true, if (shouldSave) "Publicación guardada" else "Publicación eliminada de guardados")
+                onResult(true, null)
             }.onFailure { e ->
-                onResult(false, e.message ?: "Error al actualizar guardados")
+                onResult(false, e.message)
             }
         }
     }
 
     /**
-     * Obtiene en UNA sola consulta los IDs de posts que el usuario ya dio
-     * like (collectionGroup "likes"), en vez de 1 lectura por post (N+1).
-     *
-     * @return Set de IDs, o null si la consulta falla (p. ej. índice aún no
-     *         desplegado) para que el feed caiga al modo anterior.
+     * Fetches in ONE query the IDs of posts the user already liked
+     * (collectionGroup "likes"), instead of 1 read per post (N+1).
      */
     suspend fun fetchLikedPostIds(currentUserId: String): Set<String>? {
         if (currentUserId.isBlank()) return emptySet()
@@ -95,51 +274,37 @@ class FeedViewModel @Inject constructor(
                 .get()
                 .await()
                 .documents
-                // Un like vive en posts/{postId}/likes/{uid}, así que el ID del
-                // documento es el UID, no el postId. El ID del post es el del
-                // abuelo (parent = colección "likes", parent.parent = el post).
-                //
-                // Antes se devolvía `it.id` (el UID), así que el feed comparaba
-                // postId contra un set de UIDs: nunca coincidía y el corazón
-                // aparecía siempre apagado aunque el like sí se guardara.
-                //
-                // El filtro por path evita mezclar los likes de comentarios
-                // (posts/{id}/comments/{id}/likes/{uid}), que caen en la misma
-                // consulta de collectionGroup.
                 .mapNotNull { doc ->
                     val parent = doc.reference.parent.parent ?: return@mapNotNull null
                     if (parent.parent?.id == "posts") parent.id else null
                 }
                 .toSet()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
 
     /**
-     * Regenera la URL firmada de un archivo en B2 (expira a los 7 días).
-     * Devuelve null si falla para que el llamador conserve la URL guardada.
+     * Regenerates the signed URL for a file in B2 (expires after 7 days).
+     * Returns null on failure so the caller keeps the saved URL.
      */
     suspend fun refreshSignedUrl(storageKey: String): String? = try {
         storage.signDownloadUrl(storageKey)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 
-    /** Borra best-effort un archivo remoto (al eliminar un post). */
+    /** Best-effort deletion of a remote file (when deleting a post). */
     suspend fun deleteRemoteFile(storageKey: String): Boolean =
         runCatching { storage.deleteFile(storageKey) }.getOrDefault(false)
 
     /**
-     * Guarda los posts visibles en la caché Room (con timestamp de caché).
-     * Se llama cuando el feed recibe datos de Firestore.
+     * Saves visible posts to the Room cache (with cache timestamp).
+     * Called when the feed receives data from Firestore.
      *
-     * Regla de preservación: si en Room ya vive una URL re-firmada (el feed
-     * la regeneró cuando la anterior venció) y el documento de Firestore
-     * todavía trae la URL vieja, se conserva la de Room. Así la URL firme
-     * sobrevive a los re-cacheos y el disco caché de Coil/ExoPlayer sigue
-     * pegando entre sesiones. Las URLs de post NO se editan después de
-     * publicar, así que no hay riesgo de conservar una URL desactualizada.
+     * Preservation rule: if Room already has a re-signed URL (the feed
+     * regenerated it when the previous one expired) and the Firestore document
+     * still has the old URL, the Room URL is preserved.
      */
     suspend fun cachePosts(posts: List<PostData>) {
         if (posts.isEmpty()) return
@@ -176,8 +341,8 @@ class FeedViewModel @Inject constructor(
     }
 
     /**
-     * Si el caché tiene una URL distinta a la del documento (la re-firmada
-     * localmente) y no está vacía, se queda con la del caché.
+     * If the cache has a URL different from the document's (the locally
+     * re-signed one) and it is not empty, keep the cached one.
      */
     private fun preferResignedUrl(incoming: String, cached: String?): String {
         if (cached.isNullOrBlank()) return incoming
@@ -185,29 +350,29 @@ class FeedViewModel @Inject constructor(
         return if (cached != incoming) cached else incoming
     }
 
-    /** Borra un post del caché Room (post borrado en el servidor). */
+    /** Deletes a post from the Room cache (post deleted on the server). */
     suspend fun deleteCachedPost(postId: String) {
         postDao.deletePost(postId)
     }
 
-    /** Persiste la URL de imagen re-firmada para la próxima sesión. */
+    /** Persists the re-signed image URL for the next session. */
     suspend fun saveResignedImageUrl(postId: String, url: String) {
         postDao.updateImageUrl(postId, url)
     }
 
-    /** Persiste la URL de música re-firmada para la próxima sesión. */
+    /** Persists the re-signed music URL for the next session. */
     suspend fun saveResignedMusicUrl(postId: String, url: String) {
         postDao.updateMusicUrl(postId, url)
     }
 
-    /** Persiste la URL de video re-firmada para la próxima sesión. */
+    /** Persists the re-signed video URL for the next session. */
     suspend fun saveResignedVideoUrl(postId: String, url: String) {
         postDao.updateVideoUrl(postId, url)
     }
 
     /**
-     * Convierte entidades Room cacheadas a [PostData] para mostrar offline
-     * o mientras se refresca Firestore.
+     * Converts cached Room entities to [PostData] for offline display
+     * or while refreshing from Firestore.
      */
     fun cachedPostsToData(entities: List<PostEntity>): List<PostData> =
         entities.map { entity ->
@@ -235,14 +400,12 @@ class FeedViewModel @Inject constructor(
             )
         }
 
-    /**
-     * Indica si la caché de posts sigue vigente (menos de 7 días).
-     */
+    /** Indicates whether the post cache is still valid (less than 7 days). */
     suspend fun isPostCacheFresh(): Boolean {
         val lastCached = postDao.getLastCachedAt() ?: return false
         return (System.currentTimeMillis() - lastCached) < 7L * 24L * 60L * 60L * 1000L
     }
 
-    /** Devuelve los posts cacheados en Room (una sola lectura). */
+    /** Returns the cached posts in Room (single read). */
     suspend fun getCachedPosts(): List<PostEntity> = postDao.getPostsOnce()
 }
