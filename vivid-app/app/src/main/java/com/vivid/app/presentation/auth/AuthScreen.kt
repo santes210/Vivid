@@ -1,6 +1,7 @@
 package com.vivid.app.presentation.auth
 
 import android.app.Activity
+import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -657,12 +658,12 @@ fun AuthScreen(
             // ── Google (flujo intacto) ─────────────────────────────────────
             OutlinedButton(
                 onClick = {
-                    // default_web_client_id viene de google-services.json (oauth_client).
-                    // Si el proyecto aún no tiene Web client ID en Firebase, el string
-                    // existe vacío (strings.xml) y el botón muestra un aviso en vez de
-                    // fallar. Al agregar el client ID en Firebase + google-services.json,
-                    // se rellena automáticamente y Google Sign-In queda activo.
-                    val serverClientId = context.getString(R.string.default_web_client_id)
+                    // default_web_client_id lo genera el plugin google-services
+                    // a partir de google-services.json (oauth_client type 3).
+                    // Si el JSON inyectado no trae ese client (p. ej. un
+                    // placeholder de CI en PRs de forks), la función devuelve
+                    // "" y el botón muestra un aviso en vez de fallar.
+                    val serverClientId = webClientIdOrEmpty(context)
                     val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                     if (serverClientId.isNotBlank()) {
                         gsoBuilder.requestIdToken(serverClientId)
@@ -795,4 +796,20 @@ private fun GoogleLogo(modifier: Modifier = Modifier.size(20.dp)) {
         contentDescription = null,
         modifier = modifier
     )
+}
+
+/**
+ * Web client ID de Google (default_web_client_id) para requestIdToken().
+ *
+ * Lo genera el plugin google-services durante el build a partir del
+ * `oauth_client` con `client_type 3` de google-services.json. Se lee por
+ * nombre (Resources.getIdentifier) porque el recurso puede NO existir en
+ * builds que usan un google-services.json placeholder sin oauth_client
+ * (PRs de forks sin acceso a secrets). Devuelve "" en ese caso, que es el
+ * mismo comportamiento que tenía el string vacío hardcodeado en strings.xml.
+ */
+private fun webClientIdOrEmpty(context: Context): String {
+    val resources = context.resources
+    val resId = resources.getIdentifier("default_web_client_id", "string", context.packageName)
+    return if (resId != 0) resources.getString(resId) else ""
 }

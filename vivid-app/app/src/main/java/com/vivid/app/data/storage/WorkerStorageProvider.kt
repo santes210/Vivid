@@ -2,9 +2,11 @@ package com.vivid.app.data.storage
 
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import okhttp3.CertificatePinner
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -13,6 +15,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.net.URI
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -28,8 +31,11 @@ import java.util.concurrent.TimeUnit
  *
  * Flujo de subida:
  *   1. POST {worker}/storage/upload-url  → uploadUrl + token temporal de B2
+ *      (el Worker valida contentType, sizeBytes y la cuota del usuario)
  *   2. POST del binario DIRECTO a B2     → los bytes no pasan por Cloudflare
- *   3. POST {worker}/storage/sign        → URL firmada para reproducir
+ *   3. POST {worker}/storage/complete    → el Worker verifica el tamaño real
+ *      en B2 y suma la cuota del usuario (anti-abuso)
+ *   4. POST {worker}/storage/sign        → URL firmada para reproducir
  *
  * El paso 2 es lo que permite subir vídeos de cualquier tamaño: el límite de
  * 100 MB de cuerpo de petición de Cloudflare no aplica porque el archivo no
@@ -40,8 +46,7 @@ import java.util.concurrent.TimeUnit
  */
 class WorkerStorageProvider(
     private val workerBaseUrl: String,
-    private val auth: FirebaseAuth,
-    private val client: OkHttpClient = defaultClient()
+    private val auth: FirebaseAuth
 ) : StorageProvider {
 
     init {
@@ -51,6 +56,54 @@ class WorkerStorageProvider(
     }
 
     private val baseUrl = workerBaseUrl.trimEnd('/')
+
+    private val client: OkHttpClient = buildHttpClient()
+
+    private fun buildHttpClient(): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.MINUTES) // vídeos grandes
+            .readTimeout(60, TimeUnit.SECONDS)
+        applyWorkerCertPinning(builder)
+        return builder.build()
+    }
+
+    /**
+     * Cert pinning del Worker (defensa en profundidad, OPCIONAL).
+     *
+     * Los pins se pasan en el build con `-PvividWorkerPin` o la variable
+     * VIVID_WORKER_PIN (buildConfigField WORKER_PIN), con formato
+     * "sha256/<base64>;sha256/<base64>" (primario + respaldo). Si está vacío
+     * no se pinea nada: es el comportamiento por defecto recomendado, porque
+     * los certificados de *.workers.dev rotan y un pin viejo rompería la app.
+     *
+     * Cómo generar los pins y activarlos: ver SECURITY.md → "Cert pinning".
+     */
+    private fun applyWorkerCertPinning(builder: OkHttpClient.Builder) {
+        val rawPins = BuildConfig.WORKER_PIN
+        if (rawPins.isBlank()) return
+        val host = runCatching { URI(baseUrl).host }.getOrNull()
+        if (host.isNullOrBlank()) {
+            Log.w(TAG, "No se pudo extraer el host de $baseUrl para el cert pinning")
+            return
+        }
+        var added = false
+        val pinner = CertificatePinner.Builder().apply {
+            for (candidate in rawPins.split(';')) {
+                val pin = candidate.trim()
+                if (PIN_PATTERN.matches(pin)) {
+                    add(host, pin)
+                    added = true
+                } else {
+                    Log.w(TAG, "Pin ignorado (formato inválido): $pin")
+                }
+            }
+        }.build()
+        if (added) {
+            builder.certificatePinner(pinner)
+            Log.i(TAG, "Cert pinning activo para $host")
+        }
+    }
 
     override suspend fun uploadFile(
         localFilePath: String,
@@ -64,15 +117,19 @@ class WorkerStorageProvider(
         require(remoteKey.isNotBlank()) { "La ruta remota está vacía" }
 
         val contentType = guessContentType(remoteKey)
-        Log.d(TAG, "Subiendo ${file.name} (${file.length() / 1024} KB) → $remoteKey")
+        val sizeBytes = file.length()
+        Log.d(TAG, "Subiendo ${file.name} (${sizeBytes / 1024} KB) → $remoteKey")
         onProgress(5)
 
-        // 1. Pedir permiso de subida al Worker.
+        // 1. Pedir permiso de subida al Worker. Enviamos el tamaño real del
+        //    archivo local para que valide los límites por tipo y la cuota
+        //    del usuario ANTES de entregar el ticket de B2.
         val ticket = callWorker(
             "storage/upload-url",
             JSONObject().apply {
                 put("key", remoteKey)
                 put("contentType", contentType)
+                put("sizeBytes", sizeBytes)
             }
         )
         val uploadUrl = ticket.optString("uploadUrl")
@@ -105,7 +162,35 @@ class WorkerStorageProvider(
         }
         onProgress(90)
 
-        // 3. Obtener la URL firmada para reproducir el archivo.
+        // 3. Confirmar la subida: el Worker verifica el tamaño REAL en B2 y
+        //    registra la cuota del usuario (ledger anti-abuso). Es idempotente
+        //    (uploadId = sha1:tamaño), así que reintentar no duplica la cuota.
+        //    Best-effort: si falla por red no bloqueamos al usuario (el ticket
+        //    ya validó tamaño y cuota); la cuota se autocorrige al borrar.
+        val uploadId = "$sha1:$sizeBytes"
+        try {
+            callWorker(
+                "storage/complete",
+                JSONObject().apply {
+                    put("key", effectiveKey)
+                    put("uploadId", uploadId)
+                    put("sizeBytes", sizeBytes)
+                    put("contentType", contentType)
+                }
+            )
+        } catch (e: IOException) {
+            val message = e.message.orEmpty().lowercase()
+            if (message.contains("quota") || message.contains("too large")) {
+                // El archivo quedó subido pero no cumple los límites reales:
+                // limpiarlo para no dejar basura en B2.
+                runCatching { deleteFile(effectiveKey) }
+                throw e
+            }
+            Log.w(TAG, "storage/complete falló (best-effort): ${e.message}")
+        }
+        onProgress(95)
+
+        // 4. Obtener la URL firmada para reproducir el archivo.
         val signedUrl = signDownloadUrl(effectiveKey)
         check(signedUrl.isNotBlank()) { "No se pudo firmar la URL de descarga" }
 
@@ -215,10 +300,7 @@ class WorkerStorageProvider(
         private const val TAG = "WorkerStorage"
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-        private fun defaultClient() = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.MINUTES) // vídeos grandes
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
+        /** Formato de pin aceptado por OkHttp CertificatePinner. */
+        private val PIN_PATTERN = Regex("^sha256/[A-Za-z0-9+/=_-]+$")
     }
 }

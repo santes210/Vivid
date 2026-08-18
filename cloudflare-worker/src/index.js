@@ -30,7 +30,10 @@ export default {
           HttpError,
           readJson,
           authenticate: (req) => authenticateFirebaseUser(req, projectId),
-          getDocument: (path) => getDocument(serviceAccount, projectId, path)
+          getDocument: (path) => getDocument(serviceAccount, projectId, path),
+          createIfAbsent: (path, fields) => createIfAbsent(serviceAccount, projectId, path, fields),
+          writeDocument: (path, fields) => writeDocument(serviceAccount, projectId, path, fields),
+          deleteDocument: (path) => deleteDocument(serviceAccount, projectId, path)
         });
         return response ?? json({ error: "Not found" }, 404);
       } catch (error) {
@@ -371,6 +374,34 @@ async function claimEvent(sa, projectId, path, event) {
     if (error instanceof HttpError && (error.status === 409 || error.status === 412)) return false;
     throw error;
   }
+}
+
+/**
+ * Crea un documento solo si no existe (conditional PATCH con
+ * currentDocument.exists=false). Devuelve true si se creó, false si ya
+ * existía (409/412). Usado por /storage/complete para la idempotencia
+ * de la contabilidad de cuotas.
+ */
+async function createIfAbsent(sa, projectId, path, fields) {
+  try {
+    await firestoreRequest(sa, projectId, path, {
+      method: "PATCH",
+      query: "?currentDocument.exists=false",
+      body: { fields: encodeFields(fields) }
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof HttpError && (error.status === 409 || error.status === 412)) return false;
+    throw error;
+  }
+}
+
+/** Escribe (crea o sobreescribe) un documento. Usado por el ledger de cuotas. */
+async function writeDocument(sa, projectId, path, fields) {
+  return firestoreRequest(sa, projectId, path, {
+    method: "PATCH",
+    body: { fields: encodeFields(fields) }
+  });
 }
 
 async function finishEvent(sa, projectId, path, status, sent) {

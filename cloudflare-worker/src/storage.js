@@ -11,8 +11,23 @@
  *
  * Endpoints:
  *   POST /storage/upload-url  → { remoteKey, uploadUrl, uploadAuthToken }
+ *                              (valida contentType, sizeBytes y cuota)
+ *   POST /storage/complete    → { ok, sizeBytes, usageBytes, quotaBytes }
+ *                              (verifica el tamaño real en B2 y registra la
+ *                               cuota del usuario; idempotente por uploadId)
  *   POST /storage/sign        → { signedUrl, expiresAt }
- *   POST /storage/delete      → { ok, deleted }
+ *   POST /storage/delete      → { ok, deleted } (y descuenta la cuota)
+ *
+ * Límites y cuotas:
+ *   El Worker nunca ve los bytes (la app sube directo a B2), así que la
+ *   protección contra abuso se apoya en tres capas:
+ *     1. Límite por tipo MIME (SIZE_LIMITS_BYTES) validado en upload-url con
+ *        el sizeBytes que declara la app y RE-verificado en complete contra
+ *        el tamaño real que reporta B2.
+ *     2. Cuota por usuario y namespace (NAMESPACE_QUOTA_BYTES) con un ledger
+ *        en Firestore (_storageUsage/{uid}/namespaces/{namespace}) que se
+ *        suma en complete y se resta en delete.
+ *     3. Allowlist de contentType (ALLOWED_CONTENT_TYPES).
  */
 
 const B2_API_VERSION = "v4";
@@ -40,6 +55,47 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "audio/ogg",
   "audio/wav"
 ]);
+
+// -------------------------------------------------------------------------
+// Límites de tamaño y cuotas por usuario
+// -------------------------------------------------------------------------
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+// Tamaño máximo por tipo de contenido. La app comprime antes de subir
+// (imágenes ≤ ~1.5 MB, vídeos 720p a 1.2-2.5 Mbps ≈ 45-90 MB en 5 min,
+// notas de voz AAC .m4a ≈ 0.5 MB/min), así que estos techos son generosos.
+const SIZE_LIMITS_BYTES = Object.freeze({
+  "image/jpeg": 15 * MB,
+  "image/png": 15 * MB,
+  "image/webp": 15 * MB,
+  "image/gif": 20 * MB,
+  "video/mp4": 300 * MB,
+  "audio/mp4": 30 * MB, // .m4a (notas de voz AAC)
+  "audio/aac": 30 * MB,
+  "audio/mpeg": 30 * MB,
+  "audio/ogg": 30 * MB,
+  "audio/wav": 50 * MB
+});
+const DEFAULT_SIZE_LIMIT_BYTES = 25 * MB;
+
+// Techo absoluto para CUALQUIER archivo, se sobreescriba o no el límite por
+// tipo. Env: UPLOAD_MAX_BYTES.
+const ABSOLUTE_MAX_BYTES = 512 * MB;
+
+// Cuota de almacenamiento por usuario y namespace: la suma de bytes de los
+// archivos VIVOS del usuario en ese namespace no puede superarla. Env:
+// UPLOAD_QUOTA_BYTES redefine la cuota global de un usuario (aplica a todos
+// los namespaces).
+const NAMESPACE_QUOTA_BYTES = Object.freeze({
+  posts: 1.5 * GB,
+  reels: 3 * GB,
+  stories: 1 * GB,
+  avatars: 200 * MB,
+  chat_images: 1 * GB,
+  chat_voice: 500 * MB
+});
+const DEFAULT_QUOTA_BYTES = 2 * GB;
 
 /**
  * Prefijos válidos y cómo se autoriza cada uno.
@@ -72,6 +128,7 @@ export function handleStorageRoute(request, pathname, deps) {
 
   switch (pathname) {
     case "/storage/upload-url": return createUploadUrl(request, deps);
+    case "/storage/complete": return completeUpload(request, deps);
     case "/storage/sign": return signDownload(request, deps);
     case "/storage/delete": return deleteObject(request, deps);
     default: return deps.json({ error: "Not found" }, 404);
@@ -89,7 +146,21 @@ async function createUploadUrl(request, deps) {
 
   const remoteKey = normalizeKey(body.key, HttpError);
   const contentType = normalizeContentType(body.contentType, HttpError);
+  const sizeBytes = normalizeSize(body.sizeBytes, HttpError);
+  const namespace = keyNamespace(remoteKey, HttpError);
   await assertCanWrite(remoteKey, actorUid, deps);
+
+  // Límites de tamaño y cuota ANTES de entregar el ticket de B2. El sizeBytes
+  // lo declara la app (File.length()) y se vuelve a comprobar contra el
+  // tamaño REAL en /storage/complete, así que mentir aquí solo engaña al
+  // propio ticket.
+  if (sizeBytes > sizeLimitFor(contentType)) {
+    throw new HttpError(413, `File too large: max ${sizeLimitFor(contentType)} bytes for ${contentType}`);
+  }
+  if (sizeBytes > absoluteMaxBytes(env)) {
+    throw new HttpError(413, "File too large");
+  }
+  await assertQuotaAvailable(actorUid, namespace, sizeBytes, deps, env);
 
   const session = await getB2Session(env, HttpError);
   const bucketId = requireEnv(env, "B2_BUCKET_ID", HttpError);
@@ -153,6 +224,103 @@ async function createScopedKey(session, bucketId, namePrefix, HttpError) {
 function scopedKeyName(prefix) {
   const safe = prefix.replace(/[^A-Za-z0-9-]/g, "-").slice(0, 60);
   return `vivid-up-${safe}-${Date.now().toString(36)}`.slice(0, 100);
+}
+
+// -------------------------------------------------------------------------
+// POST /storage/complete
+// -------------------------------------------------------------------------
+
+/**
+ * Confirma una subida ya realizada directamente a B2.
+ *
+ * El Worker no ve los bytes, así que aquí se verifica con la metadata real
+ * de B2 (b2_list_file_names) que el archivo existe y que su tamaño no excede
+ * los límites, y se registra en el ledger de cuota del usuario.
+ *
+ * Idempotente por `uploadId` (la app manda "sha1:tamaño"): si el marker ya
+ * existe, la cuota ya se contabilizó (retry de la app) y no se duplica.
+ */
+async function completeUpload(request, deps) {
+  const { env, HttpError, json } = deps;
+  const actorUid = await deps.authenticate(request);
+  const body = await deps.readJson(request);
+
+  const remoteKey = normalizeKey(body.key, HttpError);
+  const uploadId = normalizeUploadId(body.uploadId, HttpError);
+  const declaredSize = normalizeSize(body.sizeBytes, HttpError);
+  const contentType = normalizeContentType(body.contentType, HttpError);
+  const namespace = keyNamespace(remoteKey, HttpError);
+  await assertCanWrite(remoteKey, actorUid, deps);
+
+  // Tamaño REAL según B2; si la lista aún no lo ve (consistencia eventual),
+  // se usa el declarado (que el ticket ya validó contra el mismo límite).
+  const actualSize = (await resolveActualSize(remoteKey, deps)) ?? declaredSize;
+
+  if (actualSize > sizeLimitFor(contentType)) {
+    throw new HttpError(413, `File too large: max ${sizeLimitFor(contentType)} bytes for ${contentType}`);
+  }
+  if (actualSize > absoluteMaxBytes(env)) {
+    throw new HttpError(413, "File too large");
+  }
+
+  // Marker de idempotencia: solo la primera vez contabiliza cuota.
+  const markerPath = `_storageUsage/${actorUid}/uploads/${uploadId}`;
+  const firstTime = await deps.createIfAbsent(markerPath, {
+    key: remoteKey,
+    namespace,
+    sizeBytes: actualSize,
+    createdAt: Date.now()
+  });
+  if (!firstTime) {
+    return json({ ok: true, duplicate: true, sizeBytes: actualSize });
+  }
+
+  const usagePath = usageDocPath(actorUid, namespace);
+  const usage = await deps.getDocument(usagePath);
+  const quota = quotaBytesFor(namespace, env);
+  const used = Number(usage?.bytes || 0) + actualSize;
+  const files = Number(usage?.files || 0) + 1;
+
+  if (used > quota) {
+    // Solo pasa si el cliente declaró en upload-url menos de lo que subió.
+    // El archivo queda en B2: la app recibe el 403 y debe borrarlo.
+    await deps.deleteDocument(markerPath).catch(() => {});
+    throw new HttpError(403, `Upload quota exceeded (${namespace})`);
+  }
+
+  // Lectura + escritura sin transacción: dos completes concurrentes pueden
+  // perder una suma. Es una protección anti-abuso, no una contabilidad exacta.
+  await deps.writeDocument(usagePath, {
+    bytes: used,
+    files,
+    updatedAt: Date.now()
+  });
+
+  return json({
+    ok: true,
+    duplicate: false,
+    sizeBytes: actualSize,
+    usageBytes: used,
+    quotaBytes: quota
+  });
+}
+
+/** Tamaño real del archivo en B2, o null si aún no es visible en la lista. */
+async function resolveActualSize(remoteKey, deps) {
+  const { env, HttpError } = deps;
+  try {
+    const session = await getB2Session(env, HttpError);
+    const bucketId = requireEnv(env, "B2_BUCKET_ID", HttpError);
+    const listed = await b2Post(session, "b2_list_file_names", {
+      bucketId,
+      startFileName: remoteKey,
+      maxFileCount: 1
+    }, HttpError);
+    const file = (listed.files || []).find((entry) => entry.fileName === remoteKey);
+    return file ? Number(file.contentLength) || null : null;
+  } catch (error) {
+    return null; // Best-effort: se usará el tamaño declarado (ya validado).
+  }
 }
 
 // -------------------------------------------------------------------------
@@ -222,6 +390,21 @@ async function deleteObject(request, deps) {
     fileId: file.fileId
   }, HttpError);
 
+  // Descuenta la cuota del usuario por el tamaño REAL del archivo borrado.
+  // El borrador siempre es quien subió (reglas de Firestore: solo el autor
+  // borra sus posts/reels/mensajes), así que actorUid == dueño del ledger.
+  const fileSize = Number(file.contentLength) || 0;
+  if (fileSize > 0) {
+    const { namespace } = splitKey(remoteKey, HttpError);
+    const usagePath = usageDocPath(actorUid, namespace);
+    const usage = await deps.getDocument(usagePath);
+    if (usage) {
+      const bytes = Math.max(0, Number(usage.bytes || 0) - fileSize);
+      const files = Math.max(0, Number(usage.files || 0) - 1);
+      await deps.writeDocument(usagePath, { bytes, files, updatedAt: Date.now() });
+    }
+  }
+
   return json({ ok: true, deleted: true });
 }
 
@@ -285,6 +468,52 @@ async function assertChatParticipant(chatId, actorUid, deps) {
 }
 
 // -------------------------------------------------------------------------
+// Cuotas y límites
+// -------------------------------------------------------------------------
+
+/** Límite de tamaño para un contentType dado (bytes). */
+export function sizeLimitFor(contentType) {
+  return SIZE_LIMITS_BYTES[contentType] || DEFAULT_SIZE_LIMIT_BYTES;
+}
+
+/** Cuota de un usuario en un namespace (bytes). UPLOAD_QUOTA_BYTES la globaliza. */
+export function quotaBytesFor(namespace, env = {}) {
+  const override = Number(env.UPLOAD_QUOTA_BYTES);
+  if (Number.isFinite(override) && override > 0) return override;
+  return NAMESPACE_QUOTA_BYTES[namespace] || DEFAULT_QUOTA_BYTES;
+}
+
+/** Techo absoluto por archivo (bytes). UPLOAD_MAX_BYTES lo sobreescribe. */
+export function absoluteMaxBytes(env = {}) {
+  const override = Number(env.UPLOAD_MAX_BYTES);
+  if (Number.isFinite(override) && override > 0) return override;
+  return ABSOLUTE_MAX_BYTES;
+}
+
+function usageDocPath(uid, namespace) {
+  return `_storageUsage/${uid}/namespaces/${namespace}`;
+}
+
+/** El namespace es la primera parte de la key, ya validada por normalizeKey. */
+function keyNamespace(remoteKey, HttpError) {
+  return splitKey(remoteKey, HttpError).namespace;
+}
+
+/**
+ * Comprueba la cuota ANTES de entregar el ticket: uso actual + tamaño nuevo
+ * no puede superar la cuota del namespace. El ledger vive en Firestore
+ * (_storageUsage) y lo mantienen complete/delete.
+ */
+async function assertQuotaAvailable(uid, namespace, sizeBytes, deps, env) {
+  const usage = await deps.getDocument(usageDocPath(uid, namespace));
+  const used = Number(usage?.bytes || 0);
+  const quota = quotaBytesFor(namespace, env);
+  if (used + sizeBytes > quota) {
+    throw new deps.HttpError(403, `Upload quota exceeded (${namespace})`);
+  }
+}
+
+// -------------------------------------------------------------------------
 // Validación de claves
 // -------------------------------------------------------------------------
 
@@ -331,6 +560,21 @@ function normalizeContentType(value, HttpError) {
     throw new HttpError(400, `Unsupported contentType: ${contentType || "(missing)"}`);
   }
   return contentType;
+}
+
+/** Tamaño declarado por la app: entero positivo (bytes). */
+export function normalizeSize(value, HttpError) {
+  const size = Number(value);
+  if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, "Invalid sizeBytes");
+  return size;
+}
+
+/** Identificador de subida para la idempotencia de /storage/complete. */
+export function normalizeUploadId(value, HttpError) {
+  const id = typeof value === "string" ? value.trim() : "";
+  if (!id || id.length > 128) throw new HttpError(400, "Invalid uploadId");
+  if (!/^[A-Za-z0-9:_-]+$/.test(id)) throw new HttpError(400, "Invalid uploadId");
+  return id;
 }
 
 function normalizeTtl(value, HttpError) {
