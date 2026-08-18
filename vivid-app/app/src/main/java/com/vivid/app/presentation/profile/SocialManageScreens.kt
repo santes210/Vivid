@@ -257,42 +257,9 @@ private fun SocialUserCard(
 
 @Composable
 private fun SocialAvatar(user: SocialUserPreview) {
-    if (user.avatarBase64.isNotBlank()) {
-        var bitmap by remember(user.avatarBase64) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(user.avatarBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(user.avatarBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) { null }
-        }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = user.displayName,
-                modifier = Modifier.size(56.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-            return
-        }
-    }
-
-    if (user.avatarUrl.isNotBlank()) {
-        AsyncImage(
-            model = user.avatarUrl,
-            contentDescription = user.displayName,
-            modifier = Modifier.size(56.dp).clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                user.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-    }
+    com.vivid.app.ui.components.UserAvatar(
+        imageUrl = user.avatarUrl,
+        name = user.displayName,
+        size = 56.dp
+    )
 }

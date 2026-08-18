@@ -288,44 +288,10 @@ fun StoryAvatar(
     avatarBase64: String,
     modifier: Modifier = Modifier
 ) {
-    if (avatarBase64.isNotBlank()) {
-        var bitmap by remember(avatarBase64) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(avatarBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(avatarBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
-            }
-        }
-
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = username,
-                modifier = modifier,
-                contentScale = ContentScale.Crop
-            )
-            return
-        }
-    }
-
-    if (avatarUrl.isNotBlank()) {
-        AsyncImage(
-            model = avatarUrl,
-            contentDescription = username,
-            modifier = modifier,
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = modifier.background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
-    }
+    com.vivid.app.ui.components.UserAvatar(
+        imageUrl = avatarUrl,
+        name = username,
+        modifier = modifier,
+        size = 56.dp
+    )
 }

@@ -25,7 +25,10 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.vivid.app.util.ExoPlayerPool
+import com.vivid.app.util.MusicAssets
 import com.vivid.app.util.VideoCacheManager
+import com.vivid.app.util.rememberPooledExoPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -38,21 +41,15 @@ internal fun PostVideoPlayer(
     thumbnailUrl: String,
     onUrlExpired: () -> Unit = {}
 ) {
-    val ctx = LocalContext.current
     var isReady by remember(videoUrl) { mutableStateOf(false) }
     var expiredReported by remember(videoUrl) { mutableStateOf(false) }
 
-    val player = remember(videoUrl) {
-        ExoPlayer.Builder(ctx).build().apply {
-            if (VideoCacheManager.isCacheable(videoUrl)) {
-                setMediaSource(VideoCacheManager.buildCachedMediaSource(ctx, videoUrl))
-            } else {
-                setMediaItem(MediaItem.fromUri(videoUrl))
-            }
-            prepare()
-        }
-    }
-    DisposableEffect(player) {
+    val player = rememberPooledExoPlayer(
+        mediaUrl = videoUrl,
+        playWhenReady = false,
+        repeatMode = Player.REPEAT_MODE_OFF
+    )
+    DisposableEffect(player, videoUrl) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 if (!expiredReported) {
@@ -60,12 +57,12 @@ internal fun PostVideoPlayer(
                     onUrlExpired()
                 }
             }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) isReady = true
+            }
         }
         player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            player.release()
-        }
+        onDispose { player.removeListener(listener) }
     }
 
     Box(Modifier.fillMaxWidth().height(380.dp).background(Color.Black)) {
@@ -106,8 +103,8 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
             isPreparingAsset = true
             resolvedAssetFile = withContext(Dispatchers.IO) {
                 try {
-                    val assetPath = post.musicAssetFile
-                    val input = context.assets.open(assetPath)
+                    val assetPath = MusicAssets.resolvePackedPath(post.musicAssetFile)
+                    val input = MusicAssets.openAsset(context.assets, post.musicAssetFile)
                     val tempFile = File(context.cacheDir, "post_music_asset_${post.id}_${assetPath.substringAfterLast("/")}")
                     if (!tempFile.exists() || tempFile.length() < 1024) {
                         tempFile.outputStream().use { out -> input.copyTo(out) }
@@ -130,7 +127,7 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
         when {
             post.musicUrl.isNotBlank() -> post.musicUrl
             raf != null && raf.exists() -> "file://${raf.absolutePath}"
-            post.musicAssetFile.isNotBlank() -> "asset:///${post.musicAssetFile}"
+            post.musicAssetFile.isNotBlank() -> "asset:///${MusicAssets.resolvePackedPath(post.musicAssetFile)}"
             else -> null
         }
     }
@@ -141,7 +138,7 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
         if (shouldPlay && uri != null) {
             try {
                 val parsedUri = Uri.parse(uri)
-                val p = ExoPlayer.Builder(context).build().apply {
+                val p = ExoPlayerPool.acquire(context).apply {
                     if (VideoCacheManager.isCacheable(uri)) {
                         setMediaSource(VideoCacheManager.buildCachedMediaSource(context, uri))
                     } else {
@@ -171,11 +168,11 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
                 isPlaying = false
             }
         } else {
-            player?.release()
+            player?.let { ExoPlayerPool.release(it) }
             player = null
         }
         onDispose {
-            player?.release()
+            player?.let { ExoPlayerPool.release(it) }
             player = null
         }
     }

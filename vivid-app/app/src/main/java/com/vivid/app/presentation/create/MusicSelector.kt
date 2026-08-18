@@ -48,21 +48,21 @@ data class MusicTrack(
 object MusicCatalog {
     // Curated demo tracks — if asset not present, UI still shows them but mixing will require custom pick
     val demoTracks = listOf(
-        MusicTrack("1", "Vivid Pop Energy", "Luna Skye", "Pop", "0:29", "music/vivid_pop.wav"),
-        MusicTrack("2", "Lo-Fi Dreams", "A. Kumo", "Lo-Fi", "1:12", "music/lofi_dreams.wav"),
-        MusicTrack("3", "Sunset Chill", "Coastline", "Chill", "0:45", "music/sunset_chill.wav"),
-        MusicTrack("4", "Neon Nights", "Synthwave 84", "Electronic", "0:38", "music/neon_nights.wav"),
-        MusicTrack("5", "Happy Loop", "Joy Parade", "Pop", "0:32", "music/happy_loop.wav"),
-        MusicTrack("6", "Calm Piano", "E. Sol", "Chill", "1:05", "music/calm_piano.wav"),
-        MusicTrack("7", "Energetic Beat", "Rush", "Energético", "0:27", "music/energetic_beat.wav"),
-        MusicTrack("8", "Midnight Lo-Fi", "Night Owl", "Lo-Fi", "0:58", "music/midnight_lofi.wav"),
+        MusicTrack("1", "Vivid Pop Energy", "Luna Skye", "Pop", "0:29", "music/vivid_pop.mp3"),
+        MusicTrack("2", "Lo-Fi Dreams", "A. Kumo", "Lo-Fi", "1:12", "music/lofi_dreams.mp3"),
+        MusicTrack("3", "Sunset Chill", "Coastline", "Chill", "0:45", "music/sunset_chill.mp3"),
+        MusicTrack("4", "Neon Nights", "Synthwave 84", "Electronic", "0:38", "music/neon_nights.mp3"),
+        MusicTrack("5", "Happy Loop", "Joy Parade", "Pop", "0:32", "music/happy_loop.mp3"),
+        MusicTrack("6", "Calm Piano", "E. Sol", "Chill", "1:05", "music/calm_piano.mp3"),
+        MusicTrack("7", "Energetic Beat", "Rush", "Energético", "0:27", "music/energetic_beat.mp3"),
+        MusicTrack("8", "Midnight Lo-Fi", "Night Owl", "Lo-Fi", "0:58", "music/midnight_lofi.mp3"),
     )
 
     val moods = listOf("Todos", "Pop", "Lo-Fi", "Chill", "Electronic", "Energético")
 
     fun discoverAssets(context: Context): List<MusicTrack> {
         return try {
-            val files = context.assets.list("music")?.filter { it.endsWith(".mp3") || it.endsWith(".m4a") || it.endsWith(".wav") } ?: emptyList()
+            val files = context.assets.list("music")?.filter { com.vivid.app.util.MusicAssets.isPackedAudio(it) } ?: emptyList()
             files.mapIndexed { idx, name ->
                 MusicTrack(
                     id = "asset_$idx",
@@ -166,7 +166,7 @@ fun MusicSelectorBottomSheet(
 
             Spacer(Modifier.height(10.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(MusicCatalog.moods) { mood ->
+                items(MusicCatalog.moods, key = { it }) { mood ->
                     val isSel = mood == moodFilter
                     FilterChip(
                         selected = isSel,
@@ -291,7 +291,7 @@ private fun MusicTrackRow(track: MusicTrack, isSelected: Boolean, onSelect: () -
                 track.uri != null -> track.uri
                 track.assetFile != null -> {
                     // ExoPlayer can play asset via "asset:///music/..."
-                    Uri.parse("asset:///${track.assetFile}")
+                    Uri.parse("asset:///${com.vivid.app.util.MusicAssets.resolvePackedPath(track.assetFile)}")
                 }
                 else -> null
             }

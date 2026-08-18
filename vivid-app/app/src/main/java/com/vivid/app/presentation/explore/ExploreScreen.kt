@@ -172,7 +172,7 @@ fun ExploreScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(tags) { tag ->
+                items(tags, key = { it }) { tag ->
                     FilterChip(
                         selected = selectedTag == tag,
                         onClick = { selectedTag = tag },

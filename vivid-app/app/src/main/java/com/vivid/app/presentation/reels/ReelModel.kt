@@ -1,8 +1,11 @@
 package com.vivid.app.presentation.reels
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Modelo unificado de Reel para toda la app.
  */
+@Immutable
 data class Reel(
     val id: String,
     val userId: String = "",

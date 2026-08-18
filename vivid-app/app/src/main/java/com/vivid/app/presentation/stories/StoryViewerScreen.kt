@@ -466,18 +466,11 @@ private fun ViewersBottomSheet(viewers: List<StoryViewer>, viewersCount: Int, on
 private fun ViewersRow(v: StoryViewer) {
     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {}.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         // Avatar
-        if (v.avatarBase64.isNotBlank()) {
-            val bmp = remember(v.avatarBase64) { decodeBase64Bitmap(v.avatarBase64) }
-            if (bmp != null) {
-                Image(bitmap = bmp.asImageBitmap(), contentDescription = v.username, modifier = Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-            } else {
-                PlaceholderAvatar(v.username)
-            }
-        } else if (v.avatarUrl.isNotBlank()) {
-            AsyncImage(model = v.avatarUrl, contentDescription = v.username, modifier = Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-        } else {
-            PlaceholderAvatar(v.username)
-        }
+        com.vivid.app.ui.components.UserAvatar(
+            imageUrl = v.avatarUrl,
+            name = v.username,
+            size = 44.dp
+        )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(v.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
@@ -556,38 +549,22 @@ private fun StoryViewerOverlay(
 
 @Composable
 private fun StoryHeaderAvatar(story: ViewerStory) {
-    if (story.avatarBase64.isNotBlank()) {
-        val bitmap = remember(story.avatarBase64) { decodeBase64Bitmap(story.avatarBase64) }
-        if (bitmap != null) {
-            Image(bitmap = bitmap.asImageBitmap(), contentDescription = story.username, modifier = Modifier.size(32.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-            return
-        }
-    }
-    if (story.avatarUrl.isNotBlank()) {
-        AsyncImage(model = story.avatarUrl, contentDescription = story.username, modifier = Modifier.size(32.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-    } else {
-        Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-            Text(story.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?", color = Color.White, style = MaterialTheme.typography.labelMedium)
-        }
-    }
+    com.vivid.app.ui.components.UserAvatar(
+        imageUrl = story.avatarUrl,
+        name = story.username,
+        size = 32.dp
+    )
 }
 
 @UnstableApi
 @Composable
 private fun VideoStoryPlayer(story: ViewerStory, onCompleted: () -> Unit) {
     val context = LocalContext.current
-    val player = remember(story.videoUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            // Caché local: el video de la story no se re-descarga en cada visita
-            if (com.vivid.app.util.VideoCacheManager.isCacheable(story.videoUrl)) {
-                setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(context, story.videoUrl))
-            } else {
-                setMediaItem(MediaItem.fromUri(story.videoUrl))
-            }
-            prepare()
-            playWhenReady = true
-        }
-    }
+    val player = com.vivid.app.util.rememberPooledExoPlayer(
+        mediaUrl = story.videoUrl,
+        playWhenReady = true,
+        repeatMode = Player.REPEAT_MODE_OFF
+    )
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -595,7 +572,7 @@ private fun VideoStoryPlayer(story: ViewerStory, onCompleted: () -> Unit) {
             }
         }
         player.addListener(listener)
-        onDispose { player.removeListener(listener); player.release() }
+        onDispose { player.removeListener(listener) }
     }
     AndroidView(factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
 }

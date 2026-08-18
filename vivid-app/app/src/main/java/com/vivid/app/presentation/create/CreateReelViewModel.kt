@@ -101,8 +101,8 @@ class CreateReelViewModel @Inject constructor(
                     musicAssetFile != null -> {
                         // Copia asset a cache para AudioMixer
                         try {
-                            val assetIn = context.assets.open(musicAssetFile)
-                            val tmp = File(context.cacheDir, "music_${System.currentTimeMillis()}.mp3")
+                            val assetIn = com.vivid.app.util.MusicAssets.openAsset(context.assets, musicAssetFile)
+                            val tmp = File(context.cacheDir, "music_${System.currentTimeMillis()}.${com.vivid.app.util.MusicAssets.COMPRESSED_EXTENSION}")
                             tmp.outputStream().use { out -> assetIn.copyTo(out) }
                             assetIn.close()
                             Uri.fromFile(tmp)

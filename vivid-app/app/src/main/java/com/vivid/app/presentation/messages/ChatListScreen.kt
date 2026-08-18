@@ -41,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@androidx.compose.runtime.Immutable
 data class ChatPreview(
     val chatId: String,
     val otherUserId: String,
@@ -517,50 +518,11 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
 
 @Composable
 private fun AvatarForChat(chat: ChatPreview) {
-    if (chat.avatarBase64.isNotBlank()) {
-        var bitmap by remember(chat.avatarBase64) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(chat.avatarBase64) {
-            bitmap = try {
-                val bytes = Base64.decode(chat.avatarBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) { null }
-        }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = chat.otherUserName,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-            return
-        }
-    }
-    if (chat.avatarUrl.isNotBlank()) {
-        AsyncImage(
-            model = chat.avatarUrl,
-            contentDescription = chat.otherUserName,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                chat.otherUserName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-        }
-    }
+    com.vivid.app.ui.components.UserAvatar(
+        imageUrl = chat.avatarUrl,
+        name = chat.otherUserName,
+        size = 56.dp
+    )
 }
 
 /**
