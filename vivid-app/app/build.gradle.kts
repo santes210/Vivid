@@ -44,6 +44,20 @@ val WORKER_URL_VALUE = providers.gradleProperty("vividWorkerUrl")
     .get()
     .trimEnd('/')
 
+// Cert pinning del Worker (defensa en profundidad, OPCIONAL).
+// Formato: "sha256/<base64>;sha256/<base64>" (pin primario + pin de respaldo).
+//   ./gradlew assembleRelease -PvividWorkerPin='sha256/AAAA...;sha256/BBBB...'
+// o con la variable de entorno VIVID_WORKER_PIN en GitHub Actions.
+// Vacío (default) = sin pinning. Recomendado activarlo SOLO cuando el Worker
+// tenga un dominio propio fijo: los certificados de *.workers.dev rotan y un
+// pin desactualizado dejaría la app sin conexión. Cómo generar los pins:
+// ver SECURITY.md → "Cert pinning".
+val WORKER_PIN_VALUE = providers.gradleProperty("vividWorkerPin")
+    .orElse(providers.environmentVariable("VIVID_WORKER_PIN"))
+    .orElse("")
+    .get()
+    .trim()
+
 // En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
 // Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
 val configuredVersionCode = providers.gradleProperty("vividVersionCode")
@@ -89,6 +103,9 @@ android {
         // mantiene como alias para el código de notificaciones ya existente.
         buildConfigField("String", "WORKER_URL", "\"$WORKER_URL_VALUE\"")
         buildConfigField("String", "PUSH_WORKER_URL", "\"$WORKER_URL_VALUE\"")
+        // Pins SHA-256 opcionales del dominio del Worker (ver arriba). Vacío
+        // por defecto: sin pinning. WorkerStorageProvider los aplica con OkHttp.
+        buildConfigField("String", "WORKER_PIN", "\"$WORKER_PIN_VALUE\"")
     }
 
     signingConfigs {

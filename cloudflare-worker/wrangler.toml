@@ -32,3 +32,10 @@ B2_BUCKET_NAME = "VividGrem"
 # Pon "false" solo para depurar: desactiva la creación de application keys
 # temporales acotadas al prefijo del usuario en cada subida.
 B2_RESTRICT_UPLOAD_KEYS = "true"
+
+# ── Límites y cuotas de subida (opcionales) ──────────────────────────────
+# storage.js trae límites por tipo MIME y cuotas por usuario y namespace
+# (posts/reels/stories/avatars/chat). Estos vars los sobreescriben si algún
+# día necesitas ajustarlos sin tocar código:
+# UPLOAD_QUOTA_BYTES = "2147483648"   # cuota global por usuario (bytes)
+# UPLOAD_MAX_BYTES = "536870912"      # techo absoluto por archivo (bytes)

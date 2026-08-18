@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Reglas de backup (Android 11 e inferiores, android:fullBackupContent).
+
+    PRIVACIDAD: la caché local de Vivid NO se sube a la nube.
+      - La base de datos Room (vivid_database) contiene conversaciones,
+        mensajes y contenido cacheado: se EXCLUYE. Es una caché de Firestore
+        y se vuelve a poblar al iniciar sesión, así que excluirla no pierde
+        datos de forma permanente.
+      - La caché de media (archivos descargados, avatares Base64...) también
+        se excluye: es regenerable y puede contener contenido privado.
+      - Un backup en la nube se puede restaurar en cualquier dispositivo
+        (incluso uno comprometido), por eso no debe incluir datos sensibles.
+
+    Solo se respaldan las preferencias (SharedPreferences): tema, ajustes de
+    notificación, calidad de descarga, etc.
+-->
 <full-backup-content>
     <include domain="sharedpref" path="."/>
-    <include domain="database" path="."/>
-    <include domain="file" path="."/>
+    <exclude domain="database" path="."/>
+    <exclude domain="file" path="."/>
+    <exclude domain="external" path="."/>
 </full-backup-content>

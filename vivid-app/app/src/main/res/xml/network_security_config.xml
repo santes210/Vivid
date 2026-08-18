@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Seguridad de red (Android 7+ / API 24+).
+
+    cleartextTrafficPermitted="false": TODO el tráfico de la app debe ser
+    HTTPS. Esto cubre Firebase (Auth/Firestore/Storage), el Cloudflare Worker
+    y Backblaze B2 (downloadUrl / MEDIA_BASE_URL). Si algún día se introduce
+    una URL http:// (Coil, ExoPlayer, OkHttp...), el sistema la rechaza de
+    forma explícita en vez de enviar credenciales por un canal sin cifrar.
+
+    Cert pinning (defensa en profundidad, OPCIONAL):
+    El dominio del Worker es dinámico (workers.dev / dominio propio) y sus
+    certificados rotan, así que los pins NO van hardcodeados aquí: se
+    configuran por código (OkHttp CertificatePinner) con la variable de build
+    VIVID_WORKER_PIN cuando tengas un dominio propio fijo y los pins
+    generados. Ver SECURITY.md → "Cert pinning".
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

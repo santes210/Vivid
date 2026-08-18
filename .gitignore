@@ -13,9 +13,15 @@ local.properties
 # ruta real "vivid-app/app/src/main/...".
 **/BuildConfigSecrets.kt
 
-# NOTA: vivid-app/app/google-services.json SI esta versionado a proposito,
-# porque el build lo necesita y no contiene secretos de servidor. Si algun
-# dia quieres sacarlo del repo, inyectalo en CI desde un secret base64.
+# google-services.json ya NO se versiona (dejó de estar commiteado en el PR
+# de seguridad). El build lo necesita, así que:
+#   - En CI (GitHub Actions) se inyecta desde el secret GOOGLE_SERVICES_JSON_BASE64.
+#   - En local, descárgalo de Firebase Console (Project settings → Your apps →
+#     Android app → google-services.json) y colócalo en vivid-app/app/.
+# Contiene la API key y el app id de Android: no son secretos de servidor,
+# pero versionarlos en un repo público facilita el abuso (spam, clonación de
+# la app), así que es mejor práctica inyectarlo en CI.
+**/google-services.json
 
 # Build outputs
 node_modules/

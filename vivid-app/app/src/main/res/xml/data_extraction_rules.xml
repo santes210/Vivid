@@ -1,13 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Reglas de extracción de datos (Android 12+, android:dataExtractionRules).
+
+    cloud-backup: igual que backup_rules.xml — SOLO preferencias. La base de
+    datos Room (chats/mensajes cacheados) y la caché de media quedan FUERA:
+    un backup en la nube es restaurable en cualquier dispositivo y no debe
+    poder exponer conversaciones ni contenido privado.
+
+    device-transfer: al pasar a un teléfono NUEVO del mismo propietario la
+    transferencia es local y cifrada, pero aun así se mantiene el mismo
+    criterio estricto: la base de datos (caché de Firestore) y la caché de
+    media se excluyen y se regeneran al iniciar sesión. Así un dispositivo
+    comprometido usado para la migración no arrastra el historial local.
+-->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
-        <include domain="database" path="."/>
-        <include domain="file" path="."/>
+        <exclude domain="database" path="."/>
+        <exclude domain="file" path="."/>
+        <exclude domain="external" path="."/>
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="."/>
-        <include domain="database" path="."/>
-        <include domain="file" path="."/>
+        <exclude domain="database" path="."/>
+        <exclude domain="file" path="."/>
+        <exclude domain="external" path="."/>
     </device-transfer>
 </data-extraction-rules>
