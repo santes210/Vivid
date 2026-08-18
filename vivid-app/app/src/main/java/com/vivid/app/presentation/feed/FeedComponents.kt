@@ -419,7 +419,7 @@ internal fun PostCard(
                     tint = if (post.isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
             }
-            IconButton(onClick = onShare) { Icon(Icons.Default.Share, stringResource(R.string.feed_share)) }
+            IconButton(onClick = { onShare(post) }) { Icon(Icons.Default.Share, stringResource(R.string.feed_share)) }
         }
 
         // ── Likes count ──

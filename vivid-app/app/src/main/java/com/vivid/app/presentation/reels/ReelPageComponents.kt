@@ -136,11 +136,9 @@ internal fun ReelPage(
     var isLiked by remember(reel.id) { mutableStateOf(false) }
     var likeCount by remember(reel.id) { mutableIntStateOf(reel.likes) }
     var commentCount by remember(reel.id) { mutableIntStateOf(reel.commentsCount) }
-    var isPausedByUser by remember(reel.id) { mutableStateOf(false) }
     var isPlayerReady by remember(reel.id) { mutableStateOf(false) }
     var showHeartAnimation by remember(reel.id) { mutableStateOf(false) }
     var lastTapTime by remember(reel.id) { mutableStateOf(0L) }
-    var isMuted by remember(reel.id) { mutableStateOf(false) }
     var showComments by remember(reel.id) { mutableStateOf(false) }
     var relationshipState by remember(reel.userId) { mutableStateOf(FollowRelationshipState()) }
     var isFollowLoading by remember(reel.userId) { mutableStateOf(false) }
