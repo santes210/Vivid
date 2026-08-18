@@ -1,0 +1,59 @@
+name: Firestore Rules Tests
+
+# Ejecuta firestore-tests/rules.test.js contra el emulador de Firestore en
+# cada PR y en cada push a main que toque las reglas. Así nadie puede relajar
+# una regla de seguridad (privacidad, contadores, chats) sin que el test lo
+# detecte antes del merge.
+
+on:
+  pull_request:
+    paths:
+      - 'firestore.rules'
+      - 'firestore-tests/**'
+      - 'firebase.json'
+      - '.firebaserc'
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firestore-tests/**'
+      - 'firebase.json'
+      - '.firebaserc'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rules-tests:
+    name: Firestore rules (emulador)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firestore-tests/package-lock.json
+
+      - name: Setup Java (el emulador de Firestore corre en JVM)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install test dependencies
+        working-directory: firestore-tests
+        run: npm ci
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@latest
+
+      - name: Run rules tests against the emulator
+        working-directory: firestore-tests
+        run: firebase emulators:exec --only firestore --project demo-vivid-rules "npm test"
