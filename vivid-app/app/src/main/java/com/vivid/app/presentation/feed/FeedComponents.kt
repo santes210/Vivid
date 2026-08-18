@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -168,30 +169,12 @@ internal fun InlineFollowButton(
 
 @Composable
 internal fun PostAuthorAvatar(post: PostData) {
-    if (post.userProfilePictureBase64.isNotBlank()) {
-        var bmp by remember(post.userProfilePictureBase64) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(post.userProfilePictureBase64) {
-            bmp = try {
-                val bytes = Base64.decode(post.userProfilePictureBase64, Base64.NO_WRAP)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) { null }
-        }
-        if (bmp != null) {
-            Image(bmp!!.asImageBitmap(), stringResource(R.string.avatar_description), Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-            return
-        }
-    }
-    if (post.userProfilePicture.isNotBlank()) {
-        AsyncImage(model = post.userProfilePicture, stringResource(R.string.avatar_description), Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-    } else {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-            Text(
-                post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimary
-            )
-        }
-    }
+    UserAvatar(
+        imageUrl = post.userProfilePicture,
+        name = post.username,
+        size = 44.dp,
+        contentDescription = stringResource(R.string.avatar_description)
+    )
 }
 
 // ── Post image ──
@@ -336,19 +319,19 @@ internal fun PostCard(
     currentUserId: String,
     isFollowingAuthor: Boolean,
     hasPendingRequestToAuthor: Boolean,
-    onOpenPost: () -> Unit,
-    onOpenComments: () -> Unit,
-    onOpenDetails: () -> Unit,
-    onEditPost: () -> Unit,
-    onDeletePost: () -> Unit,
+    onOpenPost: (PostData) -> Unit,
+    onOpenComments: (PostData) -> Unit,
+    onOpenDetails: (PostData) -> Unit,
+    onEditPost: (PostData) -> Unit,
+    onDeletePost: (PostData) -> Unit,
     onToggleFollow: (String) -> Unit,
-    onToggleSave: () -> Unit,
-    onToggleLike: () -> Unit,
-    onShare: () -> Unit,
+    onToggleSave: (PostData) -> Unit,
+    onToggleLike: (PostData) -> Unit,
+    onShare: (PostData) -> Unit,
     onReportPost: (String, String, String) -> Unit = { _, _, _ -> },
-    onImageUrlExpired: () -> Unit = {},
-    onMusicUrlExpired: () -> Unit = {},
-    onVideoUrlExpired: () -> Unit = {}
+    onImageUrlExpired: (PostData) -> Unit = {},
+    onMusicUrlExpired: (PostData) -> Unit = {},
+    onVideoUrlExpired: (PostData) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Header ──
@@ -376,10 +359,10 @@ internal fun PostCard(
                 IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.feed_more_options)) }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     if (post.userId == currentUserId) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.feed_edit)) }, onClick = { showMenu = false; onEditPost() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.feed_edit)) }, onClick = { showMenu = false; onEditPost(post) }, leadingIcon = { Icon(Icons.Default.Edit, null) })
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.feed_delete), color = MaterialTheme.colorScheme.error) },
-                            onClick = { showMenu = false; onDeletePost() },
+                            onClick = { showMenu = false; onDeletePost(post) },
                             leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                         )
                     }
@@ -393,43 +376,43 @@ internal fun PostCard(
         }
 
         // ── Media content ──
-        Box(modifier = Modifier.fillMaxWidth().clickable { onOpenPost() }) {
+        Box(modifier = Modifier.fillMaxWidth().clickable { onOpenPost(post) }) {
             when {
                 post.isVideo && post.videoUrl.isNotBlank() -> PostVideoPlayer(
                     videoUrl = post.videoUrl,
                     thumbnailUrl = post.thumbnailUrl,
-                    onUrlExpired = onVideoUrlExpired
+                    onUrlExpired = { onVideoUrlExpired(post) }
                 )
                 else -> PostImage(
                     imageBase64 = post.imageBase64,
                     imageUrl = post.imageUrl,
                     username = post.username,
                     storageKey = post.storageKey,
-                    onUrlExpired = onImageUrlExpired
+                    onUrlExpired = { onImageUrlExpired(post) }
                 )
             }
         }
 
         // ── Optional music (Material You 3) ──
         if (post.musicTitle.isNotBlank() || post.musicUrl.isNotBlank() || post.musicAssetFile.isNotBlank()) {
-            PostMusicChip(post = post, onMusicUrlExpired = onMusicUrlExpired)
+            PostMusicChip(post = post, onMusicUrlExpired = { onMusicUrlExpired(post) })
         }
 
         // ── Actions ──
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onToggleLike) {
+            IconButton(onClick = { onToggleLike(post) }) {
                 Icon(
                     if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     stringResource(R.string.feed_like),
                     tint = if (post.isLiked) Color.Red else MaterialTheme.colorScheme.onSurface
                 )
             }
-            IconButton(onClick = onOpenComments) { Icon(Icons.Default.ChatBubbleOutline, stringResource(R.string.feed_comment)) }
-            IconButton(onClick = onOpenDetails) { Icon(Icons.Default.Info, stringResource(R.string.feed_details)) }
+            IconButton(onClick = { onOpenComments(post) }) { Icon(Icons.Default.ChatBubbleOutline, stringResource(R.string.feed_comment)) }
+            IconButton(onClick = { onOpenDetails(post) }) { Icon(Icons.Default.Info, stringResource(R.string.feed_details)) }
 
             Spacer(Modifier.weight(1f))
 
-            IconButton(onClick = onToggleSave) {
+            IconButton(onClick = { onToggleSave(post) }) {
                 Icon(
                     if (post.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                     stringResource(R.string.feed_save),
@@ -459,7 +442,7 @@ internal fun PostCard(
 
         // ── Comments count ──
         if (post.commentsCount > 0) {
-            TextButton(onClick = onOpenComments, modifier = Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { onOpenComments(post) }, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text(
                     stringResource(R.string.feed_view_comments, post.commentsCount),
                     style = MaterialTheme.typography.labelMedium,

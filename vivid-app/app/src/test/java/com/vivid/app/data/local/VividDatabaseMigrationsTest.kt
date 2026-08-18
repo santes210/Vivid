@@ -50,14 +50,8 @@ class VividDatabaseMigrationsTest {
     }
 
     @Test
-    fun `all migrations form contiguous chain from 1 to 6`() {
-        val migrations = listOf(
-            VividDatabase.MIGRATION_1_2,
-            VividDatabase.MIGRATION_2_3,
-            VividDatabase.MIGRATION_3_4,
-            VividDatabase.MIGRATION_4_5,
-            VividDatabase.MIGRATION_5_6
-        )
+    fun `all migrations form contiguous chain from 1 to current version`() {
+        val migrations = VividDatabase.ALL_MIGRATIONS.toList()
 
         for (i in 0 until migrations.size - 1) {
             assertEquals(
@@ -68,7 +62,13 @@ class VividDatabaseMigrationsTest {
         }
 
         assertEquals(1, migrations.first().startVersion)
-        assertEquals(6, migrations.last().endVersion)
+        assertEquals(VividDatabase.VERSION, migrations.last().endVersion)
+    }
+
+    @Test
+    fun `ALL_MIGRATIONS covers every step up to VERSION`() {
+        assertEquals(VividDatabase.VERSION - 1, VividDatabase.ALL_MIGRATIONS.size)
+        assertEquals(6, VividDatabase.VERSION)
     }
 
     // ── Entity default values match DDL defaults ──

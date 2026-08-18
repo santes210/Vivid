@@ -4,7 +4,6 @@ import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -79,7 +78,7 @@ fun FeedScreen(
 
     var followRequestsCount by remember { mutableIntStateOf(0) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
-    var selectedPostViewerIndex by remember { mutableStateOf<Int?>(null) }
+    var selectedPostViewerId by remember { mutableStateOf<String?>(null) }
     var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForEdit by remember { mutableStateOf<PostData?>(null) }
     var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
@@ -89,6 +88,120 @@ fun FeedScreen(
     var reportPostCaption by remember { mutableStateOf("") }
     var reportReason by remember { mutableStateOf(context.getString(R.string.report_reason_inappropriate)) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    val displayPosts = remember(posts, savedPostIds) {
+        posts.map { post ->
+            val saved = post.id in savedPostIds
+            if (post.isSaved == saved) post else post.copy(isSaved = saved)
+        }
+    }
+
+    val onOpenPost = remember { { post: PostData -> selectedPostViewerId = post.id } }
+    val onOpenComments = remember { { post: PostData -> selectedPostForComments = post } }
+    val onOpenDetails = remember { { post: PostData -> selectedPostForDetails = post } }
+    val onEditPost = remember { { post: PostData -> selectedPostForEdit = post } }
+    val onDeletePost = remember { { post: PostData -> selectedPostForDelete = post } }
+    val onReportPost = remember {
+        { pid: String, user: String, cap: String ->
+            showReportDialog = true
+            reportPostId = pid
+            reportPostUser = user
+            reportPostCaption = cap
+        }
+    }
+    val onToggleFollow = remember {
+        { targetUserId: String ->
+            feedViewModel.toggleFollowUser(targetUserId) { action ->
+                val msg = when (action) {
+                    FollowActionResult.FOLLOWED -> context.getString(R.string.follow_now_following)
+                    FollowActionResult.UNFOLLOWED -> context.getString(R.string.follow_unfollowed)
+                    FollowActionResult.REQUESTED -> context.getString(R.string.follow_requested)
+                    FollowActionResult.REQUEST_CANCELLED -> context.getString(R.string.follow_request_cancelled)
+                    null -> context.getString(R.string.follow_error)
+                }
+                scope.launch { snackbarHostState.showSnackbar(msg) }
+            }
+        }
+    }
+    val onToggleSave = remember {
+        { post: PostData ->
+            val shouldSave = !post.isSaved
+            feedViewModel.toggleSavePost(post.id, currentUserId, shouldSave) { _, _ ->
+                val msg = if (shouldSave) context.getString(R.string.feed_post_saved) else context.getString(R.string.feed_post_unsaved)
+                scope.launch { snackbarHostState.showSnackbar(msg) }
+            }
+        }
+    }
+    val onToggleLike = remember {
+        { target: PostData ->
+            val newLiked = !target.isLiked
+            posts = posts.map {
+                if (it.id == target.id) it.copy(isLiked = newLiked, likesCount = (it.likesCount + if (newLiked) 1 else -1).coerceAtLeast(0)) else it
+            }
+            likedPostIds = likedPostIds?.let { ids -> if (newLiked) ids + target.id else ids - target.id }
+            feedViewModel.togglePostLike(
+                target.id, currentUserId, newLiked,
+                onFailure = { e ->
+                    posts = posts.map { if (it.id == target.id) target else it }
+                    likedPostIds = likedPostIds?.let { ids -> if (newLiked) ids - target.id else ids + target.id }
+                    scope.launch { snackbarHostState.showSnackbar(e.message ?: context.getString(R.string.feed_like_error)) }
+                }
+            )
+        }
+    }
+    val onImageUrlExpired = remember {
+        { post: PostData ->
+            val key = post.storageKey
+            if (key.isNotBlank() && post.id !in refreshAttemptedIds) {
+                refreshAttemptedIds = refreshAttemptedIds + post.id
+                scope.launch {
+                    feedViewModel.refreshSignedUrl(key)?.let { freshUrl ->
+                        posts = posts.map { if (it.id == post.id) it.copy(imageUrl = freshUrl) else it }
+                        resignedImageUrls = resignedImageUrls + (post.id to freshUrl)
+                        feedViewModel.saveResignedImageUrl(post.id, freshUrl)
+                    }
+                }
+            }
+        }
+    }
+    val onMusicUrlExpired = remember {
+        { post: PostData ->
+            val mKey = post.musicStorageKey
+            if (mKey.isNotBlank()) {
+                scope.launch {
+                    feedViewModel.refreshSignedUrl(mKey)?.let { freshUrl ->
+                        posts = posts.map { if (it.id == post.id) it.copy(musicUrl = freshUrl) else it }
+                        resignedMusicUrls = resignedMusicUrls + (post.id to freshUrl)
+                        feedViewModel.saveResignedMusicUrl(post.id, freshUrl)
+                    }
+                }
+            }
+        }
+    }
+    val onVideoUrlExpired = remember {
+        { post: PostData ->
+            val vKey = post.storageKey
+            if (vKey.isNotBlank()) {
+                scope.launch {
+                    feedViewModel.refreshSignedUrl(vKey)?.let { freshUrl ->
+                        posts = posts.map { if (it.id == post.id) it.copy(videoUrl = freshUrl) else it }
+                        resignedVideoUrls = resignedVideoUrls + (post.id to freshUrl)
+                        feedViewModel.saveResignedVideoUrl(post.id, freshUrl)
+                    }
+                }
+            }
+        }
+    }
+    val onSharePost = remember {
+        { post: PostData ->
+            val deepLink = "vivid://post/${post.id}"
+            shareText(context, context.getString(R.string.feed_share_title), buildString {
+                append(context.getString(R.string.feed_share_body, post.username))
+                if (post.caption.isNotBlank()) append("\n\n${post.caption}")
+                append("\n\n$deepLink")
+            })
+        }
+    }
 
     // ── Initial load: single likes query + real-time listener for posts ──
     LaunchedEffect(currentUserId) {
@@ -326,107 +439,29 @@ fun FeedScreen(
                     }
 
                     when {
-                        isLoading -> { items(3) { FeedSkeleton() } }
+                        isLoading -> { items(3, key = { "skeleton_$it" }) { FeedSkeleton() } }
                         isError -> { item(key = "error") { FeedErrorState(onRetry = { retryKey++ }) } }
-                        posts.isEmpty() -> { item(key = "empty") { FeedEmptyState() } }
+                        displayPosts.isEmpty() -> { item(key = "empty") { FeedEmptyState() } }
                         else -> {
-                            itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
-                                val isFollowingAuthor = post.userId in followingUserIds
-                                val hasPendingRequestToAuthor = post.userId in pendingFollowUserIds
-                                val isSaved = post.id in savedPostIds
-
+                            items(displayPosts, key = { it.id }) { post ->
                                 PostCard(
-                                    post = post.copy(isSaved = isSaved),
+                                    post = post,
                                     currentUserId = currentUserId,
-                                    isFollowingAuthor = isFollowingAuthor,
-                                    hasPendingRequestToAuthor = hasPendingRequestToAuthor,
-                                    onOpenPost = { selectedPostViewerIndex = index },
-                                    onOpenComments = { selectedPostForComments = post },
-                                    onOpenDetails = { selectedPostForDetails = post },
-                                    onEditPost = { selectedPostForEdit = post },
-                                    onDeletePost = { selectedPostForDelete = post },
-                                    onToggleFollow = { targetUserId ->
-                                        feedViewModel.toggleFollowUser(targetUserId) { action ->
-                                            val msg = when (action) {
-                                                FollowActionResult.FOLLOWED -> context.getString(R.string.follow_now_following)
-                                                FollowActionResult.UNFOLLOWED -> context.getString(R.string.follow_unfollowed)
-                                                FollowActionResult.REQUESTED -> context.getString(R.string.follow_requested)
-                                                FollowActionResult.REQUEST_CANCELLED -> context.getString(R.string.follow_request_cancelled)
-                                                null -> context.getString(R.string.follow_error)
-                                            }
-                                            scope.launch { snackbarHostState.showSnackbar(msg) }
-                                        }
-                                    },
-                                    onToggleSave = {
-                                        val shouldSave = !isSaved
-                                        feedViewModel.toggleSavePost(post.id, currentUserId, shouldSave) { success, _ ->
-                                            val msg = if (shouldSave) context.getString(R.string.feed_post_saved) else context.getString(R.string.feed_post_unsaved)
-                                            scope.launch { snackbarHostState.showSnackbar(msg) }
-                                        }
-                                    },
-                                    onToggleLike = {
-                                        val target = post
-                                        val newLiked = !target.isLiked
-                                        posts = posts.map {
-                                            if (it.id == target.id) it.copy(isLiked = newLiked, likesCount = (it.likesCount + if (newLiked) 1 else -1).coerceAtLeast(0)) else it
-                                        }
-                                        likedPostIds = likedPostIds?.let { ids -> if (newLiked) ids + target.id else ids - target.id }
-                                        feedViewModel.togglePostLike(target.id, currentUserId, newLiked,
-                                            onFailure = { e ->
-                                                posts = posts.map { if (it.id == target.id) target else it }
-                                                likedPostIds = likedPostIds?.let { ids -> if (newLiked) ids - target.id else ids + target.id }
-                                                scope.launch { snackbarHostState.showSnackbar(e.message ?: context.getString(R.string.feed_like_error)) }
-                                            }
-                                        )
-                                    },
-                                    onImageUrlExpired = {
-                                        val key = post.storageKey
-                                        if (key.isNotBlank() && post.id !in refreshAttemptedIds) {
-                                            refreshAttemptedIds = refreshAttemptedIds + post.id
-                                            scope.launch {
-                                                feedViewModel.refreshSignedUrl(key)?.let { freshUrl ->
-                                                    posts = posts.map { if (it.id == post.id) it.copy(imageUrl = freshUrl) else it }
-                                                    resignedImageUrls = resignedImageUrls + (post.id to freshUrl)
-                                                    feedViewModel.saveResignedImageUrl(post.id, freshUrl)
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onMusicUrlExpired = {
-                                        val mKey = post.musicStorageKey
-                                        if (mKey.isNotBlank()) {
-                                            scope.launch {
-                                                feedViewModel.refreshSignedUrl(mKey)?.let { freshUrl ->
-                                                    posts = posts.map { if (it.id == post.id) it.copy(musicUrl = freshUrl) else it }
-                                                    resignedMusicUrls = resignedMusicUrls + (post.id to freshUrl)
-                                                    feedViewModel.saveResignedMusicUrl(post.id, freshUrl)
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onVideoUrlExpired = {
-                                        val vKey = post.storageKey
-                                        if (vKey.isNotBlank()) {
-                                            scope.launch {
-                                                feedViewModel.refreshSignedUrl(vKey)?.let { freshUrl ->
-                                                    posts = posts.map { if (it.id == post.id) it.copy(videoUrl = freshUrl) else it }
-                                                    resignedVideoUrls = resignedVideoUrls + (post.id to freshUrl)
-                                                    feedViewModel.saveResignedVideoUrl(post.id, freshUrl)
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onShare = {
-                                        val deepLink = "vivid://post/${post.id}"
-                                        shareText(context, context.getString(R.string.feed_share_title), buildString {
-                                            append(context.getString(R.string.feed_share_body, post.username))
-                                            if (post.caption.isNotBlank()) append("\n\n${post.caption}")
-                                            append("\n\n$deepLink")
-                                        })
-                                    },
-                                    onReportPost = { pid, user, cap ->
-                                        showReportDialog = true; reportPostId = pid; reportPostUser = user; reportPostCaption = cap
-                                    }
+                                    isFollowingAuthor = post.userId in followingUserIds,
+                                    hasPendingRequestToAuthor = post.userId in pendingFollowUserIds,
+                                    onOpenPost = onOpenPost,
+                                    onOpenComments = onOpenComments,
+                                    onOpenDetails = onOpenDetails,
+                                    onEditPost = onEditPost,
+                                    onDeletePost = onDeletePost,
+                                    onToggleFollow = onToggleFollow,
+                                    onToggleSave = onToggleSave,
+                                    onToggleLike = onToggleLike,
+                                    onShare = onSharePost,
+                                    onReportPost = onReportPost,
+                                    onImageUrlExpired = onImageUrlExpired,
+                                    onMusicUrlExpired = onMusicUrlExpired,
+                                    onVideoUrlExpired = onVideoUrlExpired
                                 )
                             }
                             if (isLoadingMore) {
@@ -445,7 +480,12 @@ fun FeedScreen(
 
     // ── Dialogs ──
     selectedPostForComments?.let { post -> PostCommentsSheet(post = post, viewModel = feedViewModel, onDismiss = { selectedPostForComments = null }) }
-    selectedPostViewerIndex?.let { idx -> PostViewerDialog(posts = posts, initialIndex = idx, onDismiss = { selectedPostViewerIndex = null }) }
+    selectedPostViewerId?.let { viewerId ->
+        val viewerIndex = posts.indexOfFirst { it.id == viewerId }
+        if (viewerIndex >= 0) {
+            PostViewerDialog(posts = posts, initialIndex = viewerIndex, onDismiss = { selectedPostViewerId = null })
+        }
+    }
     selectedPostForDetails?.let { post -> PostDetailsDialog(post = post, onDismiss = { selectedPostForDetails = null }) }
     selectedPostForEdit?.let { post ->
         EditPostDialog(post = post, viewModel = feedViewModel, onDismiss = { selectedPostForEdit = null }, onSaved = { cap ->

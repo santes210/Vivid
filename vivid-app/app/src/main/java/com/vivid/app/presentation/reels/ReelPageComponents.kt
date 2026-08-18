@@ -42,8 +42,10 @@ import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.PushSender
+import com.vivid.app.util.rememberPooledExoPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -95,20 +97,17 @@ internal fun ReelPage(
     val scope = rememberCoroutineScope()
     val followRepository = remember { FollowRepository(firestore, FirebaseAuth.getInstance()) }
 
-    // ExoPlayer con remember keyed por videoUrl para que se recicle correctamente.
-    // Usa caché local (Vivid video cache): el reel no se re-descarga de B2 en
-    // cada visita — se sirve de disco hasta que se borre caché o caduque (7d).
-    val exoPlayer = remember(reel.videoUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            if (com.vivid.app.util.VideoCacheManager.isCacheable(reel.videoUrl)) {
-                setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(context, reel.videoUrl))
-            } else {
-                setMediaItem(MediaItem.fromUri(reel.videoUrl))
-            }
-            repeatMode = ExoPlayer.REPEAT_MODE_ALL
-            prepare()
-        }
-    }
+    var isPausedByUser by remember(reel.id) { mutableStateOf(false) }
+    var isMuted by remember(reel.id) { mutableStateOf(false) }
+
+    // Pooled ExoPlayer + local video cache. VerticalPager keeps ~3 pages
+    // composed; the pool recycles decoders instead of leaking one per reel.
+    val exoPlayer = rememberPooledExoPlayer(
+        mediaUrl = reel.videoUrl,
+        playWhenReady = isPlaying && !isPausedByUser && SettingsManager.autoplayReels,
+        repeatMode = ExoPlayer.REPEAT_MODE_ALL,
+        volume = if (isMuted) 0f else 1f
+    )
 
     // URL firmada vencida → error de reproducción → pedir una firma nueva.
     // refreshReelUrl cambia reel.videoUrl, el remember() recrea el player y
@@ -165,25 +164,6 @@ internal fun ReelPage(
                 followRepository.getRelationshipState(reel.userId)
             }.getOrDefault(FollowRelationshipState())
         }
-    }
-
-    // Control de reproducción tipo TikTok: solo el reel visible reproduce
-    LaunchedEffect(isPlaying, isPausedByUser) {
-        if (isPlaying && !isPausedByUser && SettingsManager.autoplayReels) {
-            exoPlayer.playWhenReady = true
-            exoPlayer.play()
-        } else {
-            exoPlayer.playWhenReady = false
-            exoPlayer.pause()
-        }
-    }
-
-    LaunchedEffect(isMuted) {
-        exoPlayer.volume = if (isMuted) 0f else 1f
-    }
-
-    DisposableEffect(exoPlayer) {
-        onDispose { exoPlayer.release() }
     }
 
     LaunchedEffect(showHeartAnimation) {
@@ -692,6 +672,7 @@ internal fun ReelCommentsSheet(
     }
 }
 
+@androidx.compose.runtime.Immutable
 internal data class ReelComment(
     val id: String,
     val userId: String,

@@ -9,9 +9,12 @@ Coloca tus archivos MP3 aqui. Recomendados de fuentes libres:
 - https://soundcloud.com (filtrar por "no copyright")
 
 ## Formatos
-- MP3 128kbps o mayor
+- MP3 / OGG / M4A (nunca WAV: infla el APK)
 - Duracion: 30s - 3min (seran looped o cortados)
 - Tamano: < 5MB por track (limite de assets en Android)
+
+Las pistas demo van en `.mp3`. Posts viejos que aún guardan `music/*.wav`
+se remapean a `.mp3` en runtime (`MusicAssets.resolvePackedPath`).
 
 ## Naming convention
 - background-1.mp3, background-2.mp3, ...

@@ -22,6 +22,7 @@ data class ProfileUiState(
     val isFollowRequestPending: Boolean = false
 )
 
+@androidx.compose.runtime.Immutable
 data class ProfilePost(
     val id: String,
     val imageUrl: String = "",

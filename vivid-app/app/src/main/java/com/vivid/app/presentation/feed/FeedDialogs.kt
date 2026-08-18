@@ -1,9 +1,5 @@
 package com.vivid.app.presentation.feed
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Base64
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,17 +15,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
-import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
+import com.vivid.app.ui.components.UserAvatar
+import com.vivid.app.util.rememberPooledExoPlayer
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.R
@@ -56,18 +51,11 @@ internal fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismis
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     when {
                         post.isVideo && post.videoUrl.isNotBlank() -> {
-                            val ctx = androidx.compose.ui.platform.LocalContext.current
-                            val player = remember(post.videoUrl) {
-                                ExoPlayer.Builder(ctx).build().apply {
-                                    if (com.vivid.app.util.VideoCacheManager.isCacheable(post.videoUrl)) {
-                                        setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(ctx, post.videoUrl))
-                                    } else {
-                                        setMediaItem(MediaItem.fromUri(post.videoUrl))
-                                    }
-                                    repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true
-                                }
-                            }
-                            DisposableEffect(player) { onDispose { player.release() } }
+                            val player = rememberPooledExoPlayer(
+                                mediaUrl = post.videoUrl,
+                                playWhenReady = true,
+                                repeatMode = Player.REPEAT_MODE_ALL
+                            )
                             AndroidView(factory = { c -> PlayerView(c).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
                         }
                         else -> PostImage(post.imageBase64, post.imageUrl, post.username, useDefaultHeight = false)
@@ -498,18 +486,5 @@ internal fun CommentRow(
 
 @Composable
 private fun CommentAvatar(comment: PostComment) {
-    if (comment.avatarBase64.isNotBlank()) {
-        var bmp by remember(comment.avatarBase64) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(comment.avatarBase64) {
-            bmp = try { val bytes = Base64.decode(comment.avatarBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null }
-        }
-        if (bmp != null) { Image(bmp!!.asImageBitmap(), comment.username, Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop); return }
-    }
-    if (comment.avatarUrl.isNotBlank()) {
-        AsyncImage(model = comment.avatarUrl, contentDescription = comment.username, modifier = Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-    } else {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-            Text(comment.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-        }
-    }
+    UserAvatar(imageUrl = comment.avatarUrl, name = comment.username, size = 36.dp)
 }

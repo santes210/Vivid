@@ -20,5 +20,10 @@ class VividApplication : Application(), ImageLoaderFactory {
         PushSender.initialize(this)
     }
 
+    override fun onTerminate() {
+        com.vivid.app.util.ExoPlayerPool.releaseAll()
+        super.onTerminate()
+    }
+
     override fun newImageLoader(): ImageLoader = imageLoader
 }

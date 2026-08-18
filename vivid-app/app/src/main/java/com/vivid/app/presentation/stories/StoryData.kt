@@ -13,6 +13,7 @@ import java.util.UUID
 
 const val STORY_DURATION_MILLIS: Long = 24L * 60L * 60L * 1000L
 
+@androidx.compose.runtime.Immutable
 data class Story(
     val id: String,
     val userId: String,
@@ -32,6 +33,7 @@ data class Story(
     val hasUnseenStory: Boolean = true
 )
 
+@androidx.compose.runtime.Immutable
 data class StoryGroup(
     val userId: String,
     val username: String,

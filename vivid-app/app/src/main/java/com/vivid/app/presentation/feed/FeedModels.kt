@@ -1,10 +1,13 @@
 package com.vivid.app.presentation.feed
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Data models used across the feed feature.
  * Extracted from FeedScreen.kt for reuse and testability.
  */
 
+@Immutable
 data class PostData(
     val id: String, val userId: String, val username: String,
     val userProfilePicture: String, val userProfilePictureBase64: String = "",
@@ -23,6 +26,7 @@ data class PostData(
     val musicStorageKey: String = ""
 )
 
+@Immutable
 data class PostComment(
     val id: String,
     val userId: String,

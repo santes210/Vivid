@@ -41,6 +41,9 @@ abstract class VividDatabase : RoomDatabase() {
     abstract fun reelDao(): ReelDao
 
     companion object {
+        const val VERSION = 6
+        const val NAME = "vivid_database"
+
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN imageUrl TEXT NOT NULL DEFAULT ''")
@@ -136,5 +139,14 @@ abstract class VividDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE reels ADD COLUMN videoUrlExpiresAt INTEGER NOT NULL DEFAULT 0")
             }
         }
+
+        /** Contiguous 1 → VERSION chain. Used by Hilt and by migration tests. */
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6
+        )
     }
 }
