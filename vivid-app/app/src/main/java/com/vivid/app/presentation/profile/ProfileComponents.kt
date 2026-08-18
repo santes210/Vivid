@@ -496,3 +496,4 @@ fun ProfileStat(count: String, label: String, modifier: Modifier = Modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
