@@ -54,6 +54,25 @@ jobs:
 
           echo "Cloudflare Worker configurado correctamente."
 
+      - name: Guard packed music is compressed
+        shell: bash
+        run: |
+          MUSIC_DIR="vivid-app/app/src/main/assets/music"
+          if [ ! -d "$MUSIC_DIR" ]; then
+            echo "::warning::No existe $MUSIC_DIR"
+            exit 0
+          fi
+
+          WAVS="$(find "$MUSIC_DIR" -type f -iname '*.wav' -print || true)"
+          if [ -n "$WAVS" ]; then
+            echo "::error::Hay WAV sin comprimir en assets/music (inflan el APK):"
+            echo "$WAVS"
+            exit 1
+          fi
+
+          echo "Pistas empaquetadas:"
+          find "$MUSIC_DIR" -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.m4a' -o -iname '*.aac' \) | sort
+
       - name: Setup JDK 17
         uses: actions/setup-java@v5
         with:
@@ -109,16 +128,41 @@ jobs:
             -alias "$ANDROID_KEY_ALIAS" \
             >/dev/null
 
+      - name: Run unit tests
+        working-directory: vivid-app
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest \
+            --no-daemon \
+            --max-workers=1 \
+            --stacktrace
+
       - name: Build signed release APK
         working-directory: vivid-app
         shell: bash
         run: |
           chmod +x gradlew
 
-          ./gradlew clean assembleRelease \
+          # isMinifyEnabled=true + isShrinkResources=true en el buildType release.
+          ./gradlew assembleRelease \
             --no-daemon \
             --max-workers=1 \
             --stacktrace
+
+      - name: Verify R8 minify ran
+        shell: bash
+        run: |
+          MAPPING="vivid-app/app/build/outputs/mapping/release/mapping.txt"
+          if [ ! -s "$MAPPING" ]; then
+            echo "::error::No se generó mapping.txt. R8 no minificó el release."
+            echo "::error::Revisa isMinifyEnabled en app/build.gradle.kts."
+            find vivid-app/app/build/outputs -maxdepth 4 -type f -print || true
+            exit 1
+          fi
+
+          echo "R8 mapping.txt ($(wc -c < "$MAPPING") bytes):"
+          ls -lh "$MAPPING"
 
       - name: Verify APK signature
         id: apk
@@ -154,6 +198,8 @@ jobs:
           cp "$APK_PATH" "$OUTPUT_APK"
 
           echo "apk_path=$OUTPUT_APK" >> "$GITHUB_OUTPUT"
+          echo "apk_bytes=$(wc -c < "$OUTPUT_APK")" >> "$GITHUB_OUTPUT"
+          ls -lh "$OUTPUT_APK"
 
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
@@ -162,6 +208,16 @@ jobs:
           path: ${{ steps.apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 30
+
+      # mapping.txt hace falta para desofuscar crashes de Play / Firebase.
+      - name: Upload R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mapping-vc${{ github.run_number }}
+          path: vivid-app/app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: ignore
+          retention-days: 90
 
       # Cada build genera los esquemas de Room.
       - name: Check Room schemas
