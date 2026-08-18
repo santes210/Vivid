@@ -3,20 +3,113 @@
     <string name="app_name">Vivid</string>
 
     <!--
-      default_web_client_id: lo genera automáticamente el plugin google-services
-      (processDebugGoogleServices) SOLO si google-services.json tiene un
-      oauth_client con client_type 3 (Web client ID).
+      default_web_client_id: generated automatically by the google-services plugin
+      (processDebugGoogleServices) ONLY when google-services.json has an
+      oauth_client with client_type 3 (Web client ID).
 
-      Hoy el google-services.json del repo no tiene ese client, así que este
-      string se define vacío para que el código compile. Para activar
-      Google Sign-In:
-        1. Firebase Console → Project settings → Your apps → (app Android)
-        2. Agrega tu SHA-1 y copia el "Web client (auto created by Google Service)" ID
-        3. Pega ese ID en google-services.json → oauth_client (client_type 3)
-           y BORRA este string de aquí (si no, habrá recurso duplicado).
+      Today the repo's google-services.json does not have that client, so this
+      string is defined empty to allow compilation. To enable Google Sign-In:
+        1. Firebase Console → Project settings → Your apps → (Android app)
+        2. Add your SHA-1 and copy the "Web client (auto created by Google Service)" ID
+        3. Paste that ID into google-services.json → oauth_client (client_type 3)
+           and DELETE this string from here (otherwise there will be a duplicate resource).
 
-      Mientras esté vacío, el botón de Google muestra un aviso claro en vez
-      de crashear, y el login con email/contraseña funciona normal.
+      While it is empty, the Google button shows a clear message instead of
+      crashing, and email/password login works normally.
     -->
     <string name="default_web_client_id" translatable="false">952899444057-btlfp4jfes67kotcemmbk3r0ubb688ho.apps.googleusercontent.com</string>
+
+    <!-- ========== Feed ========== -->
+    <string name="feed_title">Vivid</string>
+    <string name="feed_requests">Solicitudes</string>
+    <string name="feed_messages">Mensajes</string>
+    <string name="feed_like">Me gusta</string>
+    <string name="feed_comment">Comentar</string>
+    <string name="feed_details">Detalles</string>
+    <string name="feed_save">Guardar</string>
+    <string name="feed_share">Compartir</string>
+    <string name="feed_more_options">Más opciones</string>
+    <string name="feed_edit">Editar</string>
+    <string name="feed_delete">Eliminar</string>
+    <string name="feed_likes_count">%d Me gusta</string>
+    <string name="feed_view_comments">Ver los %d comentarios</string>
+    <string name="feed_report_post">Reportar publicación</string>
+    <string name="feed_loading_image_error">No se pudo cargar</string>
+    <string name="feed_retry">Reintentar</string>
+    <string name="feed_share_title">Compartir publicación</string>
+    <string name="feed_share_body">Mira esta publicación de @%1$s en Vivid</string>
+    <string name="feed_post_updated">Publicación actualizada</string>
+    <string name="feed_post_deleted">Publicación eliminada</string>
+    <string name="feed_delete_confirm_title">Eliminar publicación</string>
+    <string name="feed_delete_confirm_body">¿Estás seguro? Esta acción no se puede deshacer.</string>
+    <string name="feed_error_prefix">Error: %s</string>
+    <string name="feed_like_error">No se pudo actualizar el like</string>
+    <string name="feed_post_saved">Publicación guardada</string>
+    <string name="feed_post_unsaved">Publicación eliminada de guardados</string>
+    <string name="feed_save_error">Error al actualizar guardados</string>
+    <string name="feed_no_active_session">No hay sesión activa</string>
+
+    <!-- Feed states -->
+    <string name="feed_empty_title">No hay publicaciones aún</string>
+    <string name="feed_empty_subtitle">Sigue a personas para ver sus publicaciones aquí.</string>
+    <string name="feed_error_title">Error al cargar el feed</string>
+    <string name="feed_error_subtitle">Verifica tu conexión a internet.</string>
+    <string name="feed_error_retry">Reintentar</string>
+
+    <!-- Comments -->
+    <string name="comments_title">Comentarios (%d)</string>
+    <string name="comments_empty">No hay comentarios aún. ¡Sé el primero!</string>
+    <string name="comments_reply">Responder</string>
+    <string name="comments_edit">Editar</string>
+    <string name="comments_delete">Eliminar</string>
+    <string name="comments_edited_tag">(editado)</string>
+    <string name="comments_replying_to">Respondiendo a @%s</string>
+    <string name="comments_reply_placeholder">Escribe tu respuesta…</string>
+    <string name="comments_placeholder">Escribe un comentario…</string>
+    <string name="comments_send">Enviar</string>
+    <string name="comments_sending">…</string>
+    <string name="comments_edit_title">Editar comentario</string>
+    <string name="comments_like">Like comentario</string>
+
+    <!-- Post details dialog -->
+    <string name="details_title">Detalles</string>
+    <string name="details_likes">%d Me gusta</string>
+    <string name="details_comments">%d Comentarios</string>
+
+    <!-- Post viewer dialog -->
+    <string name="viewer_close">Cerrar</string>
+
+    <!-- Edit post dialog -->
+    <string name="edit_post_title">Editar</string>
+
+    <!-- Follow actions -->
+    <string name="follow_now_following">Ahora sigues a esta cuenta.</string>
+    <string name="follow_unfollowed">Dejaste de seguir esta cuenta.</string>
+    <string name="follow_requested">Solicitud de seguimiento enviada.</string>
+    <string name="follow_request_cancelled">Solicitud cancelada.</string>
+    <string name="follow_error">No se pudo actualizar el seguimiento.</string>
+    <string name="follow_button_following">Siguiendo</string>
+    <string name="follow_button_requested">Solicitado</string>
+    <string name="follow_button_follow">Seguir</string>
+
+    <!-- Report dialog -->
+    <string name="report_title">Reportar publicación</string>
+    <string name="report_reason_label">Motivo:</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_inappropriate">Contenido inapropiado</string>
+    <string name="report_reason_harassment">Acoso</string>
+    <string name="report_reason_other">Otro</string>
+    <string name="report_post_preview">Post: %1$s — %2$s</string>
+    <string name="report_send">Enviar reporte</string>
+    <string name="report_email_opened">Redactando reporte en tu correo.</string>
+    <string name="report_no_email_app">No se encontró una app de correo instalada.</string>
+
+    <!-- Common -->
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_send">Enviar</string>
+    <string name="action_retry">Reintentar</string>
+    <string name="user_fallback">usuario</string>
+    <string name="avatar_description">Avatar</string>
 </resources>
