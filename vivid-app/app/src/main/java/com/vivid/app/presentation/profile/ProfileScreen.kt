@@ -49,6 +49,7 @@ import com.vivid.app.theme.LocalVividAnimationsEnabled
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+
 // Data models moved to ProfileModels.kt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -471,4 +472,3 @@ fun ProfileScreen(
         )
     }
 }
-
