@@ -39,7 +39,7 @@ import androidx.media3.ui.PlayerView
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 
 @Composable
-private fun ProfileHeader(
+internal fun ProfileHeader(
     profile: ProfileUiState,
     isOwnProfile: Boolean,
     relationshipState: com.vivid.app.domain.repository.FollowRelationshipState,
