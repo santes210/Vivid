@@ -338,6 +338,10 @@ fun ProfileScreen(
                                     onClick = {
                                         showProfileMenu = false
                                         com.vivid.app.util.PushNotificationHelper.unregisterToken()
+                                        // Credential Manager cachea la cuenta usada: sin
+                                        // limpiarla, el próximo login la reutilizaría.
+                                        com.vivid.app.presentation.auth.GoogleCredentialSignIn
+                                            .clearCredentialState(context)
                                         auth.signOut(); onLogout()
                                     },
                                     leadingIcon = {

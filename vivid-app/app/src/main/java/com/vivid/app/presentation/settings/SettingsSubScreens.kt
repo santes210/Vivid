@@ -170,6 +170,10 @@ fun CuentaSettingsScreen(
                         leadingContent = { Icon(Icons.Default.ExitToApp, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(28.dp)) },
                         modifier = Modifier.clickable {
                             com.vivid.app.util.PushNotificationHelper.unregisterToken()
+                            // Credential Manager cachea la cuenta usada: sin
+                            // limpiarla, el próximo login la reutilizaría.
+                            com.vivid.app.presentation.auth.GoogleCredentialSignIn
+                                .clearCredentialState(context)
                             auth.signOut(); onBack()
                         },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
