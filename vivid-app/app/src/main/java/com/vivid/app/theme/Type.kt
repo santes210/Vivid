@@ -6,8 +6,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.isSp
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.sp
 import com.vivid.app.R
 
@@ -49,9 +48,9 @@ val LocalFontScale = compositionLocalOf { 1.0f }
 internal fun Typography.scaled(scale: Float): Typography {
     if (scale == 1.0f) return this
     fun TextStyle.scaledStyle() = copy(
-        fontSize = if (fontSize.isSp) (fontSize.value * scale).sp else fontSize,
+        fontSize = if (fontSize.type == TextUnitType.Sp) (fontSize.value * scale).sp else fontSize,
         lineHeight = when {
-            lineHeight.isSp -> (lineHeight.value * scale).sp
+            lineHeight.type == TextUnitType.Sp -> (lineHeight.value * scale).sp
             else -> lineHeight
         }
     )
