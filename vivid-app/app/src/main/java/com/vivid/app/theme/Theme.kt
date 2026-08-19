@@ -151,12 +151,15 @@ fun VividTheme(
     // Se provee desde MainActivity leyendo LocaleManager.fontScale; por defecto
     // 1.0 (tamaño normal). effectiveVividTypography() multiplica los fontSize
     // en sp preservando lineHeight y letterSpacing.
+    // La escala tipográfica se aplica en Activity.attachBaseContext()
+    // (Configuration.fontScale). Los `sp` de Compose ya la respetan;
+    // volver a multiplicar VividTypography aquí la duplicaría.
     CompositionLocalProvider(
         LocalFontScale provides LocaleManager.fontScale
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = effectiveVividTypography(),
+            typography = VividTypography,
             shapes = VividShapes,
             content = content
         )

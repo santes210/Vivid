@@ -23,5 +23,9 @@ data class Message(
 ) {
     /** True si el mensaje fue editado al menos una vez. */
     val isEdited: Boolean get() = lastEditedAt > 0L
+
+    /** Solo el emisor puede editar mensajes de texto no vacíos. */
+    fun canBeEditedBy(userId: String): Boolean =
+        userId.isNotBlank() && senderId == userId && type == "text" && text.isNotBlank()
 }
 

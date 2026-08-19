@@ -10,6 +10,7 @@ import com.vivid.app.data.local.dao.ReelDao
 import com.vivid.app.data.local.entity.ReelEntity
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.util.CrashReporter
+import com.vivid.app.util.PlaybackPolicy
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.toUserFacingMessage
 import com.vivid.app.util.withNetworkTimeout
@@ -69,8 +70,9 @@ class ReelsViewModel @Inject constructor(
 
     private var lastDoc: DocumentSnapshot? = null
 
-    /** Tamaño de página: 6 con data saver, 15 sin. */
-    private val pageSize: Int get() = if (_dataSaverActive.value) 6 else 15
+    /** Tamaño de página según Wi-Fi / datos / ahorro. */
+    private val pageSize: Int
+        get() = PlaybackPolicy.current(dataSaver = _dataSaverActive.value).pageSize
 
     /** TTL de las URLs firmadas de B2 (7 días). */
     private val signedUrlTtlMs = 7L * 24L * 60L * 60L * 1000L
@@ -95,6 +97,17 @@ class ReelsViewModel @Inject constructor(
         if (_dataSaverActive.value == enabled) return
         _dataSaverActive.value = enabled
         loadInitial()
+    }
+
+    /**
+     * Ajusta el tamaño de página si PlaybackPolicy cambió (Wi-Fi ↔ datos).
+     * No recarga si el tamaño no cambió, para no interrumpir el scroll.
+     */
+    fun applyPlaybackPolicy(newPageSize: Int) {
+        val constrained = newPageSize <= 8
+        if (_dataSaverActive.value != constrained && constrained) {
+            _dataSaverActive.value = true
+        }
     }
 
     fun loadInitial() {

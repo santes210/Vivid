@@ -76,13 +76,8 @@ class MainActivity : ComponentActivity() {
 
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
 
-        // Permiso de notificaciones Android 13+
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            val permission = android.Manifest.permission.POST_NOTIFICATIONS
-            if (checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(permission), 101)
-            }
-        }
+        // POST_NOTIFICATIONS se pide en PermissionsOnboardingScreen, con
+        // contexto, no aquí al arrancar (Android 13+ rechaza el diálogo frío).
 
         setContent {
             val selectedTheme = SettingsManager.selectedThemeOption

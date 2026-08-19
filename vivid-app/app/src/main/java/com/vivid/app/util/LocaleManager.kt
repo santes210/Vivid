@@ -46,12 +46,20 @@ object LocaleManager {
         val prefs = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         selectedLang = prefs.getString(KEY_LANG, DEFAULT_LANG) ?: DEFAULT_LANG
-        fontScale = prefs.getFloat(KEY_FONT_SCALE, DEFAULT_FONT_SCALE)
-            .coerceIn(FONT_SCALES.min(), FONT_SCALES.max())
+        fontScale = clampFontScale(prefs.getFloat(KEY_FONT_SCALE, DEFAULT_FONT_SCALE))
     }
 
+    fun normalizeLang(lang: String): String = when (lang) {
+        SYSTEM_LANG, "" -> DEFAULT_LANG
+        in SUPPORTED_LANGS -> lang
+        else -> DEFAULT_LANG
+    }
+
+    fun clampFontScale(scale: Float): Float =
+        scale.coerceIn(FONT_SCALES.min(), FONT_SCALES.max())
+
     fun setLanguage(context: Context, lang: String) {
-        val normalized = if (lang == SYSTEM_LANG) DEFAULT_LANG else lang
+        val normalized = normalizeLang(lang)
         selectedLang = normalized
         context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -61,7 +69,7 @@ object LocaleManager {
     }
 
     fun setFontScale(context: Context, scale: Float) {
-        val clamped = scale.coerceIn(FONT_SCALES.min(), FONT_SCALES.max())
+        val clamped = clampFontScale(scale)
         fontScale = clamped
         context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

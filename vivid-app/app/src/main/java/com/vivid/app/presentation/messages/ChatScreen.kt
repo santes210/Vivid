@@ -95,6 +95,7 @@ fun ChatScreen(
     var activeReactionMessageId by remember { mutableStateOf<String?>(null) }
     var selectedMessageForOptions by remember { mutableStateOf<Message?>(null) }
     var editingMessage by remember { mutableStateOf<Message?>(null) }
+    var pendingDelete by remember { mutableStateOf<Message?>(null) }
 
     val imageUploads: List<ImageUpload> = viewModel.imageUploads.collectAsState(initial = emptyList()).value
     val voiceUploads: List<VoiceUpload> = viewModel.voiceUploads.collectAsState(initial = emptyList()).value
@@ -150,7 +151,7 @@ fun ChatScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 title = {
@@ -196,7 +197,7 @@ fun ChatScreen(
                                 Text(
                                     if (canMessage) "• En línea" else "Cuenta privada",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (canMessage) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (canMessage) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -419,7 +420,7 @@ fun ChatScreen(
                                         modifier = Modifier.size(46.dp),
                                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
                                     ) {
-                                        Icon(Icons.Default.Send, contentDescription = "Enviar", modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.Send, contentDescription = stringResource(R.string.cd_send_message), modifier = Modifier.size(20.dp))
                                     }
                                 } else {
                                     FilledTonalIconButton(
@@ -431,7 +432,7 @@ fun ChatScreen(
                                         modifier = Modifier.size(46.dp),
                                         colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
                                     ) {
-                                        Icon(Icons.Filled.Mic, contentDescription = "Voz", modifier = Modifier.size(22.dp))
+                                        Icon(Icons.Filled.Mic, contentDescription = stringResource(R.string.cd_voice_message), modifier = Modifier.size(22.dp))
                                     }
                                 }
                             }
@@ -534,7 +535,7 @@ fun ChatScreen(
                         ListItem(headlineContent = { Text("Copiar texto") }, supportingContent = { Text(message.text.take(80), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { clipboardManager.setText(AnnotatedString(message.text)); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                 }
-                if (message.senderId == currentUserId && message.type == "text") {
+                if (message.canBeEditedBy(currentUserId)) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.msg_edit)) },
                         supportingContent = { Text(stringResource(R.string.msg_edited).take(40), maxLines = 1) },
@@ -549,7 +550,23 @@ fun ChatScreen(
                 }
                 if (message.senderId == currentUserId) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                    ListItem(headlineContent = { Text("Eliminar mensaje", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)) }, supportingContent = { Text(when(message.type){ "image" -> "Se borrará la imagen también del servidor."; "voice" -> "Se borrará el audio también."; else -> "Se borrará esta burbuja permanentemente." }) }, leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { viewModel.deleteMessage(chatId, message); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                stringResource(R.string.msg_delete),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                        },
+                        supportingContent = { Text(stringResource(R.string.msg_delete_confirm_body)) },
+                        leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                            pendingDelete = message
+                            selectedMessageForOptions = null
+                            activeReactionMessageId = null
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
             }

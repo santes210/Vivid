@@ -110,7 +110,12 @@ fun VividNavigation(
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
     val startDestination = remember(auth.currentUser?.uid) {
-        if (auth.currentUser != null) Screen.Feed.route else Screen.Auth.route
+        when {
+            auth.currentUser == null -> Screen.Auth.route
+            !com.vivid.app.util.SettingsManager.permissionsOnboardingCompleted ->
+                Screen.PermissionsOnboarding.route
+            else -> Screen.Feed.route
+        }
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route

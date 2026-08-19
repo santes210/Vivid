@@ -169,7 +169,7 @@ private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier.clickable(onClickLabel = "Tu historia") { onClick() }
     ) {
         Box(
             modifier = Modifier.size(68.dp),

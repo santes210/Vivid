@@ -92,6 +92,8 @@ class ChatViewModel @Inject constructor(
     private var loadedChatId: String? = null
     private var messagesListener: ListenerRegistration? = null
     private var reactionsListener: ListenerRegistration? = null
+    private var editsListener: ListenerRegistration? = null
+    private var deliveryListener: ListenerRegistration? = null
     private var typingListener: ListenerRegistration? = null
     private var typingJob: Job? = null
     private var recordingTickerJob: Job? = null
@@ -163,7 +165,11 @@ class ChatViewModel @Inject constructor(
         messagesListener?.remove()
         readReceiptsListener?.remove()
         reactionsListener?.remove()
+        editsListener?.remove()
+        deliveryListener?.remove()
         reactionsListener = null
+        editsListener = null
+        deliveryListener = null
 
         // ── Estrategia de caché (para que el servidor no lea todo el historial) ──
         // Caché vacía → sync completo (backfill del historial).
@@ -225,9 +231,27 @@ class ChatViewModel @Inject constructor(
                     chatId = chatId,
                     onMessageEvent = { event -> handleMessageEvent(chatId, event) },
                     onError = { error ->
-                        // Se degrada silenciosamente: solo se pierde el refresh
-                        // de reacciones, los mensajes siguen funcionando.
                         Log.w(TAG, "Listener de reacciones rechazado: ${error.message}")
+                    }
+                )
+                editsListener?.remove()
+                editsListener = chatRepository.listenToEdits(
+                    chatId = chatId,
+                    onMessageEvent = { event -> handleMessageEvent(chatId, event) },
+                    onError = { error ->
+                        Log.w(TAG, "Listener de ediciones rechazado: ${error.message}")
+                    }
+                )
+                deliveryListener?.remove()
+                deliveryListener = chatRepository.listenToDeliveryReceipts(
+                    chatId = chatId,
+                    onMessageDelivered = { messageId ->
+                        _messages.value = _messages.value.map {
+                            if (it.id == messageId) it.copy(isDelivered = true) else it
+                        }
+                    },
+                    onError = { error ->
+                        Log.w(TAG, "Listener de entregas rechazado: ${error.message}")
                     }
                 )
             }
@@ -248,8 +272,15 @@ class ChatViewModel @Inject constructor(
                     current.add(event.message)
                 }
                 _messages.value = current.sortedBy { it.timestamp }
-                if (event.message.senderId != currentUserId && !event.message.isRead) {
-                    viewModelScope.launch { chatRepository.markMessagesAsRead(chatId) }
+                if (event.message.senderId != currentUserId) {
+                    viewModelScope.launch {
+                        if (!event.message.isDelivered) {
+                            chatRepository.markMessageDelivered(chatId, event.message.id)
+                        }
+                        if (!event.message.isRead) {
+                            chatRepository.markMessagesAsRead(chatId)
+                        }
+                    }
                 }
             }
             is ChatRepository.MessageChange.Removed -> {

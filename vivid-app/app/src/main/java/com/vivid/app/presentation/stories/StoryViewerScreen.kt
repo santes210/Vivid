@@ -37,6 +37,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import com.vivid.app.util.rememberPlaybackPolicy
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -165,6 +168,18 @@ fun StoryViewerRoute(
 
     val currentStory = stories.getOrNull(currentIndex)
     val isOwner = currentStory?.userId == currentUserId
+    val playbackPolicy = rememberPlaybackPolicy()
+
+    // Precarga la siguiente foto solo en Wi-Fi (no gasta datos móviles).
+    LaunchedEffect(currentIndex, stories, playbackPolicy.prefetchNextMedia) {
+        if (!playbackPolicy.prefetchNextMedia) return@LaunchedEffect
+        val next = stories.getOrNull(currentIndex + 1) ?: return@LaunchedEffect
+        val url = next.mediaUrl.ifBlank { next.thumbnailUrl }
+        if (url.isBlank()) return@LaunchedEffect
+        context.imageLoader.enqueue(
+            ImageRequest.Builder(context).data(url).build()
+        )
+    }
 
     // Mark viewed & listen viewers when story changes
     LaunchedEffect(currentStory?.id, currentUserId) {

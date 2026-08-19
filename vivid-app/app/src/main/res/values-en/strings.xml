@@ -147,4 +147,32 @@
     <string name="msg_delete_confirm_body">This message will be removed for both participants.</string>
     <string name="msg_edit_title">Edit message</string>
     <string name="msg_edit_save">Save</string>
+    <string name="msg_sent">Sent</string>
+    <string name="msg_delivered">Delivered</string>
+    <string name="msg_read">Read</string>
+    <string name="action_message">Message</string>
+
+    <string name="explore_title">Explore</string>
+    <string name="explore_empty">No posts for #%1$s</string>
+    <string name="explore_error">Couldn\'t load posts.</string>
+    <string name="search_people_label">Search people</string>
+    <string name="search_min_chars">Type at least 2 letters to find people.</string>
+    <string name="search_no_results">No users found with that name.</string>
+    <string name="search_error">Couldn\'t search users.</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_user_row">%1$s, username %2$s</string>
+    <string name="cd_send_message_to">Send message to %1$s</string>
+    <string name="cd_post_by">Post by %1$s</string>
+    <string name="cd_like">Like</string>
+    <string name="cd_comment">Comment</string>
+    <string name="cd_camera">Camera</string>
+
+    <string name="perm_onb_allow_camera">Allow camera</string>
+    <string name="perm_onb_allow_mic">Allow microphone</string>
+    <string name="perm_onb_allow_notif">Allow notifications</string>
+    <string name="perm_onb_open_settings">Open system settings</string>
+    <string name="perm_onb_granted">Granted</string>
+
+    <string name="data_saver_wifi_hint">On mobile data, reels and stories are not preloaded</string>
+    <string name="appearance_subtitle">Theme, language and text size</string>
 </resources>

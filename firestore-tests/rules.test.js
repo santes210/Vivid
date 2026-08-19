@@ -361,8 +361,14 @@ describe("chats", () => {
     // Acuses y reacción → sí.
     await assertSucceeds(alice.doc("chats/ab/messages/m1").update({ isRead: true }));
     await assertSucceeds(bob.doc("chats/ab/messages/m1").update({ reaction: "❤️" }));
-    // Reescribir el texto del mensaje → no.
+    // Reescribir el texto SIN lastEditedAt → no.
     await assertFails(doc.update({ text: "reescrito" }));
+    // El receptor no puede editar el texto aunque mande lastEditedAt.
+    await assertFails(bob.doc("chats/ab/messages/m1").update({
+      text: "hack", lastEditedAt: Date.now()
+    }));
+    // El emisor sí puede editar texto + lastEditedAt.
+    await assertSucceeds(doc.update({ text: "editado", lastEditedAt: 1 }));
     // Borrar: solo el emisor.
     await assertFails(bob.doc("chats/ab/messages/m1").delete());
     await assertSucceeds(alice.doc("chats/ab/messages/m1").delete());

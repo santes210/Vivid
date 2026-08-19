@@ -24,7 +24,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.vivid.app.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -105,7 +107,7 @@ internal fun TypingIndicatorBubble() {
                         Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)))
                     }
                     Spacer(Modifier.width(4.dp))
-                    Text("escribiendo…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.msg_typing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -123,7 +125,7 @@ internal fun TypingIndicatorBubble() {
                     Box(modifier = Modifier.size((8 * scale).dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)))
                 }
                 Spacer(Modifier.width(4.dp))
-                Text("escribiendo…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.msg_typing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -337,6 +339,15 @@ internal fun StoryReplyContent(message: Message, isMine: Boolean) {
 internal fun MessageMetaRow(message: Message, isMine: Boolean, showResignVoice: Boolean = false, onResignVoice: (Message) -> Unit = {}) {
     val metaColor = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+        if (message.isEdited) {
+            Text(
+                text = stringResource(R.string.msg_edited),
+                style = MaterialTheme.typography.labelSmall,
+                color = metaColor,
+                fontSize = 9.sp
+            )
+            Spacer(Modifier.width(4.dp))
+        }
         Text(
             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
             style = MaterialTheme.typography.labelSmall,
@@ -345,15 +356,27 @@ internal fun MessageMetaRow(message: Message, isMine: Boolean, showResignVoice: 
         )
         if (isMine) {
             Spacer(Modifier.width(3.dp))
-            // Estados enviado / entregado / leído — compactos
             val icon: ImageVector
             val tint: Color
+            val receiptCd: String
             when {
-                message.isRead -> { icon = Icons.Filled.DoneAll; tint = MaterialTheme.colorScheme.tertiary }
-                message.isDelivered -> { icon = Icons.Filled.DoneAll; tint = metaColor }
-                else -> { icon = Icons.Filled.Check; tint = metaColor }
+                message.isRead -> {
+                    icon = Icons.Filled.DoneAll
+                    tint = MaterialTheme.colorScheme.tertiary
+                    receiptCd = stringResource(R.string.msg_read)
+                }
+                message.isDelivered -> {
+                    icon = Icons.Filled.DoneAll
+                    tint = metaColor
+                    receiptCd = stringResource(R.string.msg_delivered)
+                }
+                else -> {
+                    icon = Icons.Filled.Check
+                    tint = metaColor
+                    receiptCd = stringResource(R.string.msg_sent)
+                }
             }
-            Icon(icon, contentDescription = if (message.isRead) "Leído" else if (message.isDelivered) "Entregado" else "Enviado", tint = tint, modifier = Modifier.size(12.dp))
+            Icon(icon, contentDescription = receiptCd, tint = tint, modifier = Modifier.size(12.dp))
         }
     }
 }
