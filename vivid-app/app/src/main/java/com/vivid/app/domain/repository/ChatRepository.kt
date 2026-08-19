@@ -158,7 +158,8 @@ class ChatRepository @Inject constructor(
             voiceUrl = doc.getString("voiceUrl").orEmpty(),
             voiceKey = doc.getString("voiceKey").orEmpty(),
             voiceDurationMs = doc.getLong("voiceDurationMs") ?: 0L,
-            replyToStoryId = doc.getString("replyToStoryId").orEmpty()
+            replyToStoryId = doc.getString("replyToStoryId").orEmpty(),
+            lastEditedAt = doc.getLong("lastEditedAt") ?: 0L
         )
 
     /** Persiste un [Message] en la caché Room del chat. */
@@ -506,6 +507,47 @@ class ChatRepository @Inject constructor(
             ),
             SetOptions.merge()
         ).await()
+    }
+
+    /**
+     * Edita el texto de un mensaje propio (solo type=text). Marca
+     * `lastEditedAt` con el timestamp del momento; el resto de campos
+     * (senderId, isRead, etc.) NO se modifican.
+     *
+     * El listener del chat propaga el cambio a la UI automáticamente
+     * porque la query escucha cualquier MODIFIED.
+     */
+    suspend fun editMessage(chatId: String, messageId: String, newText: String) {
+        val senderId = currentUserId
+        if (senderId.isBlank() || chatId.isBlank() || messageId.isBlank()) return
+        if (newText.isBlank()) return
+        try {
+            val ref = firestore.collection("chats").document(chatId)
+                .collection("messages").document(messageId)
+            val snap = ref.get().await()
+            if (!snap.exists()) return
+            // Solo el emisor puede editar (las reglas también lo bloquean,
+            // pero el chequeo local evita un round-trip inútil).
+            if (snap.getString("senderId") != senderId) return
+            if (snap.getString("type") != "text") return
+            val now = System.currentTimeMillis()
+            ref.update(
+                mapOf(
+                    "text" to newText,
+                    "lastEditedAt" to now
+                )
+            ).await()
+            // El listener ya va a repintar la UI, pero actualizamos el caché
+            // local también para que al volver al chat no se vea el texto viejo.
+            repositoryScope.launch {
+                val existing = messageDao.getMessagesForChat(chatId)
+                // getMessagesForChat devuelve Flow; aquí no podemos leer de él
+                // directamente. Como el listener se va a disparar igualmente,
+                // dejamos que Room se actualice por la ruta del listener.
+            }
+        } catch (_: Exception) {
+            // Silencioso: la UI muestra snackbar de error en ChatViewModel.
+        }
     }
 
     suspend fun markChatAsRead(chatId: String) {

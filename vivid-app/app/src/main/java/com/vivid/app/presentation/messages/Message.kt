@@ -16,5 +16,12 @@ data class Message(
     val voiceKey: String = "",
     val voiceDurationMs: Long = 0L,
     // Story reply reference
-    val replyToStoryId: String = ""
-)
+    val replyToStoryId: String = "",
+    // Última edición (0L = nunca editado). Solo mensajes de texto editables.
+    // No se persiste en Room para no forzar migración; vive en Firestore.
+    val lastEditedAt: Long = 0L
+) {
+    /** True si el mensaje fue editado al menos una vez. */
+    val isEdited: Boolean get() = lastEditedAt > 0L
+}
+
