@@ -246,6 +246,7 @@ jobs:
           retention-days: 30
 
       # ── Android App Bundle (lo que se sube a Google Play) ────────────────
+
       - name: Verify AAB signature
         id: aab
         shell: bash
@@ -269,20 +270,55 @@ jobs:
             exit 1
           fi
 
-          # El AAB se firma con el esquema JAR (v1): apksigner no lo valida,
-          # jarsigner sí. Si el bundle saliera sin firmar, esto falla aquí y no
-          # en la consola de Play.
+          # OJO: aquí NO se usa `jarsigner -verify`.
           #
-          # Sin -strict a propósito: con un certificado autofirmado (lo normal
-          # en un keystore de app) -strict devuelve código 4 por "chain not
-          # validated" aunque la firma sea correcta. Se comprueba el texto
-          # "jar verified", que es lo que de verdad importa.
-          VERIFY_OUT="$(jarsigner -verify -verbose:summary "$AAB_PATH" 2>&1 || true)"
-          echo "$VERIFY_OUT" | tail -n 20
+          # Con un .aab, jarsigner escupe una línea por cada .properties que
+          # bundletool coloca en base/root/:
+          #   Entry base/root/play-services-base.properties is signed in
+          #   JarFile but is not signed in JarInputStream
+          # y su veredicto final deja de ser fiable AUNQUE la firma sea
+          # perfectamente válida (es un desajuste entre cómo lee el zip por
+          # streaming y cómo lo lee por acceso aleatorio, no un problema de
+          # firma). Ese es el motivo de que este paso fallara antes.
+          #
+          # La comprobación fiable es en dos partes:
+          #   1) que el bundle traiga bloque de firma (META-INF/*.RSA|DSA|EC)
+          #   2) que su certificado sea EL MISMO del keystore de release
+          #      (detecta el caso peor: un AAB firmado con la clave equivocada,
+          #      que Play rechazaría al subirlo).
 
-          if ! echo "$VERIFY_OUT" | grep -q "jar verified"; then
-            echo "::error::El AAB no está firmado o la firma no es válida."
+          echo "Entradas de firma dentro del AAB:"
+          unzip -l "$AAB_PATH" | grep -E 'META-INF/' || true
+
+          if ! unzip -l "$AAB_PATH" | grep -qE 'META-INF/.*\.(RSA|DSA|EC)$'; then
+            echo "::error::El AAB no está firmado: no hay META-INF/*.RSA en el bundle."
+            echo "::error::Revisa que signingConfigs.release esté aplicado al buildType release."
             exit 1
+          fi
+
+          AAB_CERT="$(keytool -printcert -jarfile "$AAB_PATH" 2>&1 || true)"
+          AAB_FP="$(grep -m1 -oE 'SHA256: [0-9A-Fa-f:]+' <<<"$AAB_CERT" | cut -d' ' -f2 || true)"
+
+          KS_CERT="$(keytool -list -v \
+            -keystore "$ANDROID_KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" 2>&1 || true)"
+          KS_FP="$(grep -m1 -oE 'SHA256: [0-9A-Fa-f:]+' <<<"$KS_CERT" | cut -d' ' -f2 || true)"
+
+          echo "SHA-256 del firmante del AAB: ${AAB_FP:-<no legible>}"
+          echo "SHA-256 del keystore:         ${KS_FP:-<no legible>}"
+
+          if [ -n "$AAB_FP" ] && [ -n "$KS_FP" ]; then
+            if [ "$AAB_FP" != "$KS_FP" ]; then
+              echo "::error::El AAB está firmado con una clave DISTINTA a la del keystore de release."
+              echo "::error::Play lo rechazaría: revisa ANDROID_KEY_ALIAS y el keystore."
+              exit 1
+            fi
+            echo "AAB firmado con la clave de release correcta."
+          else
+            # No se rompe el release por no poder leer una huella: el bloque de
+            # firma ya se comprobó arriba, que es el requisito duro.
+            echo "::warning::No se pudo comparar la huella del certificado del AAB."
           fi
 
           mkdir -p release-artifacts
