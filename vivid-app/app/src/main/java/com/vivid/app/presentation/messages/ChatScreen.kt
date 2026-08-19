@@ -41,6 +41,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +53,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.util.formatVoiceDuration
 import java.text.SimpleDateFormat
@@ -92,6 +94,7 @@ fun ChatScreen(
     var showAttachMenu by remember { mutableStateOf(false) }
     var activeReactionMessageId by remember { mutableStateOf<String?>(null) }
     var selectedMessageForOptions by remember { mutableStateOf<Message?>(null) }
+    var editingMessage by remember { mutableStateOf<Message?>(null) }
 
     val imageUploads: List<ImageUpload> = viewModel.imageUploads.collectAsState(initial = emptyList()).value
     val voiceUploads: List<VoiceUpload> = viewModel.voiceUploads.collectAsState(initial = emptyList()).value
@@ -184,7 +187,7 @@ fun ChatScreen(
                             )
                             if (isOtherTyping) {
                                 Text(
-                                    "escribiendo…",
+                                    stringResource(R.string.msg_typing),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
@@ -531,6 +534,19 @@ fun ChatScreen(
                         ListItem(headlineContent = { Text("Copiar texto") }, supportingContent = { Text(message.text.take(80), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { clipboardManager.setText(AnnotatedString(message.text)); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                 }
+                if (message.senderId == currentUserId && message.type == "text") {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.msg_edit)) },
+                        supportingContent = { Text(stringResource(R.string.msg_edited).take(40), maxLines = 1) },
+                        leadingContent = { Icon(Icons.Filled.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                            editingMessage = message
+                            selectedMessageForOptions = null
+                            activeReactionMessageId = null
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
                 if (message.senderId == currentUserId) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     ListItem(headlineContent = { Text("Eliminar mensaje", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)) }, supportingContent = { Text(when(message.type){ "image" -> "Se borrará la imagen también del servidor."; "voice" -> "Se borrará el audio también."; else -> "Se borrará esta burbuja permanentemente." }) }, leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { viewModel.deleteMessage(chatId, message); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
@@ -538,6 +554,41 @@ fun ChatScreen(
                 Spacer(Modifier.height(16.dp))
             }
         }
+    }
+
+    editingMessage?.let { msg ->
+        var draft by remember(msg.id) { mutableStateOf(msg.text) }
+        AlertDialog(
+            onDismissRequest = { editingMessage = null },
+            title = { Text(stringResource(R.string.msg_edit_title), fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 5,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = draft.trim()
+                        if (trimmed.isNotBlank() && trimmed != msg.text) {
+                            viewModel.editMessage(chatId, msg.id, trimmed)
+                        }
+                        editingMessage = null
+                    },
+                    enabled = draft.trim().isNotBlank()
+                ) { Text(stringResource(R.string.msg_edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingMessage = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
     }
 
     // ── Adjuntos en bottom sheet (composer) ──

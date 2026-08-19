@@ -32,6 +32,7 @@ object SettingsManager {
     private const val KEY_2FA = "two_factor_auth"
     private const val KEY_CACHE_SIZE = "cache_size_mb"
     private const val KEY_LAST_CACHE_CLEAR = "last_cache_clear"
+    private const val KEY_PERM_ONBOARDING_DONE = "perm_onboarding_done"
 
     // Observable/reactive compose states
     var selectedThemeOption by mutableStateOf("Sistema")
@@ -72,6 +73,13 @@ object SettingsManager {
         private set
     var lastCacheClearAt by mutableStateOf(0L)
         private set
+    /**
+     * Marca de si el usuario ya pasó por la pantalla de onboarding de
+     * permisos. Se usa una sola vez por instalación / cuenta; se persiste
+     * en SharedPreferences para sobrevivir reinicios y al cambio de cuenta.
+     */
+    var permissionsOnboardingCompleted by mutableStateOf(false)
+        private set
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -94,6 +102,7 @@ object SettingsManager {
         twoFactorAuthEnabled = prefs.getBoolean(KEY_2FA, false)
         simulatedCacheSizeMB = prefs.getFloat(KEY_CACHE_SIZE, 0f)
         lastCacheClearAt = prefs.getLong(KEY_LAST_CACHE_CLEAR, 0L)
+        permissionsOnboardingCompleted = prefs.getBoolean(KEY_PERM_ONBOARDING_DONE, false)
     }
 
     /** Sincroniza las preferencias de notificación a Firestore para que la Cloud Function las lea */
@@ -232,6 +241,21 @@ object SettingsManager {
         setCacheSize(context, 0f)
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putLong(KEY_LAST_CACHE_CLEAR, lastCacheClearAt).apply()
+    }
+
+    /**
+     * Marca el onboarding de permisos como completado. Se llama desde
+     * PermissionsOnboardingScreen al pulsar "Continuar" o "Ahora no", o
+     * desde Ajustes si el usuario quiere saltarlo manualmente.
+     */
+    fun markPermissionsOnboardingCompleted(context: Context? = null) {
+        permissionsOnboardingCompleted = true
+        // Si tenemos contexto, persistimos inmediatamente. Si no, se hará
+        // en el próximo init() (cambio de proceso, reinicio, etc.).
+        if (context != null) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_PERM_ONBOARDING_DONE, true).apply()
+        }
     }
 
     fun filterOffensiveWords(text: String): String {

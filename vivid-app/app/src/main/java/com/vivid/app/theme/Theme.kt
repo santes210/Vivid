@@ -9,12 +9,14 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.vivid.app.util.LocaleManager
 
 /**
  * Theme principal Vivid — Material You 3 Expressive (M3 1.4.0 estable).
@@ -145,10 +147,18 @@ fun VividTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = VividTypography,
-        shapes = VividShapes,
-        content = content
-    )
+    // LocalFontScale: Ajustes → Tamaño de fuente escala la tipografía global.
+    // Se provee desde MainActivity leyendo LocaleManager.fontScale; por defecto
+    // 1.0 (tamaño normal). effectiveVividTypography() multiplica los fontSize
+    // en sp preservando lineHeight y letterSpacing.
+    CompositionLocalProvider(
+        LocalFontScale provides LocaleManager.fontScale
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = effectiveVividTypography(),
+            shapes = VividShapes,
+            content = content
+        )
+    }
 }

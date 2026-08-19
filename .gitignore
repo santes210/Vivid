@@ -57,3 +57,8 @@ vivid-app/app/schemas/
 .zshrc
 .wget-hsts
 uploads/
+
+# Sin documentación .md en el repo. La información va en strings.xml
+# (traducible) o en código (VividChangelog, Ajustes → Acerca de).
+*.md
+**/*.md

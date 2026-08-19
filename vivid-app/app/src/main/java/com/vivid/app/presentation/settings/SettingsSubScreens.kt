@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -307,7 +308,29 @@ fun AparienciaSettingsScreen(
     val dynamic = SettingsManager.dynamicColorEnabled
     val smooth = SettingsManager.smoothAnimationsEnabled
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showLangDialog by remember { mutableStateOf(false) }
+    var showFontDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    // Re-suscribirse a los valores del LocaleManager para reflejar el estado
+    // actual y que la UI se reescale si el usuario cambia el tamaño.
+    val selectedLang = com.vivid.app.util.LocaleManager.selectedLang
+    val fontScale = com.vivid.app.util.LocaleManager.fontScale
+
+    // Etiquetas localizadas para los selectores de idioma y tamaño de fuente.
+    // (No traducimos los textos hardcoded del resto del archivo: eso queda
+    // fuera del alcance; los selectores nuevos sí porque son del feature.)
+    val langLabel = when (selectedLang) {
+        "en" -> stringResource(com.vivid.app.R.string.lang_english)
+        "es" -> stringResource(com.vivid.app.R.string.lang_spanish)
+        else -> stringResource(com.vivid.app.R.string.lang_system)
+    }
+    val fontLabel = when {
+        fontScale <= 0.9f -> stringResource(com.vivid.app.R.string.font_size_small)
+        fontScale <= 1.05f -> stringResource(com.vivid.app.R.string.font_size_normal)
+        fontScale <= 1.2f -> stringResource(com.vivid.app.R.string.font_size_large)
+        else -> stringResource(com.vivid.app.R.string.font_size_xlarge)
+    }
 
     VividSettingsScaffold(title = "Apariencia", onBack = onBack) { padding ->
         LazyColumn(
@@ -348,6 +371,25 @@ fun AparienciaSettingsScreen(
                     )
                 }
             }
+            item {
+                VividSettingsGroup(title = "Idioma y texto") {
+                    VividSettingsItem(
+                        title = stringResource(com.vivid.app.R.string.lang_setting),
+                        subtitle = "Español / English",
+                        icon = Icons.Outlined.Translate,
+                        value = langLabel,
+                        onClick = { showLangDialog = true },
+                        showDivider = true
+                    )
+                    VividSettingsItem(
+                        title = stringResource(com.vivid.app.R.string.font_size_setting),
+                        subtitle = stringResource(com.vivid.app.R.string.font_size_subtitle),
+                        icon = Icons.Outlined.TextFields,
+                        value = fontLabel,
+                        onClick = { showFontDialog = true }
+                    )
+                }
+            }
         }
     }
     if (showThemeDialog) {
@@ -375,6 +417,82 @@ fun AparienciaSettingsScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { showThemeDialog = false }) { Text("Cerrar") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    }
+    if (showLangDialog) {
+        val options = listOf(
+            "es" to stringResource(com.vivid.app.R.string.lang_spanish),
+            "en" to stringResource(com.vivid.app.R.string.lang_english)
+        )
+        AlertDialog(
+            onDismissRequest = { showLangDialog = false },
+            title = { Text(stringResource(com.vivid.app.R.string.lang_setting), fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    options.forEach { (code, label) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                com.vivid.app.util.LocaleManager.setLanguage(context, code)
+                                showLangDialog = false
+                                scope.launch {
+                                    onShowSnackbar(context.getString(com.vivid.app.R.string.lang_changed, label))
+                                    // Recrear la activity para que los recursos
+                                    // se sirvan en el nuevo idioma.
+                                    (context as? android.app.Activity)?.recreate()
+                                }
+                            }.padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = selectedLang == code, onClick = {
+                                com.vivid.app.util.LocaleManager.setLanguage(context, code)
+                                showLangDialog = false
+                                (context as? android.app.Activity)?.recreate()
+                            })
+                            Spacer(Modifier.width(12.dp)); Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showLangDialog = false }) { Text("Cerrar") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    }
+    if (showFontDialog) {
+        val options = listOf(
+            com.vivid.app.util.LocaleManager.FONT_SCALES[0] to stringResource(com.vivid.app.R.string.font_size_small),
+            com.vivid.app.util.LocaleManager.FONT_SCALES[1] to stringResource(com.vivid.app.R.string.font_size_normal),
+            com.vivid.app.util.LocaleManager.FONT_SCALES[2] to stringResource(com.vivid.app.R.string.font_size_large),
+            com.vivid.app.util.LocaleManager.FONT_SCALES[3] to stringResource(com.vivid.app.R.string.font_size_xlarge)
+        )
+        AlertDialog(
+            onDismissRequest = { showFontDialog = false },
+            title = { Text(stringResource(com.vivid.app.R.string.font_size_setting), fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    options.forEach { (scale, label) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                com.vivid.app.util.LocaleManager.setFontScale(context, scale)
+                                showFontDialog = false
+                                (context as? android.app.Activity)?.recreate()
+                            }.padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = kotlin.math.abs(fontScale - scale) < 0.01f,
+                                onClick = {
+                                    com.vivid.app.util.LocaleManager.setFontScale(context, scale)
+                                    showFontDialog = false
+                                    (context as? android.app.Activity)?.recreate()
+                                }
+                            )
+                            Spacer(Modifier.width(12.dp)); Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showFontDialog = false }) { Text("Cerrar") } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }

@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -470,8 +471,9 @@ fun AuthScreen(
                                 Icon(
                                     if (passwordVisible) Icons.Filled.VisibilityOff
                                     else Icons.Filled.Visibility,
-                                    contentDescription = if (passwordVisible) "Ocultar contraseña"
-                                    else "Mostrar contraseña"
+                                    contentDescription = if (passwordVisible)
+                                        stringResource(R.string.cd_hide_password)
+                                    else stringResource(R.string.cd_show_password)
                                 )
                             }
                         },
@@ -549,7 +551,7 @@ fun AuthScreen(
                         ) {
                             Icon(
                                 Icons.Filled.Close,
-                                contentDescription = "Cerrar",
+                                contentDescription = stringResource(R.string.cd_close),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -597,7 +599,7 @@ fun AuthScreen(
                         ) {
                             Icon(
                                 Icons.Filled.Close,
-                                contentDescription = "Cerrar",
+                                contentDescription = stringResource(R.string.cd_close),
                                 tint = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.size(18.dp)
                             )

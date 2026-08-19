@@ -564,6 +564,28 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Edita el texto de un mensaje propio (solo type=text). El listener
+     * de Firestore se encarga de propagar el cambio a la UI; mientras
+     * tanto, actualizamos el estado local para que el cambio sea
+     * instantáneo.
+     */
+    fun editMessage(chatId: String, messageId: String, newText: String) {
+        if (newText.isBlank()) return
+        val now = System.currentTimeMillis()
+        _messages.value = _messages.value.map { msg ->
+            if (msg.id == messageId) msg.copy(text = newText, lastEditedAt = now) else msg
+        }
+        viewModelScope.launch {
+            try {
+                chatRepository.editMessage(chatId, messageId, newText)
+            } catch (error: Exception) {
+                Log.e(TAG, "No se pudo editar $messageId", error)
+                showError(readableError(error, "No se pudo editar el mensaje"))
+            }
+        }
+    }
+
     fun reactToMessage(chatId: String, messageId: String, reaction: String) {
         viewModelScope.launch {
             _messages.value = _messages.value.map { msg ->

@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -29,6 +30,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.vivid.app.R
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -140,7 +142,7 @@ fun CameraScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
             }
             IconButton(onClick = {
                 lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
@@ -149,7 +151,7 @@ fun CameraScreen(
                     CameraSelector.LENS_FACING_BACK
                 }
             }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Cambiar cámara", tint = Color.White)
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cd_switch_camera), tint = Color.White)
             }
         }
 
@@ -186,7 +188,7 @@ fun CameraScreen(
             ) {
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Tomar foto",
+                    contentDescription = stringResource(R.string.cd_take_photo),
                     modifier = Modifier.size(36.dp),
                     tint = Color.White
                 )
@@ -200,7 +202,7 @@ fun CameraScreen(
                 .padding(end = 32.dp, bottom = 48.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Abrir galería")
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_open_gallery))
         }
 
         Box(

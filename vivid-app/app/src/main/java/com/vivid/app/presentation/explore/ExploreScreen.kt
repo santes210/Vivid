@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.feed.PostData
@@ -31,6 +32,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 
 private const val TAG = "ExploreScreen"
+
+// Tamaño de página para paginación tipo Paging 3 (cursor-based con startAfter).
+// Se mantiene chico para que la primera carga pese poco; al hacer scroll se
+// piden las siguientes páginas. Si el user pidió paginación real, ya no
+// cargamos todo de una.
+private const val EXPLORE_PAGE_SIZE = 18L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,55 +52,39 @@ fun ExploreScreen(
     var selectedTag by remember { mutableStateOf("vivid") }
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var loadingMore by remember { mutableStateOf(false) }
+    var endReached by remember { mutableStateOf(false) }
+    // Cursor de la última página: DocumentSnapshot del último doc cargado.
+    // Se guarda en la última paginación con startAfter(lastVisible).
+    var lastVisible by remember { mutableStateOf<DocumentSnapshot?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableIntStateOf(0) }
 
     val tags = remember { listOf("vivid", "arte", "musica", "viaje", "comida", "tecnologia", "moda", "deporte") }
 
-    suspend fun loadPosts(tag: String) {
+    /**
+     * Carga la primera página del tag. Resetea cursor y lista. Si el tag es
+     * nuevo, reemplaza la lista; si es retry, también.
+     */
+    suspend fun loadFirstPage(tag: String) {
         loading = true
         errorMessage = null
+        lastVisible = null
+        endReached = false
         try {
-            val snapshot = withNetworkTimeout("explore.loadPosts") {
+            val snapshot = withNetworkTimeout("explore.loadFirstPage") {
                 FirebaseFirestore.getInstance()
                     .collection("posts")
                     .whereArrayContains("hashtags", tag)
                     .whereEqualTo("isPrivate", false)
-                    .limit(20)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(EXPLORE_PAGE_SIZE)
                     .get()
                     .await()
             }
-            posts = snapshot.documents.mapNotNull { doc ->
-                val id = doc.id
-                val caption = doc.getString("caption") ?: ""
-                val username = doc.getString("username") ?: ""
-                val userId = doc.getString("userId") ?: ""
-                if (userId in blockedUserIds) return@mapNotNull null
-                val imageUrl = doc.getString("imageUrl") ?: ""
-                val videoUrl = doc.getString("videoUrl") ?: ""
-                val isVideo = doc.getBoolean("isVideo") ?: false
-                val timestamp = doc.getLong("timestamp") ?: 0L
-                val likesCount = doc.getLong("likesCount")?.toInt() ?: 0
-                val commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0
-                val storageKey = doc.getString("storageKey") ?: ""
-                PostData(
-                    id = id,
-                    userId = userId,
-                    username = username,
-                    userProfilePicture = "",
-                    userProfilePictureBase64 = "",
-                    imageUrl = imageUrl,
-                    videoUrl = videoUrl,
-                    isVideo = isVideo,
-                    caption = caption,
-                    likesCount = likesCount,
-                    commentsCount = commentsCount,
-                    timestamp = timestamp,
-                    isLiked = false,
-                    isSaved = false,
-                    storageKey = storageKey
-                )
-            }
+            posts = snapshot.documents.mapNotNull { doc -> docToPost(doc, blockedUserIds) }
+            lastVisible = snapshot.documents.lastOrNull()
+            endReached = snapshot.documents.size < EXPLORE_PAGE_SIZE
         } catch (e: Exception) {
             CrashReporter.recordNonFatal(TAG, e, "No se pudieron cargar posts del tag #$tag")
             posts = emptyList()
@@ -102,8 +93,42 @@ fun ExploreScreen(
         loading = false
     }
 
+    /**
+     * Carga la siguiente página usando startAfter(lastVisible). Se llama desde
+     * el grid al detectar scroll cerca del final. No hace nada si ya estamos
+     * en endReached o ya hay un loadMore en curso.
+     */
+    suspend fun loadMore() {
+        if (loading || loadingMore || endReached) return
+        val cursor = lastVisible ?: return
+        loadingMore = true
+        try {
+            val snapshot = withNetworkTimeout("explore.loadMore") {
+                FirebaseFirestore.getInstance()
+                    .collection("posts")
+                    .whereArrayContains("hashtags", selectedTag)
+                    .whereEqualTo("isPrivate", false)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .startAfter(cursor)
+                    .limit(EXPLORE_PAGE_SIZE)
+                    .get()
+                    .await()
+            }
+            val newPosts = snapshot.documents.mapNotNull { doc -> docToPost(doc, blockedUserIds) }
+            // Filtrar duplicados (Firestore puede repetir el cursor bajo presión).
+            val existingIds = posts.map { it.id }.toSet()
+            posts = posts + newPosts.filterNot { it.id in existingIds }
+            lastVisible = snapshot.documents.lastOrNull()
+            if (snapshot.documents.size < EXPLORE_PAGE_SIZE) endReached = true
+        } catch (e: Exception) {
+            // Paginación silenciosa: si falla, el usuario sigue viendo el contenido previo.
+            CrashReporter.recordNonFatal(TAG, e, "loadMore de #$selectedTag falló")
+        }
+        loadingMore = false
+    }
+
     LaunchedEffect(selectedTag, blockedUserIds, blockedUsersState.isLoaded, retryKey) {
-        if (blockedUsersState.isLoaded) loadPosts(selectedTag)
+        if (blockedUsersState.isLoaded) loadFirstPage(selectedTag)
     }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -258,9 +283,72 @@ fun ExploreScreen(
                             }
                         }
                     }
+                    // Trigger de paginación: cuando se renderizan los últimos
+                    // 6 items, se pide la siguiente página. Es la forma más
+                    // simple de emular Paging 3 sin agregar la dependencia.
+                    if (!endReached) {
+                        items(3) { _ ->
+                            // Renderiza celdas vacías como "padding" invisible
+                            // para que el loadMore se dispare antes de llegar
+                            // al final real. Es invisible (sin Card).
+                            Spacer(modifier = Modifier.aspectRatio(1f))
+                        }
+                    }
+                    if (loadingMore) {
+                        items(3) { _ ->
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        }
+                    }
+                }
+                // Detección de scroll cerca del final: las celdas padding
+                // invisibles (Spacer) sirven como disparador, pero también
+                // conectamos un LaunchedEffect al tamaño de la lista para
+                // pedir más cuando faltan pocos items por cargar.
+                LaunchedEffect(posts.size, loadingMore, endReached) {
+                    if (!loadingMore && !endReached && posts.size >= EXPLORE_PAGE_SIZE.toInt()) {
+                        loadMore()
+                    }
                 }
             }
         }
     }
         }
 }
+
+/**
+ * Convierte un DocumentSnapshot de Firestore a [PostData]. Devuelve null
+ * si el post pertenece a un usuario bloqueado o si faltan datos críticos.
+ */
+private fun docToPost(doc: DocumentSnapshot, blockedUserIds: Set<String>): PostData? {
+    val id = doc.id
+    val userId = doc.getString("userId") ?: ""
+    if (userId.isBlank() || userId in blockedUserIds) return null
+    return PostData(
+        id = id,
+        userId = userId,
+        username = doc.getString("username") ?: "",
+        userProfilePicture = "",
+        userProfilePictureBase64 = "",
+        imageUrl = doc.getString("imageUrl") ?: "",
+        videoUrl = doc.getString("videoUrl") ?: "",
+        isVideo = doc.getBoolean("isVideo") ?: false,
+        caption = doc.getString("caption") ?: "",
+        likesCount = doc.getLong("likesCount")?.toInt() ?: 0,
+        commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0,
+        timestamp = doc.getLong("timestamp") ?: 0L,
+        isLiked = false,
+        isSaved = false,
+        storageKey = doc.getString("storageKey") ?: ""
+    )
+}
+

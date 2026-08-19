@@ -107,4 +107,58 @@
     <string name="action_retry">Reintentar</string>
     <string name="user_fallback">usuario</string>
     <string name="avatar_description">Avatar</string>
+
+    <!-- ========== Accesibilidad (a11y) ========== -->
+    <!-- Descripciones contentDescription para iconos interactivos. Se mantienen
+         en español en values/ (idioma por defecto) y en inglés en values-en/. -->
+    <string name="cd_take_photo">Tomar foto</string>
+    <string name="cd_open_gallery">Abrir galería</string>
+    <string name="cd_switch_camera">Cambiar cámara</string>
+    <string name="cd_back">Volver</string>
+    <string name="cd_close">Cerrar</string>
+    <string name="cd_record_video">Grabar</string>
+    <string name="cd_stop_recording">Detener grabación</string>
+    <string name="cd_hide_password">Ocultar contraseña</string>
+    <string name="cd_show_password">Mostrar contraseña</string>
+    <string name="cd_send_message">Enviar mensaje</string>
+    <string name="cd_voice_message">Mensaje de voz</string>
+    <string name="cd_attach_image">Adjuntar imagen</string>
+    <string name="cd_open_camera">Abrir cámara</string>
+    <string name="cd_open_reels">Abrir reels</string>
+    <string name="cd_open_stories">Abrir stories</string>
+
+    <!-- ========== Idioma y tamaño de fuente ========== -->
+    <string name="lang_setting">Idioma</string>
+    <string name="lang_system">Sistema</string>
+    <string name="lang_spanish">Español</string>
+    <string name="lang_english">English</string>
+    <string name="font_size_setting">Tamaño de fuente</string>
+    <string name="font_size_small">Pequeña</string>
+    <string name="font_size_normal">Normal</string>
+    <string name="font_size_large">Grande</string>
+    <string name="font_size_xlarge">Muy grande</string>
+    <string name="font_size_subtitle">Afecta a todo el texto de la app</string>
+    <string name="lang_changed">Idioma: %1$s</string>
+
+    <!-- ========== Onboarding de permisos ========== -->
+    <string name="perm_onb_title">Bienvenido a Vivid</string>
+    <string name="perm_onb_subtitle">Algunos permisos ayudan a que Vivid funcione mejor. Podrás cambiarlos después en Ajustes.</string>
+    <string name="perm_onb_camera_title">Cámara</string>
+    <string name="perm_onb_camera_body">Toma fotos y videos para compartir en tus publicaciones, stories y reels.</string>
+    <string name="perm_onb_mic_title">Micrófono</string>
+    <string name="perm_onb_mic_body">Graba audio para tus reels y notas de voz en el chat.</string>
+    <string name="perm_onb_notif_title">Notificaciones</string>
+    <string name="perm_onb_notif_body">Te avisaremos sobre nuevos seguidores, likes, comentarios y mensajes.</string>
+    <string name="perm_onb_continue">Continuar</string>
+    <string name="perm_onb_skip">Ahora no</string>
+
+    <!-- ========== Mensajería ========== -->
+    <string name="msg_typing">escribiendo…</string>
+    <string name="msg_edited">Editado</string>
+    <string name="msg_edit">Editar mensaje</string>
+    <string name="msg_delete">Eliminar mensaje</string>
+    <string name="msg_delete_confirm_title">Eliminar mensaje</string>
+    <string name="msg_delete_confirm_body">Este mensaje se eliminará para ambos participantes.</string>
+    <string name="msg_edit_title">Editar mensaje</string>
+    <string name="msg_edit_save">Guardar</string>
 </resources>
