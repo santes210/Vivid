@@ -8,10 +8,52 @@ on:
       - 'firestore.indexes.json'
       - 'firebase.json'
       - '.firebaserc'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'firebase.json'
+      - '.firebaserc'
   workflow_dispatch:
 
 jobs:
+  test-rules:
+    name: Test Firestore rules (emulador)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firestore-tests/package-lock.json
+
+      - name: Setup Java (el emulador de Firestore corre en JVM)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install test dependencies
+        working-directory: firestore-tests
+        run: npm ci
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@latest
+
+      - name: Run rules tests against the emulator
+        working-directory: firestore-tests
+        run: firebase emulators:exec --only firestore --project demo-vivid-rules "npm test"
+
   deploy:
+    needs: test-rules
+    # En PRs solo se ejecutan los tests de reglas; el deploy queda para main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
