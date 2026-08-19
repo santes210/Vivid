@@ -30,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.launch
+
+private const val TAG = "StoriesScreen"
 
 @Composable
 fun StoriesTray(
@@ -43,11 +46,13 @@ fun StoriesTray(
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var retryKey by remember { mutableIntStateOf(0) }
 
     // ViewModel para limpieza con borrado de B2 (fix 2026-08-09) - sin try-catch porque hiltViewModel es @Composable
     val storyViewModel: CreateStoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
-    LaunchedEffect(currentUserId) {
+    LaunchedEffect(currentUserId, retryKey) {
         if (currentUserId.isNotBlank()) {
             storyViewModel.cleanExpiredStories(currentUserId)
 
@@ -64,16 +69,23 @@ fun StoriesTray(
             }
 
             // ── Firestore: datos frescos en tiempo real + persistir en caché ──
-            val fresh = runCatching {
+            loadFailed = false
+            runCatching {
                 val docs = loadVisibleStoryDocuments(db, currentUserId)
                 buildVisibleStories(db, currentUserId, docs)
-            }.getOrDefault(emptyList())
-            if (fresh.isNotEmpty()) {
-                stories = fresh
-                scope.launch {
-                    storyViewModel.cacheStories(fresh)
-                    com.vivid.app.util.VividCacheManager.markStoriesCached(context)
+            }.onSuccess { fresh ->
+                if (fresh.isNotEmpty()) {
+                    stories = fresh
+                    scope.launch {
+                        storyViewModel.cacheStories(fresh)
+                        com.vivid.app.util.VividCacheManager.markStoriesCached(context)
+                    }
                 }
+            }.onFailure { e ->
+                // Solo es un error visible si no hay nada que mostrar:
+                // si la caché ya cubrió la fila, el contenido viejo gana.
+                CrashReporter.recordNonFatal(TAG, e, "StoriesTray.load")
+                loadFailed = stories.isEmpty()
             }
         }
         isLoading = false
@@ -91,6 +103,23 @@ fun StoriesTray(
                 strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.primary
             )
+        }
+    } else if (loadFailed && stories.isEmpty()) {
+        // Error compacto (la fila vive dentro del feed): mensaje + reintento
+        // sin ocupar media pantalla.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "No se pudieron cargar las historias.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { retryKey++ }) { Text("Reintentar") }
         }
     } else {
         StoriesRow(stories = stories, onStoryClick = onStoryClick, onCreateStory = onCreateStory)

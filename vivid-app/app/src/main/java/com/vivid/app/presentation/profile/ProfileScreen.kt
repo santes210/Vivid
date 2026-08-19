@@ -46,8 +46,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+
+private const val TAG = "ProfileScreen"
 
 
 // Data models moved to ProfileModels.kt
@@ -84,6 +88,11 @@ fun ProfileScreen(
     var reelsLoaded by remember { mutableStateOf(false) }
     var savedLoaded by remember { mutableStateOf(false) }
 
+    // Error de carga (red / Firestore): muestra un estado con reintento en
+    // lugar de un skeleton eterno o un perfil vacío engañoso.
+    var loadFailed by remember { mutableStateOf(false) }
+    var retryKey by remember { mutableIntStateOf(0) }
+
     val relationshipState by viewModel.relationshipState.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
@@ -101,7 +110,7 @@ fun ProfileScreen(
         followActionMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearFollowActionMessage() }
     }
 
-    DisposableEffect(userId) {
+    DisposableEffect(userId, retryKey) {
         var profileListener: ListenerRegistration? = null
         var followListener: ListenerRegistration? = null
         var postsListener: ListenerRegistration? = null
@@ -111,7 +120,14 @@ fun ProfileScreen(
         if (userId.isNotBlank()) {
             // ── Perfil ──
             profileListener = db.collection("users").document(userId)
-                .addSnapshotListener { snapshot, _ ->
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        CrashReporter.recordNonFatal(TAG, error, "ProfileScreen.profile")
+                        isProfileLoaded = true
+                        loadFailed = true
+                        return@addSnapshotListener
+                    }
+                    loadFailed = false
                     val data = snapshot?.data.orEmpty()
                     profile = ProfileUiState(
                         uid = userId,
@@ -148,7 +164,14 @@ fun ProfileScreen(
             // ── Posts y Reels del usuario ──
             postsListener = db.collection("posts")
                 .whereEqualTo("userId", userId)
-                .addSnapshotListener { snapshot, _ ->
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        CrashReporter.recordNonFatal(TAG, error, "ProfileScreen.posts")
+                        postsLoaded = true
+                        loadFailed = true
+                        return@addSnapshotListener
+                    }
+                    loadFailed = false
                     photoPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
                             id = doc.id,
@@ -178,7 +201,14 @@ fun ProfileScreen(
 
             reelsListener = db.collection("reels")
                 .whereEqualTo("userId", userId)
-                .addSnapshotListener { snapshot, _ ->
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        CrashReporter.recordNonFatal(TAG, error, "ProfileScreen.reels")
+                        reelsLoaded = true
+                        loadFailed = true
+                        return@addSnapshotListener
+                    }
+                    loadFailed = false
                     reelPosts = snapshot?.documents.orEmpty().mapNotNull { doc ->
                         val videoUrl = doc.getString("videoUrl").orEmpty()
                         if (videoUrl.isBlank()) return@mapNotNull null
@@ -432,6 +462,20 @@ fun ProfileScreen(
                     PrivateProfileLock(
                         username = profile.username,
                         hasPendingRequest = profile.isFollowRequestPending
+                    )
+                }
+            } else if (loadFailed && currentDisplayList.isEmpty()) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                    VividErrorState(
+                        title = "No se pudieron cargar los datos del perfil",
+                        onRetry = {
+                            loadFailed = false
+                            isProfileLoaded = false
+                            postsLoaded = false
+                            reelsLoaded = false
+                            savedLoaded = false
+                            retryKey++
+                        }
                     )
                 }
             } else if (activeTabLoading) {
