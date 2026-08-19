@@ -1,3 +1,5 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,15 +17,6 @@ configurations.all {
 
 hilt {
     enableAggregatingTask = false
-}
-
-// Crashlytics: el bloque solo compila si el plugin
-// com.google.firebase.crashlytics está aplicado arriba (ese era el error
-// "Unresolved reference firebaseCrashlytics" cuando el bloque existía sin
-// el plugin). Sube mapping.txt automáticamente en cada release para que la
-// consola de Firebase desofusque los stack traces sin pasos manuales.
-firebaseCrashlytics {
-    mappingFileUploadEnabled = true
 }
 
 // Room exporta el esquema JSON a app/schemas/ en cada build.
@@ -105,6 +98,18 @@ logger.lifecycle("Vivid versionName: $vividVersionName")
 // La firma de release se inyecta desde GitHub Actions o desde variables locales.
 // Si no están presentes, Gradle aún puede compilar un release sin firmar; el workflow de
 // release valida las cuatro credenciales antes de empezar para no publicar un APK inválido.
+
+// Subida automática de mapping.txt a Crashlytics. OFF por defecto: el task
+// uploadCrashlyticsMappingFileRelease necesita credenciales de Firebase
+// (service account) y SIN ellas falla el build. Se activa solo donde existan:
+//   ./gradlew assembleRelease -PuploadCrashlyticsMapping=true
+// o la variable de entorno UPLOAD_CRASHLYTICS_MAPPING=true en CI.
+// Sin esto, mapping.txt se conserva como artefacto de build-apk.yml y se
+// puede subir manualmente (Firebase CLI: firebase crashlytics:mappingfile:upload).
+val uploadCrashlyticsMappingEnabled = providers.gradleProperty("uploadCrashlyticsMapping")
+    .orElse(providers.environmentVariable("UPLOAD_CRASHLYTICS_MAPPING"))
+    .orNull == "true"
+
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
@@ -163,6 +168,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            // Crashlytics: desde el plugin 2.6.0 la extensión ya NO se registra
+            // a nivel de proyecto, por eso el bloque `firebaseCrashlytics { }`
+            // de nivel superior falla con "Unresolved reference / receiver type
+            // mismatch" en Kotlin DSL. La forma soportada (documentación oficial
+            // de Firebase) es configure<CrashlyticsExtension> DENTRO del build
+            // type. La subida del mapping va desactivada por defecto (ver
+            // uploadCrashlyticsMappingEnabled arriba) para que el build release
+            // nunca falle por falta de credenciales de Firebase.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = uploadCrashlyticsMappingEnabled
+            }
         }
     }
 
