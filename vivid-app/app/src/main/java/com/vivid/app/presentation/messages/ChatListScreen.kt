@@ -355,10 +355,13 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                         VividErrorState(
                             title = if (currentUserId.isBlank()) "Inicia sesión" else "No se pudieron cargar los mensajes",
                             message = errorMessage ?: "Error",
-                            onRetry = if (currentUserId.isBlank()) null else {
-                                errorMessage = null
-                                isLoading = true
-                                retryKey++
+                            onRetry = when {
+                                currentUserId.isBlank() -> null
+                                else -> ({
+                                    errorMessage = null
+                                    isLoading = true
+                                    retryKey++
+                                })
                             }
                         )
                     }
