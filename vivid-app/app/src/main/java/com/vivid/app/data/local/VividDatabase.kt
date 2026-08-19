@@ -26,7 +26,7 @@ import com.vivid.app.data.local.entity.UserEntity
         StoryEntity::class,
         ReelEntity::class
     ],
-    version = 6,
+    version = 7,
     // Exportar el esquema JSON en cada build (app/schemas/) permite validar
     // migraciones con MigrationTestHelper y detectar cambios accidentales
     // de esquema ANTES de que un usuario con datos viejos sufra un crash.
@@ -41,7 +41,7 @@ abstract class VividDatabase : RoomDatabase() {
     abstract fun reelDao(): ReelDao
 
     companion object {
-        const val VERSION = 6
+        const val VERSION = 7
         const val NAME = "vivid_database"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {

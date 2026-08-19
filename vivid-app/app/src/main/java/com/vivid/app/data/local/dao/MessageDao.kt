@@ -38,4 +38,8 @@ interface MessageDao {
     /** Actualiza la reacción de un mensaje cacheado. */
     @Query("UPDATE messages SET reaction = :reaction WHERE id = :messageId")
     suspend fun updateReaction(messageId: String, reaction: String)
+
+    /** Persiste una edición de texto (type=text) con su marca lastEditedAt. */
+    @Query("UPDATE messages SET text = :text, lastEditedAt = :lastEditedAt WHERE id = :messageId")
+    suspend fun updateText(messageId: String, text: String, lastEditedAt: Long)
 }

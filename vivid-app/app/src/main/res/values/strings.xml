@@ -161,4 +161,34 @@
     <string name="msg_delete_confirm_body">Este mensaje se eliminará para ambos participantes.</string>
     <string name="msg_edit_title">Editar mensaje</string>
     <string name="msg_edit_save">Guardar</string>
+    <string name="msg_sent">Enviado</string>
+    <string name="msg_delivered">Entregado</string>
+    <string name="msg_read">Leído</string>
+    <string name="action_message">Mensaje</string>
+
+    <!-- ========== Explorar / búsqueda ========== -->
+    <string name="explore_title">Explorar</string>
+    <string name="explore_empty">No hay publicaciones para #%1$s</string>
+    <string name="explore_error">No se pudieron cargar las publicaciones.</string>
+    <string name="search_people_label">Buscar personas</string>
+    <string name="search_min_chars">Escribe al menos 2 letras para buscar personas.</string>
+    <string name="search_no_results">No encontré usuarios con ese nombre.</string>
+    <string name="search_error">No se pudieron buscar usuarios.</string>
+    <string name="cd_search">Buscar</string>
+    <string name="cd_user_row">%1$s, usuario %2$s</string>
+    <string name="cd_send_message_to">Enviar mensaje a %1$s</string>
+    <string name="cd_post_by">Publicación de %1$s</string>
+    <string name="cd_like">Me gusta</string>
+    <string name="cd_comment">Comentar</string>
+    <string name="cd_camera">Cámara</string>
+
+    <!-- Onboarding extra -->
+    <string name="perm_onb_allow_camera">Permitir cámara</string>
+    <string name="perm_onb_allow_mic">Permitir micrófono</string>
+    <string name="perm_onb_allow_notif">Permitir notificaciones</string>
+    <string name="perm_onb_open_settings">Abrir ajustes del sistema</string>
+    <string name="perm_onb_granted">Concedido</string>
+
+    <string name="data_saver_wifi_hint">En datos móviles no se precargan reels ni stories</string>
+    <string name="appearance_subtitle">Tema, idioma y tamaño de texto</string>
 </resources>

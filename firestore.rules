@@ -419,10 +419,21 @@ service cloud.firestore {
           && request.resource.data.receiverId in resultingChatParticipants()
           && request.resource.data.get('type', 'text') in ['text', 'image', 'voice', 'story_reply'];
 
-        // Tanto emisor como receptor pueden actualizar únicamente acuses,
-        // reacción y URLs firmadas. Nadie puede reescribir texto, dueño o tipo.
-        allow update: if inExistingChat()
-          && onlyChanges(['isRead', 'isDelivered', 'reaction', 'imageUrl', 'voiceUrl']);
+        // Acuses / reacción / URLs firmadas: cualquier participante.
+        // Editar texto: solo el emisor, solo type=text, y debe marcar lastEditedAt.
+        allow update: if inExistingChat() && (
+          onlyChanges(['isRead', 'isDelivered', 'reaction', 'imageUrl', 'voiceUrl'])
+          || (
+            resource.data.senderId == request.auth.uid
+            && resource.data.get('type', 'text') == 'text'
+            && onlyChanges(['text', 'lastEditedAt'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() < 4000
+            && request.resource.data.lastEditedAt is int
+            && request.resource.data.lastEditedAt > resource.data.get('lastEditedAt', 0)
+          )
+        );
 
         // Borrar solo lo propio (la UI ya solo ofrece la opción al autor).
         allow delete: if inExistingChat()

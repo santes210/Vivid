@@ -20,6 +20,17 @@ object VividChangelog {
 
     val releases: List<VividRelease> = listOf(
         VividRelease(
+            version = "2.3.0",
+            notes = listOf(
+                "Idioma (español/inglés) y tamaño de fuente desde Ajustes → Apariencia.",
+                "Explorar y búsqueda con paginación real: se carga de a poco al hacer scroll.",
+                "Mensajes: indicador de escribiendo, ticks de entregado y leído, editar y borrar.",
+                "Reels y stories no adelantan video en datos móviles; en Wi-Fi sí.",
+                "Onboarding de permisos (cámara, micrófono, notificaciones) antes de pedirlos.",
+                "Mejor soporte de TalkBack: descripciones en likes, comentarios, cámara y búsqueda."
+            )
+        ),
+        VividRelease(
             version = "2.2.0",
             notes = listOf(
                 "Reporte de crashes con Firebase Crashlytics y monitoreo de rendimiento con Performance Monitoring (gratis, sin pasos de pago).",

@@ -48,6 +48,7 @@ import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.PushSender
+import com.vivid.app.util.rememberPlaybackPolicy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -64,6 +65,11 @@ fun ReelsScreen(
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val policy = rememberPlaybackPolicy()
+
+    LaunchedEffect(policy.pageSize, policy.constrained) {
+        viewModel.applyPlaybackPolicy(policy.pageSize)
+    }
 
     // Estado del pager: el count se actualiza automáticamente con reels.size
     val pagerState = rememberPagerState(pageCount = { reels.size })
@@ -103,14 +109,14 @@ fun ReelsScreen(
             else -> VerticalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1,
+                beyondViewportPageCount = policy.beyondViewportPageCount,
                 key = { index -> if (index < reels.size) reels[index].id else index }
             ) { page ->
                 if (page in reels.indices) {
                     val reel = reels[page]
                     ReelPage(
                         reel = reel,
-                        isPlaying = page == pagerState.currentPage
+                        isPlaying = page == pagerState.currentPage && policy.autoplayAllowed
                     )
                 }
             }

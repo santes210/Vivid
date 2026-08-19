@@ -152,7 +152,7 @@ fun PermissionsOnboardingScreen(
                     onClick = { cameraLauncher.launch(Manifest.permission.CAMERA) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Permitir cámara")
+                    Text(stringResource(R.string.perm_onb_allow_camera))
                 }
             }
             if (!micGranted) {
@@ -160,7 +160,7 @@ fun PermissionsOnboardingScreen(
                     onClick = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Permitir micrófono")
+                    Text(stringResource(R.string.perm_onb_allow_mic))
                 }
             }
             if (needsNotificationPerm && !notifGranted) {
@@ -168,17 +168,16 @@ fun PermissionsOnboardingScreen(
                     onClick = { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Permitir notificaciones")
+                    Text(stringResource(R.string.perm_onb_allow_notif))
                 }
             }
 
-            // ── Ayuda si el usuario denegó permanentemente ──
             if ((!cameraGranted || !micGranted || (needsNotificationPerm && !notifGranted))) {
                 TextButton(
                     onClick = { openAppSettings() },
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
-                    Text("Abrir ajustes del sistema")
+                    Text(stringResource(R.string.perm_onb_open_settings))
                 }
             }
 
@@ -225,7 +224,7 @@ private fun PermissionCard(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = title,
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -240,9 +239,10 @@ private fun PermissionCard(
                     )
                     if (granted) {
                         Text(
-                            "✓",
+                            stringResource(R.string.perm_onb_granted),
                             color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleLarge
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

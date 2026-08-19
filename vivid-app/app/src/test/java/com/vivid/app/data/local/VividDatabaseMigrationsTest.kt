@@ -66,9 +66,16 @@ class VividDatabaseMigrationsTest {
     }
 
     @Test
+    fun `MIGRATION_6_7 covers version 6 to 7`() {
+        val migration = VividDatabase.MIGRATION_6_7
+        assertEquals(6, migration.startVersion)
+        assertEquals(7, migration.endVersion)
+    }
+
+    @Test
     fun `ALL_MIGRATIONS covers every step up to VERSION`() {
         assertEquals(VividDatabase.VERSION - 1, VividDatabase.ALL_MIGRATIONS.size)
-        assertEquals(6, VividDatabase.VERSION)
+        assertEquals(7, VividDatabase.VERSION)
     }
 
     // ── Entity default values match DDL defaults ──
@@ -90,6 +97,8 @@ class VividDatabaseMigrationsTest {
         assertEquals("", msg.replyToStoryId)
         // Field added in MIGRATION_4_5
         assertEquals("", msg.reaction)
+        // Field added in MIGRATION_6_7
+        assertEquals(0L, msg.lastEditedAt)
     }
 
     @Test

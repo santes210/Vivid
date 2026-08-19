@@ -34,7 +34,10 @@ class VividMessagingService : FirebaseMessagingService() {
             val fromUserId = remoteMessage.data["fromUserId"]
 
             when (type) {
-                "message" -> showMessageNotification(title, body, chatId, fromUserId)
+                "message" -> {
+                    markMessageDelivered(chatId, remoteMessage.data["messageId"])
+                    showMessageNotification(title, body, chatId, fromUserId)
+                }
                 "reel_like",
                 "reel_comment" -> showReelNotification(title, body, reelId)
                 "post_like",
@@ -57,6 +60,22 @@ class VividMessagingService : FirebaseMessagingService() {
         // Se llama cuando el token FCM cambia; delegamos el registro al PushNotificationHelper
         super.onNewToken(token)
         com.vivid.app.util.PushNotificationHelper.registerTokenForCurrentUser()
+    }
+
+    /**
+     * Recibo de entrega: el dispositivo recibió el push. No marca leído.
+     * Best-effort; si falta messageId o no hay sesión, no hace nada.
+     */
+    private fun markMessageDelivered(chatId: String?, messageId: String?) {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (chatId.isNullOrBlank() || messageId.isNullOrBlank()) return
+        runCatching {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("chats").document(chatId)
+                .collection("messages").document(messageId)
+                .update("isDelivered", true)
+        }
+        Log.d(TAG, "delivery receipt queued chat=$chatId msg=$messageId uid=$uid")
     }
 
     private fun showMessageNotification(

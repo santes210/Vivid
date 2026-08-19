@@ -526,7 +526,7 @@ fun ContenidoSettingsScreen(onBack: () -> Unit) {
                     VividSettingsSwitchItem(title = "Reproducción automática de Reels", subtitle = if (autoplay) "En Wi-Fi y datos" else "Pausada", icon = Icons.Outlined.PlayCircle, checked = autoplay, onCheckedChange = { SettingsManager.setAutoplayReels(context, it); upd("autoplayReels", it) }, showDivider = true)
                     VividSettingsSwitchItem(title = "Mostrar Reels en el Feed", subtitle = if (showInFeed) "Visibles en inicio" else "Solo en pestaña", icon = Icons.Outlined.VideoLibrary, checked = showInFeed, onCheckedChange = { SettingsManager.setShowReelsInFeed(context, it); upd("showReelsInFeed", it) }, showDivider = true)
                     VividSettingsSwitchItem(title = "Subidas en HD", subtitle = if (hd) "Calidad original" else "Comprimido", icon = Icons.Outlined.Hd, checked = hd, onCheckedChange = { SettingsManager.setHdUploads(context, it); upd("hdUploadsEnabled", it) }, showDivider = true)
-                    VividSettingsSwitchItem(title = "Ahorro de datos", subtitle = if (dataSaver) "Ahorrando" else "Sin restricciones", icon = Icons.Outlined.DataSaverOff, checked = dataSaver, onCheckedChange = { SettingsManager.setDataSaver(context, it); upd("dataSaverMode", it) })
+                    VividSettingsSwitchItem(title = "Ahorro de datos", subtitle = if (dataSaver) "Ahorrando · sin precarga de video" else "En datos móviles no se precargan reels ni stories", icon = Icons.Outlined.DataSaverOff, checked = dataSaver, onCheckedChange = { SettingsManager.setDataSaver(context, it); upd("dataSaverMode", it) })
                 }
             }
             item {

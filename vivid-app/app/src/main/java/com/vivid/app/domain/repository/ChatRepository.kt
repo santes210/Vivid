@@ -132,7 +132,8 @@ class ChatRepository @Inject constructor(
                     voiceUrl = entity.voiceUrl,
                     voiceKey = entity.voiceKey,
                     voiceDurationMs = entity.voiceDurationMs,
-                    replyToStoryId = entity.replyToStoryId
+                    replyToStoryId = entity.replyToStoryId,
+                    lastEditedAt = entity.lastEditedAt
                 )
             }.sortedBy { it.timestamp }
         }
@@ -162,28 +163,29 @@ class ChatRepository @Inject constructor(
             lastEditedAt = doc.getLong("lastEditedAt") ?: 0L
         )
 
+    private fun Message.toEntity(chatId: String): MessageEntity = MessageEntity(
+        id = id,
+        chatId = chatId,
+        senderId = senderId,
+        text = text,
+        timestamp = timestamp,
+        isRead = isRead,
+        isDelivered = isDelivered,
+        type = type,
+        imageUrl = imageUrl,
+        imageKey = imageKey,
+        voiceUrl = voiceUrl,
+        voiceKey = voiceKey,
+        voiceDurationMs = voiceDurationMs,
+        replyToStoryId = replyToStoryId,
+        reaction = reaction,
+        lastEditedAt = lastEditedAt
+    )
+
     /** Persiste un [Message] en la caché Room del chat. */
     private fun persistMessage(chatId: String, msg: Message) {
         repositoryScope.launch {
-            messageDao.insertMessage(
-                MessageEntity(
-                    id = msg.id,
-                    chatId = chatId,
-                    senderId = msg.senderId,
-                    text = msg.text,
-                    timestamp = msg.timestamp,
-                    isRead = msg.isRead,
-                    isDelivered = msg.isDelivered,
-                    type = msg.type,
-                    imageUrl = msg.imageUrl,
-                    imageKey = msg.imageKey,
-                    voiceUrl = msg.voiceUrl,
-                    voiceKey = msg.voiceKey,
-                    voiceDurationMs = msg.voiceDurationMs,
-                    replyToStoryId = msg.replyToStoryId,
-                    reaction = msg.reaction
-                )
-            )
+            messageDao.insertMessage(msg.toEntity(chatId))
         }
     }
 
@@ -218,23 +220,7 @@ class ChatRepository @Inject constructor(
             snapshot.documents.forEach { doc ->
                 val msg = documentToMessage(doc)
                 if (msg.id.isBlank()) return@forEach
-                entities += MessageEntity(
-                    id = msg.id,
-                    chatId = chatId,
-                    senderId = msg.senderId,
-                    text = msg.text,
-                    timestamp = msg.timestamp,
-                    isRead = msg.isRead,
-                    isDelivered = msg.isDelivered,
-                    type = msg.type,
-                    imageUrl = msg.imageUrl,
-                    imageKey = msg.imageKey,
-                    voiceUrl = msg.voiceUrl,
-                    voiceKey = msg.voiceKey,
-                    voiceDurationMs = msg.voiceDurationMs,
-                    replyToStoryId = msg.replyToStoryId,
-                    reaction = msg.reaction
-                )
+                entities += msg.toEntity(chatId)
             }
 
             if (snapshot.documents.size < pageSize) break
@@ -537,14 +523,7 @@ class ChatRepository @Inject constructor(
                     "lastEditedAt" to now
                 )
             ).await()
-            // El listener ya va a repintar la UI, pero actualizamos el caché
-            // local también para que al volver al chat no se vea el texto viejo.
-            repositoryScope.launch {
-                val existing = messageDao.getMessagesForChat(chatId)
-                // getMessagesForChat devuelve Flow; aquí no podemos leer de él
-                // directamente. Como el listener se va a disparar igualmente,
-                // dejamos que Room se actualice por la ruta del listener.
-            }
+            messageDao.updateText(messageId, newText, now)
         } catch (_: Exception) {
             // Silencioso: la UI muestra snackbar de error en ChatViewModel.
         }
@@ -570,8 +549,38 @@ class ChatRepository @Inject constructor(
                     SetOptions.merge()
                 ).await()
         }
-        // Marca todos los mensajes recibidos como leídos (read receipts)
+        markMessagesAsDelivered(chatId)
         markMessagesAsRead(chatId)
+    }
+
+    /**
+     * Entregado ≠ leído. Al recibir el mensaje en el dispositivo se marca
+     * isDelivered; isRead solo cuando el chat está abierto.
+     */
+    suspend fun markMessagesAsDelivered(chatId: String) {
+        if (currentUserId.isBlank() || chatId.isBlank()) return
+        try {
+            val undelivered = firestore.collection("chats").document(chatId)
+                .collection("messages")
+                .whereEqualTo("receiverId", currentUserId)
+                .whereEqualTo("isDelivered", false)
+                .get().await()
+            if (undelivered.isEmpty) return
+            val batch = firestore.batch()
+            undelivered.documents.forEach { doc ->
+                batch.update(doc.reference, mapOf("isDelivered" to true))
+            }
+            batch.commit().await()
+            undelivered.documents.forEach { doc ->
+                repositoryScope.launch {
+                    messageDao.updateReadState(
+                        doc.id,
+                        isRead = doc.getBoolean("isRead") ?: false,
+                        isDelivered = true
+                    )
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     /**
@@ -592,31 +601,12 @@ class ChatRepository @Inject constructor(
                 batch.update(doc.reference, mapOf("isRead" to true, "isDelivered" to true))
             }
             batch.commit().await()
-            // Update local Room
             unread.documents.forEach { doc ->
                 repositoryScope.launch {
-                    val id = doc.id
-                    val text = doc.getString("text").orEmpty()
-                    val sender = doc.getString("senderId").orEmpty()
-                    val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
-                    val type = doc.getString("type") ?: "text"
                     messageDao.insertMessage(
-                        MessageEntity(
-                            id = id,
-                            chatId = chatId,
-                            senderId = sender,
-                            text = text,
-                            timestamp = ts,
+                        documentToMessage(doc).toEntity(chatId).copy(
                             isRead = true,
-                            isDelivered = true,
-                            type = type,
-                            imageUrl = doc.getString("imageUrl").orEmpty(),
-                            imageKey = doc.getString("imageKey").orEmpty(),
-                            voiceUrl = doc.getString("voiceUrl").orEmpty(),
-                            voiceKey = doc.getString("voiceKey").orEmpty(),
-                            voiceDurationMs = doc.getLong("voiceDurationMs") ?: 0L,
-                            replyToStoryId = doc.getString("replyToStoryId").orEmpty(),
-                            reaction = doc.getString("reaction").orEmpty()
+                            isDelivered = true
                         )
                     )
                 }
@@ -808,13 +798,75 @@ class ChatRepository @Inject constructor(
     }
 
     /**
-     * Listeners de read receipts (SYNC LIGERO).
-     *
-     * Escucha los mensajes NO LEÍDOS del chat (query de un solo campo, sin
-     * índice compuesto). Cuando un mensaje pasa a leído, deja de cumplir la
-     * query y Firestore emite un evento REMOVED; si el mensaje era mío,
-     * actualizamos el caché local — sin re-leer el historial completo.
+     * Listener de ediciones (sync incremental).
+     * Una edición no cambia `timestamp`, así que no entra en listenToNewMessages.
      */
+    fun listenToEdits(
+        chatId: String,
+        onMessageEvent: (MessageChange) -> Unit,
+        onError: (Exception) -> Unit = {}
+    ): ListenerRegistration {
+        return firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .whereGreaterThan("lastEditedAt", 0)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+                snapshot?.documentChanges?.forEach { change ->
+                    if (change.type == DocumentChange.Type.ADDED ||
+                        change.type == DocumentChange.Type.MODIFIED
+                    ) {
+                        val msg = documentToMessage(change.document)
+                        persistMessage(chatId, msg)
+                        onMessageEvent(MessageChange.Upsert(msg))
+                    }
+                }
+            }
+    }
+
+    /**
+     * Listener de entregas: cuando isDelivered pasa a true, el doc sale de
+     * la query y actualizamos el doble check gris del emisor.
+     */
+    fun listenToDeliveryReceipts(
+        chatId: String,
+        onMessageDelivered: (messageId: String) -> Unit,
+        onError: (Exception) -> Unit = {}
+    ): ListenerRegistration {
+        val senderId = currentUserId
+        if (senderId.isBlank()) return firestore.collection("chats").document(chatId)
+            .collection("messages").addSnapshotListener { _, _ -> }
+        return firestore.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .whereEqualTo("isDelivered", false)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+                snapshot?.documentChanges?.forEach { change ->
+                    if (change.type == DocumentChange.Type.REMOVED) {
+                        val doc = change.document
+                        if (doc.getString("senderId") == senderId) {
+                            val id = doc.id
+                            repositoryScope.launch {
+                                messageDao.updateReadState(
+                                    id,
+                                    isRead = doc.getBoolean("isRead") ?: false,
+                                    isDelivered = true
+                                )
+                            }
+                            onMessageDelivered(id)
+                        }
+                    }
+                }
+            }
+    }
+
     fun listenToReadReceipts(
         chatId: String,
         onMessageRead: (messageId: String) -> Unit,

@@ -46,6 +46,7 @@ class EntityTest {
             text = "hello", timestamp = 100L
         )
         assertEquals("text", msg.type)
+        assertEquals(0L, msg.lastEditedAt)
     }
 
     @Test
