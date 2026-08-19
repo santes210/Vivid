@@ -54,6 +54,26 @@ jobs:
 
           echo "Cloudflare Worker configurado correctamente."
 
+            # google-services.json ya NO está versionado: se inyecta desde el
+      # secret GOOGLE_SERVICES_JSON_BASE64. Sin él, el release NO compila
+      # a propósito (un APK de producción no debe llevar credenciales falsas).
+      - name: Restore google-services.json
+        shell: bash
+        run: |
+          SECRET="${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}"
+          if [ -z "$SECRET" ]; then
+            echo "::error::Falta el Repository Secret GOOGLE_SERVICES_JSON_BASE64."
+            echo "::error::Crea el secret con:"
+            echo "::error::  base64 -w0 vivid-app/app/google-services.json"
+            exit 1
+          fi
+          printf '%s' "$SECRET" | base64 --decode > vivid-app/app/google-services.json
+          python3 -c 'import json; json.load(open("vivid-app/app/google-services.json"))' || {
+            echo "::error::GOOGLE_SERVICES_JSON_BASE64 no es un JSON válido."
+            exit 1
+          }
+          echo "google-services.json restaurado desde el secret."
+
       - name: Guard packed music is compressed
         shell: bash
         run: |
