@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vivid</string>
+
+    <!-- ========== Feed ========== -->
+    <string name="feed_title">Vivid</string>
+    <string name="feed_requests">Requests</string>
+    <string name="feed_messages">Messages</string>
+    <string name="feed_like">Like</string>
+    <string name="feed_comment">Comment</string>
+    <string name="feed_details">Details</string>
+    <string name="feed_save">Save</string>
+    <string name="feed_share">Share</string>
+    <string name="feed_more_options">More options</string>
+    <string name="feed_edit">Edit</string>
+    <string name="feed_delete">Delete</string>
+    <string name="feed_likes_count">%d likes</string>
+    <string name="feed_view_comments">View all %d comments</string>
+    <string name="feed_report_post">Report post</string>
+    <string name="feed_loading_image_error">Couldn\'t load</string>
+    <string name="feed_retry">Retry</string>
+    <string name="feed_share_title">Share post</string>
+    <string name="feed_share_body">Check out this post by @%1$s on Vivid</string>
+    <string name="feed_post_updated">Post updated</string>
+    <string name="feed_post_deleted">Post deleted</string>
+    <string name="feed_delete_confirm_title">Delete post</string>
+    <string name="feed_delete_confirm_body">Are you sure? This action can\'t be undone.</string>
+    <string name="feed_error_prefix">Error: %s</string>
+    <string name="feed_like_error">Couldn\'t update like</string>
+    <string name="feed_post_saved">Post saved</string>
+    <string name="feed_post_unsaved">Post removed from saved</string>
+    <string name="feed_save_error">Error updating saved posts</string>
+    <string name="feed_no_active_session">No active session</string>
+
+    <!-- Feed states -->
+    <string name="feed_empty_title">No posts yet</string>
+    <string name="feed_empty_subtitle">Follow people to see their posts here.</string>
+    <string name="feed_error_title">Couldn\'t load feed</string>
+    <string name="feed_error_subtitle">Check your internet connection.</string>
+    <string name="feed_error_retry">Retry</string>
+
+    <!-- Comments -->
+    <string name="comments_title">Comments (%d)</string>
+    <string name="comments_empty">No comments yet. Be the first!</string>
+    <string name="comments_reply">Reply</string>
+    <string name="comments_edit">Edit</string>
+    <string name="comments_delete">Delete</string>
+    <string name="comments_edited_tag">(edited)</string>
+    <string name="comments_replying_to">Replying to @%s</string>
+    <string name="comments_reply_placeholder">Write your reply…</string>
+    <string name="comments_placeholder">Write a comment…</string>
+    <string name="comments_send">Send</string>
+    <string name="comments_sending">…</string>
+    <string name="comments_edit_title">Edit comment</string>
+    <string name="comments_like">Like comment</string>
+
+    <!-- Post details dialog -->
+    <string name="details_title">Details</string>
+    <string name="details_likes">%d likes</string>
+    <string name="details_comments">%d comments</string>
+
+    <!-- Post viewer dialog -->
+    <string name="viewer_close">Close</string>
+
+    <!-- Edit post dialog -->
+    <string name="edit_post_title">Edit</string>
+
+    <!-- Follow actions -->
+    <string name="follow_now_following">You\'re now following this account.</string>
+    <string name="follow_unfollowed">You unfollowed this account.</string>
+    <string name="follow_requested">Follow request sent.</string>
+    <string name="follow_request_cancelled">Request cancelled.</string>
+    <string name="follow_error">Couldn\'t update follow.</string>
+    <string name="follow_button_following">Following</string>
+    <string name="follow_button_requested">Requested</string>
+    <string name="follow_button_follow">Follow</string>
+
+    <!-- Report dialog -->
+    <string name="report_title">Report post</string>
+    <string name="report_reason_label">Reason:</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_inappropriate">Inappropriate content</string>
+    <string name="report_reason_harassment">Harassment</string>
+    <string name="report_reason_other">Other</string>
+    <string name="report_post_preview">Post: %1$s — %2$s</string>
+    <string name="report_send">Send report</string>
+    <string name="report_email_opened">Composing report in your email app.</string>
+    <string name="report_no_email_app">No email app found.</string>
+
+    <!-- Common -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_save">Save</string>
+    <string name="action_send">Send</string>
+    <string name="action_retry">Retry</string>
+    <string name="user_fallback">user</string>
+    <string name="avatar_description">Avatar</string>
+
+    <!-- Accessibility / a11y descriptions for icon buttons -->
+    <string name="cd_take_photo">Take photo</string>
+    <string name="cd_open_gallery">Open gallery</string>
+    <string name="cd_switch_camera">Switch camera</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_record_video">Record</string>
+    <string name="cd_stop_recording">Stop recording</string>
+    <string name="cd_hide_password">Hide password</string>
+    <string name="cd_show_password">Show password</string>
+    <string name="cd_send_message">Send message</string>
+    <string name="cd_voice_message">Voice message</string>
+    <string name="cd_attach_image">Attach image</string>
+    <string name="cd_open_camera">Open camera</string>
+    <string name="cd_open_reels">Open reels</string>
+    <string name="cd_open_stories">Open stories</string>
+
+    <!-- Language & font size -->
+    <string name="lang_setting">Language</string>
+    <string name="lang_system">System</string>
+    <string name="lang_spanish">Español</string>
+    <string name="lang_english">English</string>
+    <string name="font_size_setting">Font size</string>
+    <string name="font_size_small">Small</string>
+    <string name="font_size_normal">Normal</string>
+    <string name="font_size_large">Large</string>
+    <string name="font_size_xlarge">Extra large</string>
+    <string name="font_size_subtitle">Affects all app text</string>
+    <string name="lang_changed">Language: %1$s</string>
+
+    <!-- Permissions onboarding -->
+    <string name="perm_onb_title">Welcome to Vivid</string>
+    <string name="perm_onb_subtitle">A few permissions help Vivid work better. You can change them later in Settings.</string>
+    <string name="perm_onb_camera_title">Camera</string>
+    <string name="perm_onb_camera_body">Take photos and videos to share in your posts, stories and reels.</string>
+    <string name="perm_onb_mic_title">Microphone</string>
+    <string name="perm_onb_mic_body">Record audio for your reels and voice notes in chat.</string>
+    <string name="perm_onb_notif_title">Notifications</string>
+    <string name="perm_onb_notif_body">We\'ll let you know about new followers, likes, comments and messages.</string>
+    <string name="perm_onb_continue">Continue</string>
+    <string name="perm_onb_skip">Not now</string>
+
+    <!-- Messaging -->
+    <string name="msg_typing">typing…</string>
+    <string name="msg_edited">Edited</string>
+    <string name="msg_edit">Edit message</string>
+    <string name="msg_delete">Delete message</string>
+    <string name="msg_delete_confirm_title">Delete message</string>
+    <string name="msg_delete_confirm_body">This message will be removed for both participants.</string>
+    <string name="msg_edit_title">Edit message</string>
+    <string name="msg_edit_save">Save</string>
+</resources>

@@ -1,6 +1,7 @@
 package com.vivid.app
 
 import android.animation.ValueAnimator
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ import com.vivid.app.domain.repository.ensureCurrentUserContentPrivacy
 import com.vivid.app.navigation.VividNavigation
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividTheme
+import com.vivid.app.util.LocaleManager
 import com.vivid.app.util.PushNotificationHelper
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.UserPresenceHelper
@@ -52,6 +54,16 @@ class MainActivity : ComponentActivity() {
 
             PushNotificationHelper.registerTokenForCurrentUser()
         }
+    }
+
+    /**
+     * Aplica el idioma y tamaño de fuente elegidos en Ajustes ANTES de que
+     * se cree la vista. Sin esto, los recursos se sirven en el idioma del
+     * sistema aunque el usuario haya elegido otro, y los strings de
+     * stringResource() salen en el idioma equivocado.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleManager.applyToActivity(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

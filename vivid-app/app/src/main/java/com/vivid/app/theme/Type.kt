@@ -1,10 +1,13 @@
 package com.vivid.app.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSp
 import androidx.compose.ui.unit.sp
 import com.vivid.app.R
 
@@ -21,6 +24,10 @@ import com.vivid.app.R
  *
  * Los colores los toma dinámicamente del wallpaper del usuario
  * (Android 12+). En <12 usa el fallback Vivid.
+ *
+ * Escala tipográfica (mejora 2026-08-18): [scaledVividTypography] aplica
+ * la escala elegida en Ajustes → Tamaño de fuente a los TextSize en sp,
+ * preservando lineHeight, letterSpacing y el resto del estilo.
  */
 
 /** Familia de marca para títulos importantes. */
@@ -30,6 +37,53 @@ val SoraFamily = FontFamily(
     Font(R.font.sora_bold, FontWeight.Bold),
     Font(R.font.sora_extrabold, FontWeight.ExtraBold)
 )
+
+/** Escala tipográfica global (Ajustes → Tamaño de fuente). 1.0 = normal. */
+val LocalFontScale = compositionLocalOf { 1.0f }
+
+/**
+ * Devuelve una copia de [base] con todos los `fontSize` en sp multiplicados
+ * por [scale]. `lineHeight` también se reescala si está en sp para mantener
+ * proporciones; si está en em u otra unidad, se queda igual.
+ */
+internal fun Typography.scaled(scale: Float): Typography {
+    if (scale == 1.0f) return this
+    fun TextStyle.scaledStyle() = copy(
+        fontSize = if (fontSize.isSp) (fontSize.value * scale).sp else fontSize,
+        lineHeight = when {
+            lineHeight.isSp -> (lineHeight.value * scale).sp
+            else -> lineHeight
+        }
+    )
+    return Typography(
+        displayLarge = displayLarge.scaledStyle(),
+        displayMedium = displayMedium.scaledStyle(),
+        displaySmall = displaySmall.scaledStyle(),
+        headlineLarge = headlineLarge.scaledStyle(),
+        headlineMedium = headlineMedium.scaledStyle(),
+        headlineSmall = headlineSmall.scaledStyle(),
+        titleLarge = titleLarge.scaledStyle(),
+        titleMedium = titleMedium.scaledStyle(),
+        titleSmall = titleSmall.scaledStyle(),
+        bodyLarge = bodyLarge.scaledStyle(),
+        bodyMedium = bodyMedium.scaledStyle(),
+        bodySmall = bodySmall.scaledStyle(),
+        labelLarge = labelLarge.scaledStyle(),
+        labelMedium = labelMedium.scaledStyle(),
+        labelSmall = labelSmall.scaledStyle()
+    )
+}
+
+/**
+ * Tipografía efectiva: toma [LocalFontScale] y la aplica a [VividTypography].
+ * Usar SIEMPRE esta en `MaterialTheme(typography = ...)` para que el cambio
+ * de tamaño de fuente se refleje sin reiniciar la app.
+ */
+@androidx.compose.runtime.Composable
+fun effectiveVividTypography(): Typography {
+    val scale = LocalFontScale.current
+    return VividTypography.scaled(scale)
+}
 
 val VividTypography = Typography(
     // ----- DISPLAY (héroe / splash) — fuente de marca, solo en momentos hero -----

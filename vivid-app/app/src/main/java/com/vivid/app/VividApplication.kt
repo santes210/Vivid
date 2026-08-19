@@ -20,6 +20,10 @@ class VividApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         SettingsManager.init(this)
+        // LocaleManager carga idioma y escala tipográfica desde SharedPreferences.
+        // MainActivity.attachBaseContext() los lee en cada arranque para
+        // servir los recursos en el idioma elegido y escalar la tipografía.
+        com.vivid.app.util.LocaleManager.init(this)
 
         // Crashlytics + Performance Monitoring (gratis en el plan Spark de
         // Firebase; sin pasos de pago). La captura de datos queda activa solo
