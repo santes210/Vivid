@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -95,6 +96,7 @@ sealed class Screen(
     object SettingsAbout : Screen("settings/about", "Acerca")
     object CameraVideo : Screen("camera_video", "Grabar")
     object VideoTrimmer : Screen("video_trimmer", "Trim")
+    object PermissionsOnboarding : Screen("permissions_onboarding", "Permisos")
 }
 
 @Composable
@@ -106,6 +108,7 @@ fun VividNavigation(
     deepLinkPostId: String? = null
 ) {
     val auth = FirebaseAuth.getInstance()
+    val context = LocalContext.current
     val startDestination = remember(auth.currentUser?.uid) {
         if (auth.currentUser != null) Screen.Feed.route else Screen.Auth.route
     }
@@ -252,10 +255,34 @@ fun VividNavigation(
             ) {
             composable(Screen.Auth.route) {
                 AuthScreen(onLoginSuccess = {
-                    navController.navigate(Screen.Feed.route) {
+                    // Decidir si mostrar el onboarding de permisos. La marca
+                    // vive en SettingsManager para que se pueda resetear desde
+                    // Ajustes si el usuario lo pide. Solo se muestra a usuarios
+                    // NUEVOS la primera vez.
+                    val next = if (com.vivid.app.util.SettingsManager.permissionsOnboardingCompleted)
+                        Screen.Feed.route
+                    else
+                        Screen.PermissionsOnboarding.route
+                    navController.navigate(next) {
                         popUpTo(Screen.Auth.route) { inclusive = true }
                     }
                 })
+            }
+            composable(Screen.PermissionsOnboarding.route) {
+                com.vivid.app.presentation.onboarding.PermissionsOnboardingScreen(
+                    onComplete = {
+                        com.vivid.app.util.SettingsManager.markPermissionsOnboardingCompleted(context)
+                        navController.navigate(Screen.Feed.route) {
+                            popUpTo(Screen.PermissionsOnboarding.route) { inclusive = true }
+                        }
+                    },
+                    onSkip = {
+                        com.vivid.app.util.SettingsManager.markPermissionsOnboardingCompleted(context)
+                        navController.navigate(Screen.Feed.route) {
+                            popUpTo(Screen.PermissionsOnboarding.route) { inclusive = true }
+                        }
+                    }
+                )
             }
             composable(Screen.Feed.route) {
                 FeedScreen(

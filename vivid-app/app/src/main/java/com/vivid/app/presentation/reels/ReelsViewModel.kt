@@ -10,6 +10,7 @@ import com.vivid.app.data.local.dao.ReelDao
 import com.vivid.app.data.local.entity.ReelEntity
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.util.CrashReporter
+import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.toUserFacingMessage
 import com.vivid.app.util.withNetworkTimeout
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,11 +28,13 @@ private const val TAG = "ReelsViewModel"
 /**
  * ViewModel de Reels con scroll infinito estilo TikTok.
  *
- * - Carga inicial 15 reels orderBy timestamp DESC
+ * - Carga inicial 15 reels orderBy timestamp DESC (6 si dataSaver está activo)
  * - Paginación real con startAfter(lastDoc)
  * - Al deslizar cerca del final, carga automáticamente más (loadMore)
  * - Regenera URLs firmadas de B2 si hay storageKey (TTL 7d)
  * - Método uploadReel mantiene compatibilidad
+ * - Respeta el modo "Ahorro de datos" de Ajustes: reduce el tamaño de página
+ *   y el número de precargas de ExoPlayer para no gastar la tarifa del user.
  */
 @HiltViewModel
 class ReelsViewModel @Inject constructor(
@@ -53,6 +56,9 @@ class ReelsViewModel @Inject constructor(
     private val _hasMore = MutableStateFlow(true)
     val hasMore: StateFlow<Boolean> = _hasMore
 
+    private val _dataSaverActive = MutableStateFlow(SettingsManager.dataSaverMode)
+    val dataSaverActive: StateFlow<Boolean> = _dataSaverActive
+
     /**
      * Error de la carga inicial, mostrado por ReelsScreen con botón de
      * reintento (retry()). Queda en null cuando hay contenido, aunque sea
@@ -62,7 +68,9 @@ class ReelsViewModel @Inject constructor(
     val errorMessage: StateFlow<String?> = _errorMessage
 
     private var lastDoc: DocumentSnapshot? = null
-    private val pageSize = 15
+
+    /** Tamaño de página: 6 con data saver, 15 sin. */
+    private val pageSize: Int get() = if (_dataSaverActive.value) 6 else 15
 
     /** TTL de las URLs firmadas de B2 (7 días). */
     private val signedUrlTtlMs = 7L * 24L * 60L * 60L * 1000L
@@ -75,6 +83,17 @@ class ReelsViewModel @Inject constructor(
     private val reuseThresholdMs = 24L * 60L * 60L * 1000L
 
     init {
+        loadInitial()
+    }
+
+    /**
+     * Aplica el cambio de data-saver desde Ajustes. Si el user subió o bajó
+     * el switch mientras estaba en Reels, recargamos con la nueva página
+     * para que el cambio se note.
+     */
+    fun applyDataSaver(enabled: Boolean) {
+        if (_dataSaverActive.value == enabled) return
+        _dataSaverActive.value = enabled
         loadInitial()
     }
 
