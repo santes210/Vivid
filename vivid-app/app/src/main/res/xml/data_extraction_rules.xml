@@ -10,20 +10,20 @@
     device-transfer: al pasar a un teléfono NUEVO del mismo propietario la
     transferencia es local y cifrada, pero aun así se mantiene el mismo
     criterio estricto: la base de datos (caché de Firestore) y la caché de
-    media se excluyen y se regeneran al iniciar sesión. Así un dispositivo
+    media se quedan fuera y se regeneran al iniciar sesión. Así un dispositivo
     comprometido usado para la migración no arrastra el historial local.
+
+    CÓMO FUNCIONA: al declarar un <include>, cada bloque pasa a ser una lista
+    blanca: SOLO se transfiere lo incluido, todo lo demás queda fuera sin
+    necesidad de <exclude>. Los <exclude domain="..." path="."/> que había
+    antes eran inválidos y lint los marcaba como
+    "'.' is not in an included path" [FullBackupContent].
 -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
-        <exclude domain="database" path="."/>
-        <exclude domain="file" path="."/>
-        <exclude domain="external" path="."/>
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="."/>
-        <exclude domain="database" path="."/>
-        <exclude domain="file" path="."/>
-        <exclude domain="external" path="."/>
     </device-transfer>
 </data-extraction-rules>
