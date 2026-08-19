@@ -26,6 +26,7 @@ object VividChangelog {
                 "Explorar y búsqueda con paginación real: se carga de a poco al hacer scroll.",
                 "Mensajes: indicador de escribiendo, ticks de entregado y leído, editar y borrar.",
                 "Reels y stories no adelantan video en datos móviles; en Wi-Fi sí.",
+                "Inicio de sesión con Google renovado: usa el selector de cuentas del sistema (Credential Manager), más rápido y sin salir de la app.",
                 "Onboarding de permisos (cámara, micrófono, notificaciones) antes de pedirlos.",
                 "Mejor soporte de TalkBack: descripciones en likes, comentarios, cámara y búsqueda."
             )

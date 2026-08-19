@@ -28,6 +28,16 @@
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 
+# Credential Manager (login con Google). Reglas oficiales de androidx.credentials:
+# el proveedor de Play Services se resuelve por reflexión.
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** {
+  *;
+}
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn androidx.credentials.**
+-dontwarn com.google.android.libraries.identity.googleid.**
+
 # Media3 / ExoPlayer: keep reflection-touched renderers.
 -dontwarn androidx.media3.**
 -keep class androidx.media3.** { *; }

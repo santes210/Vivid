@@ -110,6 +110,13 @@ val uploadCrashlyticsMappingEnabled = providers.gradleProperty("uploadCrashlytic
     .orElse(providers.environmentVariable("UPLOAD_CRASHLYTICS_MAPPING"))
     .orNull == "true"
 
+// Válvula de escape puntual para lint (ver bloque `lint { }` más abajo).
+//   ./gradlew assembleRelease -PvividLintLenient=true
+// o VIVID_LINT_LENIENT=true. Por defecto lint SÍ rompe el build.
+val lintLenient = providers.gradleProperty("vividLintLenient")
+    .orElse(providers.environmentVariable("VIVID_LINT_LENIENT"))
+    .orNull == "true"
+
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
@@ -123,12 +130,16 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.vivid.app"
-    compileSdk = 35
+    // API 36 (Android 16). Google Play exige targetSdk 36 en toda
+    // actualización publicada a partir del 31 de agosto de 2026.
+    // compileSdk 36 necesita AGP >= 8.9 (aquí 8.13) + Gradle 8.13.
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "com.vivid.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = vividVersionCode
         versionName = vividVersionName
 
@@ -208,16 +219,32 @@ android {
         }
     }
     lint {
-        // Release fallaba con lintVitalAnalyzeRelease:
+        // Lint vuelve a estar ACTIVO en release.
+        //
+        // Antes estaba apagado (abortOnError = false / checkReleaseBuilds = false)
+        // por un bug de :app:lintVitalAnalyzeRelease con AGP 8.7.3 + Kotlin 2.0.21:
         //   Found class KaCallableMemberCall but interface expected
         //   detector: androidx.lifecycle.lint.NonNullableMutableLiveDataDetector
-        // Bug conocido Kotlin 2.0.21 + AGP 8.7.3 + lifecycle lint. No es de tu tema.
-        // Desactivamos solo ese detector para que :app:lintVitalAnalyzeRelease pase.
-        // El warning sugiere exactamente disable "NullSafeMutableLiveData".
-        disable += "NullSafeMutableLiveData"
-        // Opcional: no abortar release por warnings visuales menores (deprecated icons etc.)
-        abortOnError = false
-        checkReleaseBuilds = false
+        // Ese detector (NullSafeMutableLiveData) ya no revienta con AGP 8.13, y
+        // además el proyecto no usa LiveData en ningún sitio, así que se elimina
+        // el `disable` junto con los dos interruptores que silenciaban el resto
+        // de los errores.
+        abortOnError = true
+        checkReleaseBuilds = true
+        // Los warnings siguen siendo warnings: solo los errores rompen el build.
+        warningsAsErrors = false
+        // Reportes legibles (los sube el workflow cuando el build falla).
+        htmlReport = true
+        xmlReport = true
+        sarifReport = false
+        // Válvula de escape para una release urgente:
+        //   ./gradlew assembleRelease -PvividLintLenient=true
+        // o VIVID_LINT_LENIENT=true en el entorno. No usar en CI: es para
+        // desbloquear a mano, no para volver a apagar lint de forma permanente.
+        if (lintLenient) {
+            abortOnError = false
+            checkReleaseBuilds = false
+        }
     }
 }
 
@@ -252,7 +279,13 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
-    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    // Login con Google: Credential Manager (androidx.credentials) + googleid.
+    // Sustituye a com.google.android.gms:play-services-auth / GoogleSignIn,
+    // que Google dejó deprecado y está apagando. play-services-auth sigue
+    // llegando de forma transitiva vía credentials-play-services-auth.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)

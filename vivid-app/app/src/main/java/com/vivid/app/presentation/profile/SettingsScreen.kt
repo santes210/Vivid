@@ -904,6 +904,9 @@ fun SettingsScreen(
         SignOutDialog(
             onConfirm = {
                 com.vivid.app.util.PushNotificationHelper.unregisterToken()
+                // Credential Manager cachea la cuenta usada: sin limpiarla, el
+                // próximo login la reutilizaría sin preguntar.
+                com.vivid.app.presentation.auth.GoogleCredentialSignIn.clearCredentialState(context)
                 auth.signOut()
                 showSignOutDialog = false
                 onBack()

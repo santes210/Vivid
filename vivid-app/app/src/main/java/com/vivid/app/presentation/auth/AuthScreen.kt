@@ -1,9 +1,5 @@
 package com.vivid.app.presentation.auth
 
-import android.app.Activity
-import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -70,9 +66,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -219,6 +212,16 @@ class AuthViewModel @Inject constructor(
         ).await()
     }
 
+    /** El usuario abrió la hoja de Google: bloquea la UI mientras decide. */
+    fun startExternalSignIn() {
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null, info = null)
+    }
+
+    /** Cerró la hoja de Google sin elegir cuenta: no es un error. */
+    fun cancelExternalSignIn() {
+        _uiState.value = _uiState.value.copy(isLoading = false)
+    }
+
     fun reportExternalError(message: String) {
         _uiState.value = _uiState.value.copy(isLoading = false, error = message)
     }
@@ -285,22 +288,19 @@ fun AuthScreen(
     val passwordFocus = remember { FocusRequester() }
 
     val uiState by viewModel.uiState.collectAsState()
-    val googleLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        runCatching {
-            task.getResult(ApiException::class.java)
-        }.onSuccess { account ->
-            val idToken = account.idToken
-            if (!idToken.isNullOrBlank()) {
-                viewModel.loginWithGoogle(idToken)
-            } else {
-                viewModel.reportExternalError("Google no devolvió un token válido.")
+    val scope = rememberCoroutineScope()
+
+    // Credential Manager sustituye al viejo startActivityForResult de
+    // GoogleSignIn: la hoja de cuentas la dibuja el sistema y el resultado
+    // llega como valor de retorno de una suspend fun, sin ActivityResult.
+    val startGoogleSignIn: () -> Unit = {
+        viewModel.startExternalSignIn()
+        scope.launch {
+            when (val outcome = GoogleCredentialSignIn.requestIdToken(context)) {
+                is GoogleSignInOutcome.Success -> viewModel.loginWithGoogle(outcome.idToken)
+                is GoogleSignInOutcome.Cancelled -> viewModel.cancelExternalSignIn()
+                is GoogleSignInOutcome.Failure -> viewModel.reportExternalError(outcome.message)
             }
-        }.onFailure {
-            viewModel.reportExternalError(it.message ?: "No se pudo iniciar sesión con Google.")
         }
     }
 
@@ -657,33 +657,9 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Google (flujo intacto) ─────────────────────────────────────
+            // ── Google (Credential Manager) ────────────────────────────────
             OutlinedButton(
-                onClick = {
-                    // default_web_client_id lo genera el plugin google-services
-                    // a partir de google-services.json (oauth_client type 3).
-                    // Si el JSON inyectado no trae ese client (p. ej. un
-                    // placeholder de CI en PRs de forks), la función devuelve
-                    // "" y el botón muestra un aviso en vez de fallar.
-                    val serverClientId = webClientIdOrEmpty(context)
-                    val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    if (serverClientId.isNotBlank()) {
-                        gsoBuilder.requestIdToken(serverClientId)
-                    }
-                    val gso = gsoBuilder
-                        .requestEmail()
-                        .build()
-                    if (serverClientId.isBlank()) {
-                        viewModel.reportExternalError(
-                            "Google Sign-In no está configurado: agrega tu Web client ID en Firebase y actualiza google-services.json."
-                        )
-                    } else {
-                        val client = GoogleSignIn.getClient(context, gso)
-                        client.signOut().addOnCompleteListener {
-                            googleLauncher.launch(client.signInIntent)
-                        }
-                    }
-                },
+                onClick = startGoogleSignIn,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),
@@ -798,20 +774,4 @@ private fun GoogleLogo(modifier: Modifier = Modifier.size(20.dp)) {
         contentDescription = null,
         modifier = modifier
     )
-}
-
-/**
- * Web client ID de Google (default_web_client_id) para requestIdToken().
- *
- * Lo genera el plugin google-services durante el build a partir del
- * `oauth_client` con `client_type 3` de google-services.json. Se lee por
- * nombre (Resources.getIdentifier) porque el recurso puede NO existir en
- * builds que usan un google-services.json placeholder sin oauth_client
- * (PRs de forks sin acceso a secrets). Devuelve "" en ese caso, que es el
- * mismo comportamiento que tenía el string vacío hardcodeado en strings.xml.
- */
-private fun webClientIdOrEmpty(context: Context): String {
-    val resources = context.resources
-    val resId = resources.getIdentifier("default_web_client_id", "string", context.packageName)
-    return if (resId != 0) resources.getString(resId) else ""
 }
