@@ -22,8 +22,15 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.feed.PostData
+import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.util.CrashReporter
+import com.vivid.app.util.toUserFacingMessage
+import com.vivid.app.util.withNetworkTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
+
+private const val TAG = "ExploreScreen"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,19 +45,24 @@ fun ExploreScreen(
     var selectedTag by remember { mutableStateOf("vivid") }
     var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
 
     val tags = remember { listOf("vivid", "arte", "musica", "viaje", "comida", "tecnologia", "moda", "deporte") }
 
     suspend fun loadPosts(tag: String) {
         loading = true
+        errorMessage = null
         try {
-            val snapshot = FirebaseFirestore.getInstance()
-                .collection("posts")
-                .whereArrayContains("hashtags", tag)
-                .whereEqualTo("isPrivate", false)
-                .limit(20)
-                .get()
-                .await()
+            val snapshot = withNetworkTimeout("explore.loadPosts") {
+                FirebaseFirestore.getInstance()
+                    .collection("posts")
+                    .whereArrayContains("hashtags", tag)
+                    .whereEqualTo("isPrivate", false)
+                    .limit(20)
+                    .get()
+                    .await()
+            }
             posts = snapshot.documents.mapNotNull { doc ->
                 val id = doc.id
                 val caption = doc.getString("caption") ?: ""
@@ -82,37 +94,47 @@ fun ExploreScreen(
                     storageKey = storageKey
                 )
             }
-        } catch (_: Exception) { posts = emptyList() }
+        } catch (e: Exception) {
+            CrashReporter.recordNonFatal(TAG, e, "No se pudieron cargar posts del tag #$tag")
+            posts = emptyList()
+            errorMessage = e.toUserFacingMessage("No se pudieron cargar las publicaciones.")
+        }
         loading = false
     }
 
-    LaunchedEffect(selectedTag, blockedUserIds, blockedUsersState.isLoaded) {
+    LaunchedEffect(selectedTag, blockedUserIds, blockedUsersState.isLoaded, retryKey) {
         if (blockedUsersState.isLoaded) loadPosts(selectedTag)
     }
 
     var searchQuery by remember { mutableStateOf("") }
     val searchUsers = remember { mutableStateOf<List<SearchUser>>(emptyList()) }
     val searchLoading = remember { mutableStateOf(false) }
+    val searchError = remember { mutableStateOf<String?>(null) }
+    var searchRetryKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(searchQuery, blockedUserIds, blockedUsersState.isLoaded) {
+    LaunchedEffect(searchQuery, blockedUserIds, blockedUsersState.isLoaded, searchRetryKey) {
         val q = searchQuery.trim().lowercase()
         if (!blockedUsersState.isLoaded) return@LaunchedEffect
         if (q.length < 2) {
             searchUsers.value = emptyList()
             searchLoading.value = false
+            searchError.value = null
             return@LaunchedEffect
         }
         delay(250)
         searchLoading.value = true
+        searchError.value = null
         try {
-            val snapshot = FirebaseFirestore.getInstance()
-                .collection("users")
-                .orderBy("usernameLower")
-                .startAt(q)
-                .endAt(q + "\uf8ff")
-                .limit(20)
-                .get()
-                .await()
+            val snapshot = withNetworkTimeout("explore.searchUsers") {
+                FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .orderBy("usernameLower")
+                    .startAt(q)
+                    .endAt(q + "\uf8ff")
+                    .limit(20)
+                    .get()
+                    .await()
+            }
             val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
             searchUsers.value = snapshot.documents.mapNotNull { doc ->
                 val uid = doc.getString("uid") ?: doc.id
@@ -126,7 +148,11 @@ fun ExploreScreen(
                     isFollowing = false
                 )
             }
-        } catch (_: Exception) { searchUsers.value = emptyList() }
+        } catch (e: Exception) {
+            CrashReporter.recordNonFatal(TAG, e, "Búsqueda de personas falló para '$q'")
+            searchUsers.value = emptyList()
+            searchError.value = e.toUserFacingMessage("No se pudieron buscar usuarios.")
+        }
         searchLoading.value = false
     }
 
@@ -139,6 +165,8 @@ fun ExploreScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            VividOfflineBannerHost()
+
             // Barra de búsqueda Material You 3
             OutlinedTextField(
                 value = searchQuery,
@@ -155,6 +183,10 @@ fun ExploreScreen(
                 // Resultado de búsqueda de personas (como IG)
                 when {
                     searchLoading.value -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    searchError.value != null -> VividErrorState(
+                        message = searchError.value.orEmpty(),
+                        onRetry = { searchRetryKey++ }
+                    )
                     searchUsers.value.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text("No se encontraron usuarios.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(searchUsers.value, key = { it.uid }) { user ->
@@ -190,6 +222,11 @@ fun ExploreScreen(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
+            } else if (errorMessage != null) {
+                VividErrorState(
+                    message = errorMessage.orEmpty(),
+                    onRetry = { retryKey++ }
+                )
             } else if (posts.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No hay publicaciones para #$selectedTag", color = MaterialTheme.colorScheme.onSurfaceVariant)

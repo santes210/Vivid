@@ -9,6 +9,9 @@ import com.google.firebase.firestore.Query
 import com.vivid.app.data.local.dao.ReelDao
 import com.vivid.app.data.local.entity.ReelEntity
 import com.vivid.app.data.storage.StorageProvider
+import com.vivid.app.util.CrashReporter
+import com.vivid.app.util.toUserFacingMessage
+import com.vivid.app.util.withNetworkTimeout
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -18,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
+
+private const val TAG = "ReelsViewModel"
 
 /**
  * ViewModel de Reels con scroll infinito estilo TikTok.
@@ -48,6 +53,14 @@ class ReelsViewModel @Inject constructor(
     private val _hasMore = MutableStateFlow(true)
     val hasMore: StateFlow<Boolean> = _hasMore
 
+    /**
+     * Error de la carga inicial, mostrado por ReelsScreen con botón de
+     * reintento (retry()). Queda en null cuando hay contenido, aunque sea
+     * de caché: el banner de sin conexión ya comunica el resto.
+     */
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
+
     private var lastDoc: DocumentSnapshot? = null
     private val pageSize = 15
 
@@ -69,6 +82,7 @@ class ReelsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _hasMore.value = true
+            _errorMessage.value = null
             lastDoc = null
 
             // ── Caché Room: mostrar reels cacheados (menos de 7 días) al instante ──
@@ -84,21 +98,24 @@ class ReelsViewModel @Inject constructor(
 
             try {
                 val userId = auth.currentUser?.uid.orEmpty()
-                val followingIds = if (userId.isBlank()) emptyList() else {
-                    firestore.collection("users").document(userId).collection("following")
-                        .get().await().documents.map { it.id }
-                }
-                val privateAuthorChunks = (followingIds + userId)
-                    .filter { it.isNotBlank() }.distinct().chunked(30)
-
-                val (publicSnapshot, privateDocuments) = coroutineScope {
-                    val publicRequest = async {
-                        firestore.collection("reels")
-                            .whereEqualTo("isPrivate", false)
-                            .orderBy("timestamp", Query.Direction.DESCENDING)
-                            .limit(pageSize.toLong())
-                            .get().await()
+                // Timeout global de la carga inicial: si la red cuelga, la
+                // UI muestra el error con reintento en vez de un spinner eterno.
+                val (publicSnapshot, privateDocuments) = withNetworkTimeout("reels.loadInitial") {
+                    val followingIds = if (userId.isBlank()) emptyList() else {
+                        firestore.collection("users").document(userId).collection("following")
+                            .get().await().documents.map { it.id }
                     }
+                    val privateAuthorChunks = (followingIds + userId)
+                        .filter { it.isNotBlank() }.distinct().chunked(30)
+
+                    coroutineScope {
+                        val publicRequest = async {
+                            firestore.collection("reels")
+                                .whereEqualTo("isPrivate", false)
+                                .orderBy("timestamp", Query.Direction.DESCENDING)
+                                .limit(pageSize.toLong())
+                                .get().await()
+                        }
                     val privateRequests = privateAuthorChunks.map { authors ->
                         async {
                             firestore.collection("reels")
@@ -110,6 +127,7 @@ class ReelsViewModel @Inject constructor(
                         }
                     }
                     publicRequest.await() to privateRequests.awaitAll().flatten()
+                    }
                 }
 
                 lastDoc = publicSnapshot.documents.lastOrNull()
@@ -127,6 +145,7 @@ class ReelsViewModel @Inject constructor(
                     purgeDeletedReels(fresh.map { it.id }.toSet())
                 }
             } catch (e: Exception) {
+                CrashReporter.recordNonFatal(TAG, e, "Carga inicial de reels falló")
                 // Si falla la red pero hay caché (aunque esté vencida),
                 // mostrarla: mejor contenido viejo que pantalla vacía.
                 if (_reels.value.isEmpty()) {
@@ -134,6 +153,10 @@ class ReelsViewModel @Inject constructor(
                     _reels.value = if (stale.isNotEmpty()) cachedEntitiesToData(stale) else emptyList()
                     _hasMore.value = false
                 }
+                // El error queda visible para la UI; si hay caché mostrada,
+                // ReelsScreen prioriza el contenido y solo deja el banner
+                // de sin conexión comunicando el resto.
+                _errorMessage.value = e.toUserFacingMessage("No se pudieron cargar los reels.")
             } finally {
                 _isLoading.value = false
             }
@@ -246,13 +269,15 @@ class ReelsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoadingMore.value = true
             try {
-                val snapshot = firestore.collection("reels")
-                    .whereEqualTo("isPrivate", false)
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .startAfter(currentLast)
-                    .limit(pageSize.toLong())
-                    .get()
-                    .await()
+                val snapshot = withNetworkTimeout("reels.loadMore") {
+                    firestore.collection("reels")
+                        .whereEqualTo("isPrivate", false)
+                        .orderBy("timestamp", Query.Direction.DESCENDING)
+                        .startAfter(currentLast)
+                        .limit(pageSize.toLong())
+                        .get()
+                        .await()
+                }
 
                 if (snapshot.documents.isEmpty()) {
                     _hasMore.value = false
@@ -271,8 +296,9 @@ class ReelsViewModel @Inject constructor(
                     _hasMore.value = snapshot.documents.size >= pageSize
                 }
             } catch (e: Exception) {
-                // No fatal, solo dejamos de intentar si es error de índice
-                // _hasMore stays true to allow retry
+                // No fatal: se registra para diagnóstico y _hasMore queda
+                // true para reintentar en el siguiente scroll.
+                CrashReporter.recordNonFatal(TAG, e, "Paginación de reels falló")
             } finally {
                 _isLoadingMore.value = false
             }

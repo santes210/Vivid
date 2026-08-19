@@ -27,7 +27,10 @@ import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.report.ReportHelper
 import com.vivid.app.presentation.stories.StoriesTray
+import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -35,6 +38,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+
+private const val TAG = "FeedScreen"
+
+/** Si Firestore no entrega nada en este tiempo, se muestra el estado de
+ *  error con reintento en vez de un spinner eterno (solo carga inicial). */
+private const val FEED_INITIAL_LOAD_TIMEOUT_MS = 15_000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -246,7 +255,13 @@ fun FeedScreen(
             val registrations = mutableListOf<ListenerRegistration>()
             val pages = mutableMapOf<String, List<DocumentSnapshot>>()
 
+            // Watchdog de la carga inicial: si Firestore no entrega nada en
+            // 15 s, se pasa al estado de error con reintento. Se cancela en
+            // cuanto llega la primera snapshot real.
+            var initialLoadTimeout: Job? = null
+
             fun publishVisiblePosts() {
+                initialLoadTimeout?.cancel()
                 val documents = pages.values.flatten().distinctBy { it.id }
                     .sortedByDescending { it.getLong("timestamp") ?: 0L }
                 posts = documents.mapNotNull { doc ->
@@ -308,6 +323,7 @@ fun FeedScreen(
                             }
                         }
                     } else if (err != null && pages.isEmpty()) {
+                        CrashReporter.recordNonFatal(TAG, err, "Listener del feed falló en la carga inicial")
                         isLoading = false
                         if (posts.isEmpty() && stalePosts.isNotEmpty()) posts = stalePosts
                         isError = posts.isEmpty()
@@ -332,7 +348,22 @@ fun FeedScreen(
                         }
                     }
             }
-            onDispose { registrations.forEach { it.remove() } }
+
+            // Arranca el watchdog DESPUÉS de registrar los listeners: solo
+            // dispara si ninguna snapshot llegó en el tiempo límite.
+            initialLoadTimeout = scope.launch {
+                delay(FEED_INITIAL_LOAD_TIMEOUT_MS)
+                if (pages.isEmpty()) {
+                    isLoading = false
+                    if (posts.isEmpty() && stalePosts.isNotEmpty()) posts = stalePosts
+                    isError = posts.isEmpty()
+                }
+            }
+
+            onDispose {
+                initialLoadTimeout?.cancel()
+                registrations.forEach { it.remove() }
+            }
         }
     }
 
@@ -417,6 +448,8 @@ fun FeedScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            VividOfflineBannerHost()
+
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = {

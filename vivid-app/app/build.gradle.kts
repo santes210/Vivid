@@ -1,8 +1,12 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.firebase.perf)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -58,6 +62,22 @@ val WORKER_PIN_VALUE = providers.gradleProperty("vividWorkerPin")
     .get()
     .trim()
 
+// =========================================================
+//  VERSIONADO (esquema MAJOR.MINOR.PATCH-build)
+// =========================================================
+// versionName = "<base>[-<build>]", p. ej. "2.2.0-7":
+//   MAJOR.MINOR.PATCH → cambios de producto, se editan A MANO aquí
+//                       (subir MINOR por features, PATCH por fixes).
+//   -<build>           → sufijo automático = versionCode. En CI el
+//                       versionCode es GITHUB_RUN_NUMBER (crece con cada
+//                       ejecución); en local se puede fijar con:
+//                         ./gradlew assembleRelease -PvividVersionCode=1234
+//                       Sin CI ni propiedad explícita no se muestra el
+//                       sufijo para no simular builds que no existen.
+// Changelog para usuarios: com.vivid.app.util.VividChangelog (en código,
+// sin .md) → se muestra en Ajustes → Acerca de → Novedades.
+val VIVID_VERSION_BASE = "2.2.0"
+
 // En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
 // Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
 val configuredVersionCode = providers.gradleProperty("vividVersionCode")
@@ -69,11 +89,27 @@ val vividVersionCode = configuredVersionCode?.let { rawValue ->
         ?.takeIf { it in 1..2_100_000_000 }
         ?: error("vividVersionCode debe ser un entero entre 1 y 2100000000 (recibido: '$rawValue')")
 } ?: 2
+// El sufijo -<build> solo aparece cuando hay un número de build real
+// (CI o -PvividVersionCode). El valor por defecto local (2) lo omite.
+val vividVersionName = if (vividVersionCode > 2) "$VIVID_VERSION_BASE-$vividVersionCode" else VIVID_VERSION_BASE
 logger.lifecycle("Vivid versionCode: $vividVersionCode")
+logger.lifecycle("Vivid versionName: $vividVersionName")
 
 // La firma de release se inyecta desde GitHub Actions o desde variables locales.
 // Si no están presentes, Gradle aún puede compilar un release sin firmar; el workflow de
 // release valida las cuatro credenciales antes de empezar para no publicar un APK inválido.
+
+// Subida automática de mapping.txt a Crashlytics. OFF por defecto: el task
+// uploadCrashlyticsMappingFileRelease necesita credenciales de Firebase
+// (service account) y SIN ellas falla el build. Se activa solo donde existan:
+//   ./gradlew assembleRelease -PuploadCrashlyticsMapping=true
+// o la variable de entorno UPLOAD_CRASHLYTICS_MAPPING=true en CI.
+// Sin esto, mapping.txt se conserva como artefacto de build-apk.yml y se
+// puede subir manualmente (Firebase CLI: firebase crashlytics:mappingfile:upload).
+val uploadCrashlyticsMappingEnabled = providers.gradleProperty("uploadCrashlyticsMapping")
+    .orElse(providers.environmentVariable("UPLOAD_CRASHLYTICS_MAPPING"))
+    .orNull == "true"
+
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
@@ -94,7 +130,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = vividVersionCode
-        versionName = "2.2.0-7"
+        versionName = vividVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -132,6 +168,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            // Crashlytics: desde el plugin 2.6.0 la extensión ya NO se registra
+            // a nivel de proyecto, por eso el bloque `firebaseCrashlytics { }`
+            // de nivel superior falla con "Unresolved reference / receiver type
+            // mismatch" en Kotlin DSL. La forma soportada (documentación oficial
+            // de Firebase) es configure<CrashlyticsExtension> DENTRO del build
+            // type. La subida del mapping va desactivada por defecto (ver
+            // uploadCrashlyticsMappingEnabled arriba) para que el build release
+            // nunca falle por falta de credenciales de Firebase.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = uploadCrashlyticsMappingEnabled
+            }
         }
     }
 
@@ -199,6 +247,11 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.messaging)
+    // Crash reporting + telemetría de rendimiento (gratis en el plan Spark).
+    // Analytics es la base de métricas de Crashlytics (crash-free users).
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.perf)
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     implementation(libs.kotlinx.coroutines.android)
