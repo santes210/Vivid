@@ -46,10 +46,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.vivid.app.R
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -164,7 +166,7 @@ fun CameraVideoScreen(
                 .align(Alignment.TopStart)
                 .padding(16.dp)
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close), tint = Color.White)
         }
 
         // Botón cambiar cámara
@@ -178,7 +180,7 @@ fun CameraVideoScreen(
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
         ) {
-            Icon(Icons.Default.Cameraswitch, contentDescription = "Cambiar cámara", tint = Color.White)
+            Icon(Icons.Default.Cameraswitch, contentDescription = stringResource(R.string.cd_switch_camera), tint = Color.White)
         }
 
         // Botón grabar (estilo IG: círculo grande, rojo cuando graba)
@@ -222,7 +224,7 @@ fun CameraVideoScreen(
         ) {
             Icon(
                 imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Videocam,
-                contentDescription = if (isRecording) "Detener" else "Grabar",
+                contentDescription = if (isRecording) stringResource(R.string.cd_stop_recording) else stringResource(R.string.cd_record_video),
                 tint = Color.White,
                 modifier = Modifier.size(36.dp)
             )
