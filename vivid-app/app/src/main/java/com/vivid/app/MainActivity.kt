@@ -37,6 +37,23 @@ class MainActivity : ComponentActivity() {
     private var pendingProfileUserId: String? by mutableStateOf(null)
     private var pendingPostId: String? by mutableStateOf(null)
 
+    // ── Auth listener: registra el token FCM de la sesión ──
+    // Guardado como campo para poder removerlo en onDestroy(): un listener
+    // registrado y nunca removido retiene la Activity y filtra eventos
+    // después de que la pantalla murió.
+    private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
+        if (auth.currentUser != null) {
+            val userId = auth.currentUser?.uid.orEmpty()
+            lifecycleScope.launch {
+                runCatching {
+                    ensureCurrentUserContentPrivacy(FirebaseFirestore.getInstance(), userId)
+                }
+            }
+
+            PushNotificationHelper.registerTokenForCurrentUser()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -45,20 +62,7 @@ class MainActivity : ComponentActivity() {
 
         readNotificationExtras(intent)
 
-        // ── Auth listener: registra el token FCM de la sesión ──
-        FirebaseAuth.getInstance().addAuthStateListener { auth ->
-            if (auth.currentUser != null) {
-                val userId = auth.currentUser?.uid.orEmpty()
-                lifecycleScope.launch {
-                    runCatching {
-                        ensureCurrentUserContentPrivacy(FirebaseFirestore.getInstance(), userId)
-                    }
-                }
-
-                PushNotificationHelper.registerTokenForCurrentUser()
-
-            }
-        }
+        FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
 
         // Permiso de notificaciones Android 13+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -118,6 +122,13 @@ class MainActivity : ComponentActivity() {
             UserPresenceHelper.setOffline()
         }
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        // La Activity es de tarea larga (singleTask + deep links): remover el
+        // listener evita fugas y callbacks sobre una vista muerta.
+        runCatching { FirebaseAuth.getInstance().removeAuthStateListener(authStateListener) }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

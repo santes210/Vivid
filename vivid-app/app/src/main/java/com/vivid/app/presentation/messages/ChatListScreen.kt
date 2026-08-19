@@ -35,11 +35,18 @@ import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.util.CrashReporter
+import com.vivid.app.util.toUserFacingMessage
+import com.vivid.app.util.withNetworkTimeout
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val TAG = "ChatListScreen"
 
 @androidx.compose.runtime.Immutable
 data class ChatPreview(
@@ -66,6 +73,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
     var chats by remember { mutableStateOf<List<ChatPreview>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     var presenceByUserId by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
 
@@ -112,7 +120,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Todos, 1 = No leídos, 2 = Activos
     val tabs = listOf("Todos", "No leídos", "Activos")
 
-    DisposableEffect(currentUserId) {
+    DisposableEffect(currentUserId, retryKey) {
         var registration: ListenerRegistration? = null
 
         if (currentUserId.isBlank()) {
@@ -123,7 +131,8 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 .whereArrayContains("participants", currentUserId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        errorMessage = error.message ?: "No se pudieron cargar los mensajes."
+                        CrashReporter.recordNonFatal(TAG, error, "Listener de chats falló")
+                        errorMessage = error.toUserFacingMessage("No se pudieron cargar los mensajes.")
                         isLoading = false
                         return@addSnapshotListener
                     }
@@ -265,6 +274,8 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            VividOfflineBannerHost()
+
             // Buscador moderno estilo Material You
             OutlinedTextField(
                 value = searchQuery,
@@ -340,11 +351,16 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 }
 
                 errorMessage != null -> {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(errorMessage ?: "Error", color = MaterialTheme.colorScheme.error)
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        VividErrorState(
+                            title = if (currentUserId.isBlank()) "Inicia sesión" else "No se pudieron cargar los mensajes",
+                            message = errorMessage ?: "Error",
+                            onRetry = if (currentUserId.isBlank()) null else {
+                                errorMessage = null
+                                isLoading = true
+                                retryKey++
+                            }
+                        )
                     }
                 }
 
@@ -537,10 +553,14 @@ private suspend fun loadPresenceMap(
     val result = mutableMapOf<String, Boolean>()
     userIds.distinct().chunked(10).forEach { chunk ->
         runCatching {
-            val snap = firestore.collection("users")
-                .whereIn("uid", chunk)
-                .get()
-                .await()
+            // Timeout por lote: si la red cuelga, la presencia simplemente
+            // queda pendiente en vez de bloquear la lista de chats.
+            val snap = withNetworkTimeout("chatList.presence") {
+                firestore.collection("users")
+                    .whereIn("uid", chunk)
+                    .get()
+                    .await()
+            }
             snap.documents.forEach { doc ->
                 val uid = doc.getString("uid") ?: doc.id
                 val statusEnabled = doc.getBoolean("activityStatusEnabled") ?: true

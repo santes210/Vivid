@@ -26,8 +26,15 @@ import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.presentation.common.BlockedUsersViewModel
+import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.util.CrashReporter
+import com.vivid.app.util.toUserFacingMessage
+import com.vivid.app.util.withNetworkTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
+
+private const val TAG = "SearchScreen"
 
 @androidx.compose.runtime.Immutable
 data class SearchUser(
@@ -48,6 +55,7 @@ fun SearchScreen(
     var users by remember { mutableStateOf<List<SearchUser>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
     val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
     val blockedUsersState by blockedUsersViewModel.state.collectAsState()
     val blockedUserIds = blockedUsersState.userIds
@@ -55,7 +63,7 @@ fun SearchScreen(
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val db = FirebaseFirestore.getInstance()
 
-    LaunchedEffect(query, currentUserId, blockedUserIds, blockedUsersState.isLoaded) {
+    LaunchedEffect(query, currentUserId, blockedUserIds, blockedUsersState.isLoaded, retryKey) {
         val cleanQuery = query.trim().lowercase()
         if (!blockedUsersState.isLoaded || cleanQuery.length < 2 || currentUserId.isBlank()) {
             users = emptyList()
@@ -68,13 +76,15 @@ fun SearchScreen(
         isLoading = true
         errorMessage = null
         try {
-            val snapshot = db.collection("users")
-                .orderBy("usernameLower")
-                .startAt(cleanQuery)
-                .endAt(cleanQuery + "\uf8ff")
-                .limit(25)
-                .get()
-                .await()
+            val snapshot = withNetworkTimeout("search.users") {
+                db.collection("users")
+                    .orderBy("usernameLower")
+                    .startAt(cleanQuery)
+                    .endAt(cleanQuery + "\uf8ff")
+                    .limit(25)
+                    .get()
+                    .await()
+            }
 
             users = snapshot.documents.mapNotNull { doc ->
                 val uid = doc.getString("uid") ?: doc.id
@@ -89,13 +99,16 @@ fun SearchScreen(
                 )
             }
         } catch (e: Exception) {
+            CrashReporter.recordNonFatal(TAG, e, "Búsqueda de usuarios falló para '$cleanQuery'")
             users = emptyList()
-            errorMessage = e.message ?: "No se pudieron buscar usuarios."
+            errorMessage = e.toUserFacingMessage("No se pudieron buscar usuarios.")
         }
         isLoading = false
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        VividOfflineBannerHost()
+
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -114,9 +127,10 @@ fun SearchScreen(
                 }
             }
             errorMessage != null -> {
-                Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text(errorMessage ?: "Error", color = MaterialTheme.colorScheme.error)
-                }
+                VividErrorState(
+                    message = errorMessage ?: "Error",
+                    onRetry = { retryKey++ }
+                )
             }
             query.trim().length < 2 -> {
                 Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {

@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,6 +31,7 @@ import com.vivid.app.ui.components.VividSettingsScaffold
 import com.vivid.app.ui.components.VividSettingsSwitchItem
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.VividCacheManager
+import com.vivid.app.util.VividChangelog
 import com.vivid.app.util.composeEmail
 import com.vivid.app.util.launchExternalIntent
 import com.vivid.app.util.openUrl
@@ -635,6 +637,7 @@ fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->U
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var infoDialog by remember { mutableStateOf<Pair<String,String>?>(null) }
+    var changelogDialog by remember { mutableStateOf(false) }
 
     VividSettingsScaffold(title = "Acerca de", onBack = onBack) { padding ->
         LazyColumn(
@@ -651,6 +654,13 @@ fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->U
                         onClick = { scope.launch { onShowSnackbar("Estás en la última versión") } },
                         showDivider = true
                     )
+                    VividSettingsItem(
+                        title = "Novedades",
+                        subtitle = "Qué cambia en cada versión",
+                        icon = Icons.Outlined.NewReleases,
+                        onClick = { changelogDialog = true },
+                        showDivider = true
+                    )
                     VividSettingsItem(title = "Términos del Servicio", subtitle = "Normas de la comunidad", icon = Icons.Outlined.Description, onClick = { infoDialog = "Términos" to "Al usar Vivid aceptas compartir contenido respetuoso y veraz." }, showDivider = true)
                     VividSettingsItem(title = "Política de Privacidad", subtitle = "Cómo protegemos tus datos", icon = Icons.Outlined.PrivacyTip, onClick = { infoDialog = "Privacidad" to "Tus datos, imágenes y mensajes están cifrados y protegidos." }, showDivider = true)
                     VividSettingsItem(title = "Licencias de código abierto", subtitle = "Bibliotecas usadas", icon = Icons.Outlined.Code, onClick = { infoDialog = "Licencias" to "Vivid usa Compose Material 3, Firebase, Coil, ExoPlayer, Hilt y Room." })
@@ -660,5 +670,32 @@ fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->U
     }
     infoDialog?.let { (t,m) ->
         AlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+    }
+    if (changelogDialog) {
+        AlertDialog(
+            onDismissRequest = { changelogDialog = false },
+            title = { Text("Novedades", fontWeight = FontWeight.Bold) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(VividChangelog.releases, key = { it.version }) { release ->
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            Text(
+                                "Versión ${release.version}",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            release.notes.forEach { note ->
+                                Row(Modifier.padding(top = 4.dp)) {
+                                    Text("•  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(note, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { changelogDialog = false }) { Text("Cerrar") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
     }
 }

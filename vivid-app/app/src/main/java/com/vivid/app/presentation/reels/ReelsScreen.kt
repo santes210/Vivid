@@ -44,6 +44,8 @@ import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.PushSender
 import kotlinx.coroutines.delay
@@ -61,6 +63,7 @@ fun ReelsScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     // Estado del pager: el count se actualiza automáticamente con reels.size
     val pagerState = rememberPagerState(pageCount = { reels.size })
@@ -88,6 +91,13 @@ fun ReelsScreen(
                 CircularProgressIndicator(color = Color.White)
             }
 
+            reels.isEmpty() && errorMessage != null -> Surface(Modifier.fillMaxSize()) {
+                VividErrorState(
+                    message = errorMessage.orEmpty(),
+                    onRetry = { viewModel.refresh() }
+                )
+            }
+
             reels.isEmpty() -> EmptyReelsState(onCreateReel = onCreateReel)
 
             else -> VerticalPager(
@@ -105,6 +115,14 @@ fun ReelsScreen(
                 }
             }
         }
+
+        // Banner de sin conexión, debajo de la píldora "Reels"
+        VividOfflineBannerHost(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 66.dp)
+        )
 
         // Header "Reels" flotante — píldora compacta con contenedor translúcido consistente
         Surface(
