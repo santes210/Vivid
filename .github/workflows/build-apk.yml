@@ -1,4 +1,4 @@
-name: Build Signed Release APK
+name: Build Signed Release APK + AAB
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release:
-    name: Build signed release APK
+    name: Build signed release APK + AAB (Play)
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -107,9 +107,11 @@ jobs:
         run: |
           yes | sdkmanager --licenses >/dev/null || true
 
+          # API 36: compileSdk/targetSdk del proyecto (obligatorio en Google Play
+          # para toda actualización a partir del 31 de agosto de 2026).
           sdkmanager \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
             "platform-tools"
 
       - name: Setup Gradle cache
@@ -158,17 +160,31 @@ jobs:
             --max-workers=1 \
             --stacktrace
 
-      - name: Build signed release APK
+      - name: Build signed release APK + AAB
         working-directory: vivid-app
         shell: bash
         run: |
           chmod +x gradlew
 
           # isMinifyEnabled=true + isShrinkResources=true en el buildType release.
-          ./gradlew assembleRelease \
+          # bundleRelease genera el .aab: es el ÚNICO formato que Google Play
+          # acepta para publicar. El APK se sigue generando para instalación
+          # directa / pruebas fuera de Play.
+          ./gradlew assembleRelease bundleRelease \
             --no-daemon \
             --max-workers=1 \
             --stacktrace
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports-release-vc${{ github.run_number }}
+          path: |
+            vivid-app/app/build/reports/lint-results-*.html
+            vivid-app/app/build/reports/lint-results-*.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Verify R8 minify ran
         shell: bash
@@ -207,7 +223,7 @@ jobs:
             exit 1
           fi
 
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify \
             --verbose \
             --print-certs \
             "$APK_PATH"
@@ -226,6 +242,62 @@ jobs:
         with:
           name: vivid-signed-release-vc${{ github.run_number }}
           path: ${{ steps.apk.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # ── Android App Bundle (lo que se sube a Google Play) ────────────────
+      - name: Verify AAB signature
+        id: aab
+        shell: bash
+        run: |
+          AAB_PATH="$(find vivid-app/app/build/outputs/bundle/release \
+            -maxdepth 1 \
+            -type f \
+            -name '*.aab' \
+            -print \
+            -quit)"
+
+          if [ -z "$AAB_PATH" ]; then
+            echo "::error::No se generó el App Bundle (.aab) de release."
+            echo "::error::Google Play solo acepta AAB: revisa la tarea bundleRelease."
+
+            find vivid-app/app/build/outputs \
+              -maxdepth 5 \
+              -type f \
+              -print || true
+
+            exit 1
+          fi
+
+          # El AAB se firma con el esquema JAR (v1): apksigner no lo valida,
+          # jarsigner sí. Si el bundle saliera sin firmar, esto falla aquí y no
+          # en la consola de Play.
+          #
+          # Sin -strict a propósito: con un certificado autofirmado (lo normal
+          # en un keystore de app) -strict devuelve código 4 por "chain not
+          # validated" aunque la firma sea correcta. Se comprueba el texto
+          # "jar verified", que es lo que de verdad importa.
+          VERIFY_OUT="$(jarsigner -verify -verbose:summary "$AAB_PATH" 2>&1 || true)"
+          echo "$VERIFY_OUT" | tail -n 20
+
+          if ! echo "$VERIFY_OUT" | grep -q "jar verified"; then
+            echo "::error::El AAB no está firmado o la firma no es válida."
+            exit 1
+          fi
+
+          mkdir -p release-artifacts
+
+          OUTPUT_AAB="release-artifacts/Vivid-${GITHUB_RUN_NUMBER}-release.aab"
+          cp "$AAB_PATH" "$OUTPUT_AAB"
+
+          echo "aab_path=$OUTPUT_AAB" >> "$GITHUB_OUTPUT"
+          ls -lh "$OUTPUT_AAB"
+
+      - name: Upload signed release AAB (Google Play)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vivid-signed-release-aab-vc${{ github.run_number }}
+          path: ${{ steps.aab.outputs.aab_path }}
           if-no-files-found: error
           retention-days: 30
 
