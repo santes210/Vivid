@@ -134,7 +134,10 @@ object ColorFilterEffect {
                     )
                 )
                 .build()
-            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+            // Media3 1.11 usa factories de secuencias; se conservan tanto
+            // video (al que se aplica el filtro) como el audio original.
+            val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(listOf(edited))
+            val composition = Composition.Builder(sequence).build()
 
             suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {

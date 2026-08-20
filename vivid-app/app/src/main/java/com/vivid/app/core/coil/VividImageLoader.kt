@@ -4,12 +4,14 @@ import android.content.Context
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
+import coil3.request.crossfade
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import okio.Path.Companion.toOkioPath
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,7 +28,7 @@ object VividImageLoaderModule {
             }
             .diskCache {
                 DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("vivid_image_cache"))
+                    .directory(context.cacheDir.resolve("vivid_image_cache").toOkioPath())
                     .maxSizeBytes(250L * 1024 * 1024) // 250MB
                     .build()
             }

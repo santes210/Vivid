@@ -53,7 +53,10 @@ object VideoTrimmer {
                 .setClippingConfiguration(clipping)
                 .build()
             val edited = EditedMediaItem.Builder(mediaItem).build()
-            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+            // Constructor directo retirado en Media3 1.11: conservar ambas pistas
+            // mantiene el audio sincronizado en el video recortado.
+            val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(listOf(edited))
+            val composition = Composition.Builder(sequence).build()
 
             val resultPath = suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {
