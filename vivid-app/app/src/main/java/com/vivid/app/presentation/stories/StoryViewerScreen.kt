@@ -36,9 +36,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
-import coil.imageLoader
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.imageLoader
+import coil3.request.ImageRequest
 import com.vivid.app.util.rememberPlaybackPolicy
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue

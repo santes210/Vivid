@@ -109,7 +109,10 @@ object AudioTrimmer {
                 .build()
 
             val edited = EditedMediaItem.Builder(mediaItem).build()
-            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+            // Media3 1.11 ya no expone el constructor directo de secuencias.
+            // Declarar que este flujo es solo audio evita crear una pista de video vacía.
+            val sequence = EditedMediaItemSequence.withAudioFrom(listOf(edited))
+            val composition = Composition.Builder(sequence).build()
 
             val listener = object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {

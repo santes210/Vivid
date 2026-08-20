@@ -1,6 +1,6 @@
 package com.vivid.app.di
 
-import coil.ImageLoader
+import coil3.ImageLoader
 import com.vivid.app.data.local.VividDatabase
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn

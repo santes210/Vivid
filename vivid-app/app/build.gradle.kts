@@ -1,8 +1,9 @@
 import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // Kotlin Android es integrado en AGP 9; aplicar el plugin antiguo falla.
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
@@ -130,10 +131,14 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.vivid.app"
-    // API 36 (Android 16). Google Play exige targetSdk 36 en toda
-    // actualización publicada a partir del 31 de agosto de 2026.
-    // compileSdk 36 necesita AGP >= 8.9 (aquí 8.13) + Gradle 8.13.
-    compileSdk = 36
+    // Ola 1 (Play): targetSdk 36, requerido para actualizaciones publicadas
+    // desde el 31 de agosto de 2026. Se conserva para aislar los cambios de
+    // comportamiento en runtime de Android 17 hasta completar su QA.
+    //
+    // Ola 2 (modernización): Compose 1.12 compila contra API 37. AGP 9.1.1
+    // soporta esa API con Gradle 9.3.1 y JDK 17.
+    compileSdk = 37
+    // AGP 9.1.1 usa 36.0.0 como Build Tools por defecto también para API 37.
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
@@ -198,20 +203,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-            "-opt-in=androidx.media3.common.util.UnstableApi"
-        )
-    }
 
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
     }
     packaging {
         resources {
@@ -222,13 +217,10 @@ android {
         // Lint vuelve a estar ACTIVO en release.
         //
         // Antes estaba apagado (abortOnError = false / checkReleaseBuilds = false)
-        // por un bug de :app:lintVitalAnalyzeRelease con AGP 8.7.3 + Kotlin 2.0.21:
-        //   Found class KaCallableMemberCall but interface expected
-        //   detector: androidx.lifecycle.lint.NonNullableMutableLiveDataDetector
-        // Ese detector (NullSafeMutableLiveData) ya no revienta con AGP 8.13, y
-        // además el proyecto no usa LiveData en ningún sitio, así que se elimina
-        // el `disable` junto con los dos interruptores que silenciaban el resto
-        // de los errores.
+        // por un bug de :app:lintVitalAnalyzeRelease del toolchain anterior.
+        // AGP 9.1.1 + Kotlin 2.4 lo corrigen; el proyecto tampoco usa LiveData,
+        // por lo que no se mantiene ningún `disable` ni interruptor permanente
+        // que silencie errores de release.
         abortOnError = true
         checkReleaseBuilds = true
         // Los warnings siguen siendo warnings: solo los errores rompen el build.
@@ -248,6 +240,20 @@ android {
     }
 }
 
+// AGP 9 integra la compilación Kotlin. `kotlinOptions` y
+// `composeOptions.kotlinCompilerExtensionVersion` pertenecían al plugin
+// kotlin-android anterior; Compose Compiler queda alineado a Kotlin 2.4 por
+// el plugin org.jetbrains.kotlin.plugin.compose.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.media3.common.util.UnstableApi"
+        )
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -262,8 +268,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.navigation.compose)
 
+    // Coil 3 requiere un artefacto de red explícito; este proyecto carga
+    // fotos y avatares remotos mediante HTTPS/OkHttp.
     implementation(libs.coil.compose)
     implementation(libs.coil)
+    implementation(libs.coil.network.okhttp)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
@@ -299,23 +308,23 @@ dependencies {
     implementation(libs.androidx.paging.runtime)
     implementation(libs.androidx.paging.compose)
 
-    implementation("androidx.camera:camera-core:1.3.4")
-    implementation("androidx.camera:camera-camera2:1.3.4")
-    implementation("androidx.camera:camera-lifecycle:1.3.4")
-    implementation("androidx.camera:camera-view:1.3.4")
-    implementation("androidx.camera:camera-extensions:1.3.4")
-    implementation("androidx.camera:camera-video:1.3.4")
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.extensions)
+    implementation(libs.androidx.camera.video)
 
     implementation("com.google.accompanist:accompanist-permissions:0.36.0")
 
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
-    implementation("androidx.media3:media3-transformer:1.4.1")
-    implementation("androidx.media3:media3-effect:1.4.1")
-    implementation("androidx.media3:media3-common:1.4.1")
-    implementation("androidx.media3:media3-datasource:1.4.1")
-    implementation("androidx.media3:media3-database:1.4.1")
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.exoplayer.dash)
+    implementation(libs.androidx.media3.transformer)
+    implementation(libs.androidx.media3.effect)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.database)
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
@@ -326,14 +335,14 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("io.mockk:mockk:1.13.13")
     testImplementation("app.cash.turbine:turbine:1.2.0")
-    testImplementation("androidx.room:room-testing:2.6.1")
+    testImplementation(libs.room.testing)
     testImplementation(libs.androidx.paging.common)
 
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
-    androidTestImplementation("androidx.room:room-testing:2.6.1")
+    androidTestImplementation(libs.room.testing)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

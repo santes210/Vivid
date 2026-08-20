@@ -1,8 +1,9 @@
 package com.vivid.app
 
 import android.app.Application
-import coil.ImageLoader
-import coil.ImageLoaderFactory
+import android.content.Context
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.perf.FirebasePerformance
 import com.vivid.app.util.NetworkMonitor
@@ -12,7 +13,7 @@ import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
 @HiltAndroidApp
-class VividApplication : Application(), ImageLoaderFactory {
+class VividApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject
     lateinit var imageLoader: ImageLoader
@@ -47,5 +48,8 @@ class VividApplication : Application(), ImageLoaderFactory {
         super.onTerminate()
     }
 
-    override fun newImageLoader(): ImageLoader = imageLoader
+    // Coil 3 detecta esta factory desde Application y la usa también para
+    // AsyncImage y las precargas. Devolvemos el singleton gestionado por Hilt
+    // para que toda la app comparta el mismo caché de memoria y disco.
+    override fun newImageLoader(context: Context): ImageLoader = imageLoader
 }

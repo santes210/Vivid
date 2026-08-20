@@ -114,7 +114,7 @@ object ColorFilterEffect {
         if (outputFile.exists()) outputFile.delete()
 
         try {
-            // RgbMatrix es una INTERFAZ en Media3 1.4.1 (no un constructor que
+            // RgbMatrix sigue siendo una INTERFAZ en Media3 1.11 (no un constructor que
             // recibe FloatArray). La implementamos devolviendo la matriz del filtro.
             // Como RgbMatrix extends GlEffect extends Effect, se puede usar
             // directamente como videoEffect sin RgbFilter.createMatrixEffect.
@@ -134,7 +134,10 @@ object ColorFilterEffect {
                     )
                 )
                 .build()
-            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+            // Media3 1.11 usa factories de secuencias; se conservan tanto
+            // video (al que se aplica el filtro) como el audio original.
+            val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(listOf(edited))
+            val composition = Composition.Builder(sequence).build()
 
             suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {

@@ -68,7 +68,10 @@ object VideoWatermarker {
                     )
                 )
                 .build()
-            val composition = Composition.Builder(EditedMediaItemSequence(edited)).build()
+            // Media3 1.11 reemplazó el constructor directo por factories de
+            // secuencias; la marca de agua no debe descartar el audio original.
+            val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(listOf(edited))
+            val composition = Composition.Builder(sequence).build()
 
             val outputPath = suspendCancellableCoroutine<String> { cont ->
                 val listener = object : Transformer.Listener {

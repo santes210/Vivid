@@ -42,8 +42,8 @@
 -dontwarn androidx.media3.**
 -keep class androidx.media3.** { *; }
 
-# Coil (image pipeline).
--dontwarn coil.**
+# Coil 3 (image pipeline). El paquete cambió de `coil` a `coil3`.
+-dontwarn coil3.**
 
 # OkHttp / Okio platform bits.
 -dontwarn okhttp3.**
