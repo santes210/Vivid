@@ -146,7 +146,7 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.toReadableAuthMessage()
+                    error = e.toReadableGoogleAuthMessage()
                 )
             }
         }
@@ -204,6 +204,10 @@ class AuthViewModel @Inject constructor(
                 "postsCount" to (existing["postsCount"] ?: 0),
                 "activityStatusEnabled" to (existing["activityStatusEnabled"] ?: true),
                 "isOnline" to (existing["isOnline"] ?: false),
+                // Cuentas nuevas nacen públicas. Si falta el campo, computeCanMessage
+                // y las reglas de chat/contenido lo tratan como público; lo
+                // materializamos para no depender del default.
+                "isPrivate" to (existing["isPrivate"] ?: false),
                 "lastActiveAt" to (existing["lastActiveAt"] ?: System.currentTimeMillis()),
                 "createdAt" to (existing["createdAt"] ?: System.currentTimeMillis()),
                 "updatedAt" to System.currentTimeMillis()
@@ -255,6 +259,30 @@ private fun Exception.toReadableAuthMessage(): String {
         is FirebaseNetworkException -> "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
         else -> message ?: "Ocurrió un error de autenticación."
     }
+}
+
+/**
+ * Mapeo de errores SOLO para el login con Google.
+ *
+ * No reutiliza [toReadableAuthMessage] porque ahí
+ * FirebaseAuthInvalidCredentialsException significa "contraseña equivocada",
+ * mientras que con un idToken de Google significa que Firebase RECHAZÓ el
+ * token: casi siempre un problema de configuración (SHA-1 del APK no
+ * registrado en Firebase o Web client ID de otro proyecto), no del usuario.
+ */
+private fun Exception.toReadableGoogleAuthMessage(): String {
+    val name = when (this) {
+        is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ->
+            "FirebaseAuthInvalidCredentialsException"
+        is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
+            "FirebaseAuthUserCollisionException"
+        is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+            "FirebaseAuthInvalidUserException"
+        is FirebaseNetworkException ->
+            "FirebaseNetworkException"
+        else -> this::class.simpleName.orEmpty()
+    }
+    return GoogleSignInMessages.fromFirebase(name, message)
 }
 
 /**

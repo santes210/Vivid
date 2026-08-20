@@ -361,10 +361,43 @@ service cloud.firestore {
 
   function isParticipant() {
     return signedIn()
+      && resource.data.participants is list
       && request.auth.uid in resource.data.participants;
   }
 
-  allow read: if isParticipant();
+  // El id de un DM es uidA_uidB (ordenados). Solo se permite sondear
+  // un chat INEXISTENTE si el uid actual aparece en ese id: así el
+  // transaction.get() de ensureChatExists / persistOutgoingMessage no
+  // revienta, y un extraño no enumera conversaciones ajenas.
+  function isMissingChatIBelongTo() {
+    return !exists(/databases/$(database)/documents/chats/$(chatId))
+      && (
+        chatId.matches(request.auth.uid + '_.*')
+        || chatId.matches('.*_' + request.auth.uid)
+      );
+  }
+
+  // GET de un participante sobre su conversación.
+  // También se permite el get de un chat que TODAVÍA no existe y cuyo
+  // id incluye al usuario: el flujo de una conversación nueva hace
+  // transaction.get(chats/{chatId}) ANTES de crear el documento
+  // (ensureChatExists / persistOutgoingMessage). Como resource es null
+  // cuando el documento no existe, evaluar resource.data.participants
+  // ahí resulta en PERMISSION_DENIED y NINGUNA cuenta podría iniciar
+  // un chat nuevo: solo seguirían funcionando las conversaciones ya
+  // creadas (el síntoma "las cuentas viejas sí pueden escribir").
+  // Permitir este get no filtra datos: la respuesta es "no existe".
+  //
+  // IMPORTANTE: isMissingChatIBelongTo() va ANTES de isParticipant()
+  // porque && / || cortocircuitan, y acceder a resource.data cuando
+  // el documento no existe aborta toda la regla (queda denegada).
+  allow get: if signedIn() && (
+    isMissingChatIBelongTo() || isParticipant()
+  );
+
+  // Las queries (lista de chats, whereArrayContains participants)
+  // solo ven conversaciones en las que el usuario ya participa.
+  allow list: if isParticipant();
 
   allow create: if signedIn()
     && hasValidParticipants(request.resource.data)
