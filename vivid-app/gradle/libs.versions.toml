@@ -16,6 +16,11 @@ composeBom = "2026.08.00"
 # navigation/VividNavigation.kt, ui/components/VividStates.kt,
 # presentation/explore/ExploreScreen.kt y presentation/feed/PostDetailScreen.kt.
 material3 = "1.5.0-alpha26"
+# Polígonos y morphing (RoundedPolygon, Morph). Llega transitivamente con
+# material3, pero Vivid lo usa directo en ui/components/VividMorphShape.kt,
+# así que se declara: depender de un artefacto transitivo es una bomba de
+# relojería la próxima vez que material3 cambie sus dependencias.
+graphicsShapes = "1.0.1"
 coreKtx = "1.15.0"
 coreSplashscreen = "1.0.1"
 lifecycleRuntimeKtx = "2.8.7"
@@ -51,6 +56,7 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 # Material 3 con versión explícita (ver nota de `material3` arriba): el BoM
 # resolvería 1.4.x, que no trae las APIs Expressive.
 androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
+androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version.ref = "graphicsShapes" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
 # Coil 3 cambió tanto sus coordenadas Maven como el paquete Kotlin a coil3.

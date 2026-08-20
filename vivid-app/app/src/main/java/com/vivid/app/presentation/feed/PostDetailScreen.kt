@@ -46,6 +46,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividLikeButton
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
@@ -130,7 +131,9 @@ fun PostDetailScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    ContainedLoadingIndicator()
+                    ContainedLoadingIndicator(
+                        polygons = VividMaterialShapes.LoadingSequence
+                    )
                 }
 
                 post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

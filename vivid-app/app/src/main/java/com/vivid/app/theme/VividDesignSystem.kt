@@ -60,7 +60,7 @@ package com.vivid.app.theme
  * |--------------------------------------------------|-------------------------------------------|
  * | `MaterialExpressiveTheme` + `MotionScheme.expressive()` | `theme/Theme.kt`                   |
  * | `MotionScheme` (spatial / effects)               | `theme/Motion.kt` → [VividMotion]         |
- * | `MaterialShapes`                                 | `theme/Shape.kt` → [VividMaterialShapes]  |
+ * | `MaterialShapes` (las 35) + `Morph`              | `theme/Shape.kt` → [VividMaterialShapes], `ui/components/VividMorphShape.kt` |
  * | `LoadingIndicator` / `ContainedLoadingIndicator` | estados, Explorar, detalle, perfil, feed  |
  * | `ButtonGroup` (+ overflow)                       | filtros por tema de Explorar              |
  * | `HorizontalFloatingToolbar`                      | acciones del detalle de publicación       |
@@ -73,6 +73,22 @@ package com.vivid.app.theme
  * `ButtonGroup` → `LazyRow` de `FilterChip`, `WideNavigationRail` →
  * `NavigationRail`, `HorizontalFloatingToolbar` → `BottomAppBar`.
  * [VividMotion] ya aísla al resto de la app del `MotionScheme`.
+ *
+ * ### Las 35 formas
+ *
+ * `MaterialShapes` trae 35 polígonos (Circle, Square, Slanted, Arch,
+ * SemiCircle, Oval, Pill, Triangle, Arrow, Fan, Diamond, ClamShell, Pentagon,
+ * Gem, Sunny, VerySunny, Cookie 4/6/7/9/12, Ghostish, Clover 4/8, Burst,
+ * SoftBurst, Boom, SoftBoom, Flower, Puffy, PuffyDiamond, PixelCircle,
+ * PixelTriangle, Bun, Heart). Están todas en [VividMaterialShapes.Catalog] y
+ * el preview `MaterialShapesCatalogPreview` las pinta con su nombre.
+ *
+ * Lo importante no es el catálogo sino que son `RoundedPolygon`: se
+ * **interpolan**. `ui/components/VividMorphShape.kt` expone
+ * `rememberVividMorph(start, end, progress)` y `pressMorphShape(interaction)`,
+ * usados en el botón de Crear y en el FAB del rail (círculo → galleta al
+ * pulsar). La app consume roles ([VividMaterialShapes] `Like`, `Celebration`,
+ * `EmptyStateContainer`…), nunca `MaterialShapes.X` directo.
  *
  * ---
  * ## 3. Continuidad — transiciones compartidas, hápticos y previews

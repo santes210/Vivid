@@ -53,6 +53,7 @@ import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.search.SearchViewModel
 import com.vivid.app.presentation.search.UserSearchItem
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.ui.haptics.rememberVividHaptics
@@ -121,7 +122,9 @@ fun ExploreScreen(
                 when {
                     users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            ContainedLoadingIndicator()
+                            ContainedLoadingIndicator(
+                                polygons = VividMaterialShapes.LoadingSequence
+                            )
                         }
                     }
                     users.loadState.refresh is LoadState.Error && users.itemCount == 0 -> {
@@ -206,7 +209,9 @@ fun ExploreScreen(
                 when {
                     posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            ContainedLoadingIndicator()
+                            ContainedLoadingIndicator(
+                                polygons = VividMaterialShapes.LoadingSequence
+                            )
                         }
                     }
                     posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {

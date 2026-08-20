@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +59,7 @@ import com.vivid.app.presentation.messages.ChatScreen
 import com.vivid.app.presentation.profile.*
 import com.vivid.app.presentation.reels.ReelsScreen
 import com.vivid.app.theme.VividMotion
+import com.vivid.app.ui.components.pressMorphShape
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedTransitionHost
 import com.vivid.app.ui.motion.sharedComposable
@@ -616,13 +618,18 @@ private fun VividBottomBar(
                         contentAlignment = Alignment.Center
                     ) {
                         if (dest.screen == Screen.Create) {
-                            // Acción principal: botón "Crear" de mayor énfasis
+                            // Acción principal: botón "Crear" de mayor énfasis.
+                            // Al pulsarlo su silueta se transforma de círculo a
+                            // galleta de 9 puntas (MaterialShapes + Morph): el
+                            // estado se comunica con la forma, no con un tinte.
+                            val createInteractions = remember { MutableInteractionSource() }
                             Surface(
                                 onClick = {
                                     haptics.confirm()
                                     onNavigate(dest.screen)
                                 },
-                                shape = RoundedCornerShape(20.dp),
+                                interactionSource = createInteractions,
+                                shape = pressMorphShape(createInteractions),
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 tonalElevation = 4.dp,
@@ -733,11 +740,14 @@ private fun VividNavigationRail(
                 val createDestination = destinations.firstOrNull { it.screen == Screen.Create }
                 if (createDestination != null) {
                     Spacer(Modifier.height(8.dp))
+                    val fabInteractions = remember { MutableInteractionSource() }
                     FloatingActionButton(
                         onClick = {
                             haptics.confirm()
                             onNavigate(createDestination.screen)
                         },
+                        shape = pressMorphShape(fabInteractions),
+                        interactionSource = fabInteractions,
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(56.dp)

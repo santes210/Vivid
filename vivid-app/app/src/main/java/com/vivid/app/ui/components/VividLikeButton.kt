@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividMotion
 import com.vivid.app.ui.haptics.rememberVividHaptics
 
@@ -216,10 +219,22 @@ fun DoubleTapLikeBox(
                         alpha = burstAlpha.value
                     }
                     .drawBehind {
-                        drawCircle(
-                            color = accents.like.copy(alpha = burstAlpha.value * 0.35f),
-                            radius = size.minDimension / 1.6f
+                        // El halo también es un corazón (MaterialShapes.Heart),
+                        // no un círculo genérico detrás del icono.
+                        val outline = VividMaterialShapes.Like.createOutline(
+                            size = size * 1.35f,
+                            layoutDirection = layoutDirection,
+                            density = this
                         )
+                        translate(
+                            left = -size.width * 0.175f,
+                            top = -size.height * 0.175f
+                        ) {
+                            drawOutline(
+                                outline = outline,
+                                color = accents.like.copy(alpha = burstAlpha.value * 0.35f)
+                            )
+                        }
                     }
             )
         }

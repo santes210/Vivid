@@ -45,7 +45,11 @@ fun VividLoadingState(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LoadingIndicator(modifier = Modifier.size(48.dp))
+            // Secuencia de polígonos propia: la espera "sabe" a Vivid.
+            LoadingIndicator(
+                modifier = Modifier.size(48.dp),
+                polygons = VividMaterialShapes.LoadingSequence
+            )
             if (showMessage) {
                 Spacer(Modifier.height(16.dp))
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
