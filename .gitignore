@@ -7,6 +7,13 @@ local.properties
 *.keystore
 *.jks
 
+# Excepción: el keystore de DEBUG es compartido a propósito (contraseñas
+# estándar "android") para que los APK debug — locales y los de GitHub
+# Actions — tengan SIEMPRE el mismo SHA-1 y el login con Google funcione
+# también en debug. El de RELEASE sigue sin versionarse (se inyecta desde
+# secrets en CI).
+!vivid-app/app/debug.keystore
+
 # Cualquier archivo de secretos, en cualquier subcarpeta.
 # OJO: un patron con barras se ancla a la raiz del repo, por eso el
 # antiguo "app/src/main/.../BuildConfigSecrets.kt" NO coincidia con la

@@ -169,6 +169,28 @@ android {
                 keyPassword = requireNotNull(releaseKeyPassword)
             }
         }
+
+        // Keystore de debug COMPARTIDO y commiteado (contraseñas estándar
+        // "android", no guarda secretos: es la práctica habitual en AOSP).
+        //
+        // ¿Por qué? El workflow "Build Vivid APK" compila assembleDebug en
+        // un runner efímero: sin esto, Gradle genera un debug.keystore
+        // NUEVO en cada build y su SHA-1 cambia cada vez, con lo que
+        // "Continuar con Google" jamás puede funcionar en esos APKs (Google
+        // compara el SHA-1 del APK contra los registrados en Firebase).
+        // Con este keystore fijo, debug local y debug de CI comparten
+        // siempre esta huella:
+        //   SHA-1:   DA:E6:2A:08:CA:7C:E9:D2:FC:E5:7A:4C:A3:5C:F8:73:49:B0:0B:C6
+        //   SHA-256: 97:63:0F:90:56:17:E2:BD:7B:84:5F:6B:80:66:E8:0E:25:08:FE:3A:39:53:8A:74:F1:E7:61:7E:FA:13:F2:9B
+        // (Regístralas también en Firebase Console → Tus apps → Huellas.)
+        // Se puede verificar con: python3 scripts/apk-sha1.py vivid-app/app/debug.keystore
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storeType = "PKCS12"
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
