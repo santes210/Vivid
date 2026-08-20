@@ -3,6 +3,7 @@ package com.vivid.app.presentation.auth
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
@@ -56,6 +57,8 @@ sealed interface GoogleSignInOutcome {
  * extra. Es el mismo flujo que documenta Firebase.
  */
 object GoogleCredentialSignIn {
+
+    private const val TAG = "GoogleCredentialSignIn"
 
     /** Scope propio para el "clear" al cerrar sesión (fire and forget). */
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -161,8 +164,31 @@ object GoogleCredentialSignIn {
         } catch (e: GetCredentialCancellationException) {
             GoogleSignInOutcome.Cancelled
         } catch (e: GetCredentialException) {
-            GoogleSignInOutcome.Failure(e.message ?: "No se pudo iniciar sesión con Google.")
+            Log.e(TAG, "GetCredential falló (type=${e.type})", e)
+            GoogleSignInOutcome.Failure(readableCredentialError(e))
         }
+    }
+
+    /**
+     * Traduce el error del Credential Manager a algo diagnóstico.
+     *
+     * Los fallos típicos del flujo Google son de CONFIGURACIÓN, no de código:
+     *   - SHA-1 del keystore con el que se firmó el APK no registrado en
+     *     Firebase Console → la hoja de Google devuelve DEVELOPER_ERROR.
+     *   - Web client ID (oauth_client client_type 3) ausente en
+     *     google-services.json → no se genera `default_web_client_id`.
+     * Por eso el mensaje incluye el `type` real: con él se identifica la
+     * causa en un vistazo en vez de un genérico "error de Google sign-in".
+     */
+    private fun readableCredentialError(e: GetCredentialException): String {
+        val detail = e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+        val hint = when {
+            e.type.contains("GOOGLE_ID_TOKEN", ignoreCase = true) ->
+                " Revisa en Firebase Console que el SHA-1 del APK esté registrado " +
+                    "en la app Android y que el Web client ID sea el del proyecto."
+            else -> " Suele deberse a la configuración de Firebase (SHA-1 del APK o Web client ID)."
+        }
+        return "No se pudo iniciar sesión con Google [$e.type]$detail.$hint"
     }
 
     private fun Credential.toOutcome(): GoogleSignInOutcome {

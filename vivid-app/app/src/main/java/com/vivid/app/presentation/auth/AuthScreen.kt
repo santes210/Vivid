@@ -146,7 +146,7 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.toReadableAuthMessage()
+                    error = e.toReadableGoogleAuthMessage()
                 )
             }
         }
@@ -254,6 +254,31 @@ private fun Exception.toReadableAuthMessage(): String {
         is com.google.firebase.auth.FirebaseAuthWeakPasswordException -> "La contraseña es muy débil (debe tener al menos 6 caracteres)."
         is FirebaseNetworkException -> "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
         else -> message ?: "Ocurrió un error de autenticación."
+    }
+}
+
+/**
+ * Mapeo de errores SOLO para el login con Google.
+ *
+ * No reutiliza [toReadableAuthMessage] porque ahí
+ * FirebaseAuthInvalidCredentialsException significa "contraseña equivocada",
+ * mientras que con un idToken de Google significa que Firebase RECHAZÓ el
+ * token: casi siempre un problema de configuración (SHA-1 del APK no
+ * registrado en Firebase o Web client ID de otro proyecto), no del usuario.
+ */
+private fun Exception.toReadableGoogleAuthMessage(): String {
+    return when (this) {
+        is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ->
+            "Google devolvió un token que Firebase rechazó. Verifica en Firebase Console " +
+                "(Authentication → Google) que el SHA-1 del APK instalado esté registrado " +
+                "y que el Web client ID del google-services.json sea de este proyecto."
+        is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
+            "Esa cuenta de Google usa un correo ya registrado con correo y contraseña. " +
+                "Entra con ese método para vincularla."
+        is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+            "La cuenta de Google está deshabilitada. Contacta al soporte."
+        is FirebaseNetworkException -> "No se pudo conectar con Firebase. Revisa tu internet o intenta de nuevo en unos minutos."
+        else -> message ?: "No se pudo iniciar sesión con Google."
     }
 }
 

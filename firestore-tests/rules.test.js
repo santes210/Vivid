@@ -373,4 +373,78 @@ describe("chats", () => {
     await assertFails(bob.doc("chats/ab/messages/m1").delete());
     await assertSucceeds(alice.doc("chats/ab/messages/m1").delete());
   });
+
+  // Flujo real de UNA CONVERSACIÓN NUEVA (cuenta que nunca chateó con la
+  // otra): ChatRepository hace transaction.get(chats/{chatId}) ANTES de
+  // crear el documento. Si la regla de lectura no tolerara el documento
+  // inexistente, ese get daría PERMISSION_DENIED y el primer mensaje de
+  // cualquier chat nuevo jamás se enviaría.
+  test("conversación nueva: el participante puede leer un chat que no existe", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    const alice = env.authenticatedContext("alice").firestore();
+
+    // Primer paso del cliente: sondeo del chat (aún no creado).
+    const snap = await assertSucceeds(alice.doc("chats/alice_bob").get());
+    assert.equal(snap.exists, false);
+
+    // Un extraño también puede "sondear" (no obtiene ningún dato).
+    const carol = env.authenticatedContext("carol").firestore();
+    const empty = await assertSucceeds(carol.doc("chats/alice_bob").get());
+    assert.equal(empty.exists, false);
+  });
+
+  test("conversación nueva: chat + primer mensaje en la misma transacción", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    const alice = env.authenticatedContext("alice").firestore();
+
+    // Reproduce persistOutgoingMessage/ensureChatExists: get → set(chat) →
+    // set(mensaje). La regla del mensaje usa getAfter(chats/{chatId}), que
+    // debe ver el chat creado dentro de la MISMA transacción.
+    await assertSucceeds(alice.runTransaction(async (tx) => {
+      const chatSnap = await tx.get(alice.doc("chats/alice_bob"));
+      if (!chatSnap.exists) {
+        tx.set(alice.doc("chats/alice_bob"), {
+          participants: ["alice", "bob"],
+          createdAt: 1,
+          updatedAt: 1,
+          unreadCounts: { alice: 0, bob: 1 }
+        });
+      }
+      tx.set(alice.doc("chats/alice_bob/messages/m1"), {
+        senderId: "alice",
+        receiverId: "bob",
+        type: "text",
+        text: "hola",
+        timestamp: 1,
+        isRead: false,
+        isDelivered: false
+      });
+    }));
+
+    // Un extraño no puede leer el chat recién creado ni escuchar mensajes.
+    const carol = env.authenticatedContext("carol").firestore();
+    await assertFails(carol.doc("chats/alice_bob").get());
+    await assertFails(
+      carol.collection("chats/alice_bob/messages").orderBy("timestamp", "asc").get()
+    );
+  });
+
+  test("conversación nueva: preview posterior del remitente (update del chat)", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    const alice = env.authenticatedContext("alice").firestore();
+
+    await assertSucceeds(alice.doc("chats/alice_bob").set({
+      participants: ["alice", "bob"], createdAt: 1
+    }));
+    // persistOutgoingMessage actualiza el preview con field paths.
+    await assertSucceeds(alice.doc("chats/alice_bob").update({
+      lastMessage: "hola",
+      "unreadCounts.alice": 0,
+      "unreadCounts.bob": 1,
+      updatedAt: 2
+    }));
+  });
 });

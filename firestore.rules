@@ -364,7 +364,22 @@ service cloud.firestore {
       && request.auth.uid in resource.data.participants;
   }
 
-  allow read: if isParticipant();
+  // GET de un participante sobre su conversación. También se permite el get
+  // de un chat que TODAVÍA no existe: el flujo de una conversación nueva
+  // hace transaction.get(chats/{chatId}) antes de crear el documento
+  // (ensureChatExists / persistOutgoingMessage). Como resource es null
+  // cuando el documento no existe, evaluar resource.data.participants ahí
+  // resulta en PERMISSION_DENIED y NINGUNA cuenta podría iniciar un chat
+  // nuevo: solo seguirían funcionando las conversaciones ya creadas
+  // (exactamente el síntoma "las cuentas viejas sí pueden escribir").
+  // Permitir este get no filtra datos: la respuesta siempre es "no existe".
+  allow get: if signedIn() && (
+    !exists(/databases/$(database)/documents/chats/$(chatId))
+    || isParticipant()
+  );
+
+  // Las queries (lista de chats, backfill) filtran por participants.
+  allow list: if isParticipant();
 
   allow create: if signedIn()
     && hasValidParticipants(request.resource.data)
