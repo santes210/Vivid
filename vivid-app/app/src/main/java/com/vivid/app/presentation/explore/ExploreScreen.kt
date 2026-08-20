@@ -182,7 +182,10 @@ fun ExploreScreen(
                         FilledIconButton(
                             onClick = {
                                 haptics.tick()
-                                if (menuState.isExpanded) menuState.dismiss() else menuState.show()
+                                // En material3 1.5.0-alpha el estado del menú
+                                // de ButtonGroup se llama isShowing (antes era
+                                // isExpanded).
+                                if (menuState.isShowing) menuState.dismiss() else menuState.show()
                             }
                         ) {
                             Icon(

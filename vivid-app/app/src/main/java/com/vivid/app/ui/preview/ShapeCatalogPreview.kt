@@ -25,8 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.toShape
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.toVividShape
 import com.vivid.app.ui.components.rememberVividMorph
 
 /**
@@ -65,7 +65,7 @@ private fun MaterialShapesCatalogPreview() {
                                     .size(56.dp)
                                     .background(
                                         color = MaterialTheme.colorScheme.primaryContainer,
-                                        shape = polygon.toShape()
+                                        shape = polygon.toVividShape()
                                     )
                             )
                             Spacer(Modifier.height(4.dp))
@@ -142,7 +142,7 @@ private fun LoadingSequencePreview() {
                         .size(44.dp)
                         .background(
                             color = MaterialTheme.colorScheme.primary,
-                            shape = polygon.toShape()
+                            shape = polygon.toVividShape()
                         )
                 )
             }

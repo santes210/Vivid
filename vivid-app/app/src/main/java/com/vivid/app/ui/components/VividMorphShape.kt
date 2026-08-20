@@ -40,7 +40,9 @@ import com.vivid.app.theme.VividMotion
 @Stable
 class VividMorphShape(
     private val morph: Morph,
-    private val progress: Float
+    private val progress: Float,
+    /** Caja envolvente común de las dos formas: `[left, top, right, bottom]`. */
+    private val bounds: FloatArray
 ) : Shape {
 
     override fun createOutline(
@@ -48,16 +50,32 @@ class VividMorphShape(
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
-        // El polígono vive en un espacio normalizado centrado en (0,0) con
-        // radio 1: hay que escalarlo a la mitad del tamaño y recentrarlo.
+        // Se normaliza con las medidas reales de los polígonos (igual que
+        // VividPolygonShape) y con la caja COMÚN de los dos, para que la forma
+        // no cambie de tamaño mientras se está transformando.
+        val boundsWidth = (bounds[2] - bounds[0]).takeIf { it > 0f } ?: 1f
+        val boundsHeight = (bounds[3] - bounds[1]).takeIf { it > 0f } ?: 1f
+
         val matrix = Matrix()
-        matrix.scale(size.width / 2f, size.height / 2f)
-        matrix.translate(1f, 1f)
+        matrix.scale(size.width / boundsWidth, size.height / boundsHeight)
+        matrix.translate(-bounds[0], -bounds[1])
 
         val path: Path = morph.toPath(progress = progress.coerceIn(0f, 1f)).asComposePath()
         path.transform(matrix)
         return Outline.Generic(path)
     }
+}
+
+/** Caja envolvente que contiene a los dos polígonos. */
+private fun unionBounds(start: RoundedPolygon, end: RoundedPolygon): FloatArray {
+    val a = start.calculateBounds()
+    val b = end.calculateBounds()
+    return floatArrayOf(
+        minOf(a[0], b[0]),
+        minOf(a[1], b[1]),
+        maxOf(a[2], b[2]),
+        maxOf(a[3], b[3])
+    )
 }
 
 /**
@@ -74,7 +92,8 @@ fun rememberVividMorph(
     progress: Float
 ): Shape {
     val morph = remember(start, end) { Morph(start, end) }
-    return remember(morph, progress) { VividMorphShape(morph, progress) }
+    val bounds = remember(start, end) { unionBounds(start, end) }
+    return remember(morph, bounds, progress) { VividMorphShape(morph, progress, bounds) }
 }
 
 /**

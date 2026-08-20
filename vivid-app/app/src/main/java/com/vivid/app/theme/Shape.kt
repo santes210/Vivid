@@ -4,7 +4,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.toShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
@@ -93,31 +92,35 @@ object VividExpressiveShapes {
  *
  * Todas son experimentales en material3 1.5.0-alpha: este archivo es el único
  * punto de la app que las construye.
+ *
+ * Nota: la conversión a [Shape] usa [toVividShape] y no `toShape()` de
+ * material3, porque esa extensión es `@Composable` y estas constantes viven en
+ * un `object` (y se usan dentro de `drawBehind`, que tampoco es composable).
  */
 object VividMaterialShapes {
 
     // ── Roles semánticos (lo que usa la app) ─────────────────────────────
 
     /** Galleta de 9 puntas: estados vacíos, ilustraciones de sección. */
-    val EmptyStateContainer: Shape = MaterialShapes.Cookie9Sided.toShape()
+    val EmptyStateContainer: Shape = MaterialShapes.Cookie9Sided.toVividShape()
 
     /** Explosión: confirmaciones, celebraciones, badges de logro. */
-    val Celebration: Shape = MaterialShapes.Burst.toShape()
+    val Celebration: Shape = MaterialShapes.Burst.toVividShape()
 
     /** Trébol: avatar destacado (historia nueva, cuenta recomendada). */
-    val AvatarHighlight: Shape = MaterialShapes.Clover4Leaf.toShape()
+    val AvatarHighlight: Shape = MaterialShapes.Clover4Leaf.toVividShape()
 
     /** Pastilla suave: chips y contenedores de estado. */
-    val SoftPill: Shape = MaterialShapes.Pill.toShape()
+    val SoftPill: Shape = MaterialShapes.Pill.toVividShape()
 
     /** Corazón: reventón del doble toque, badge de "más gustado". */
-    val Like: Shape = MaterialShapes.Heart.toShape()
+    val Like: Shape = MaterialShapes.Heart.toVividShape()
 
     /** Flor: logros y momentos "hero" del perfil. */
-    val Achievement: Shape = MaterialShapes.Flower.toShape()
+    val Achievement: Shape = MaterialShapes.Flower.toVividShape()
 
     /** Gema: contenido destacado / verificado. */
-    val Featured: Shape = MaterialShapes.Gem.toShape()
+    val Featured: Shape = MaterialShapes.Gem.toVividShape()
 
     // ── Polígonos para morphing (sin convertir a Shape) ──────────────────
     // rememberVividMorph() necesita el RoundedPolygon, no el Shape ya cerrado.
