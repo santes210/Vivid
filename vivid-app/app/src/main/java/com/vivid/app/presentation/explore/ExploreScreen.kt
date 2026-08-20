@@ -11,18 +11,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +55,7 @@ import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.search.SearchViewModel
 import com.vivid.app.presentation.search.UserSearchItem
+import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
@@ -173,38 +176,45 @@ fun ExploreScreen(
                     }
                 }
             } else {
-                // Filtros por tema con ButtonGroup de M3 Expressive: al pulsar,
-                // el botón se ensancha y comprime a sus vecinos (shape morph),
-                // y los que no caben se van solos a un menú de overflow — dos
-                // cosas que una LazyRow de FilterChips no hace.
-                ButtonGroup(
-                    overflowIndicator = { menuState ->
-                        FilledIconButton(
-                            onClick = {
-                                haptics.tick()
-                                // En material3 1.5.0-alpha el estado del menú
-                                // de ButtonGroup se llama isShowing (antes era
-                                // isExpanded).
-                                if (menuState.isShowing) menuState.dismiss() else menuState.show()
-                            }
-                        ) {
-                            Icon(
-                                Icons.Default.MoreHoriz,
-                                contentDescription = stringResource(R.string.explore_more_tags)
-                            )
-                        }
-                    },
+                // Filtros por tema.
+                //
+                // Aquí vivía un ButtonGroup de M3 Expressive y fue un error de
+                // diseño mío: ButtonGroup está pensado para un grupo PEQUEÑO y
+                // FIJO de acciones relacionadas (3-5), que se comprimen entre
+                // sí y mandan el sobrante a un menú. Con 8 temas (y la lista
+                // puede crecer) en un teléfono no cabe ninguno, todo se va al
+                // overflow y el cálculo de anchos del componente revienta en
+                // runtime ("ButtonGroup width cannot be unbounded" / crash por
+                // densidad). Para una lista de filtros que crece, el patrón de
+                // Material es una fila desplazable de chips.
+                //
+                // Se conservan las mejoras que sí aportaban: háptico al
+                // cambiar de filtro y formas expresivas según la selección.
+                LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ExplorePaging.TAGS.forEach { tag ->
-                        toggleableItem(
-                            checked = selectedTag == tag,
-                            onCheckedChange = {
-                                haptics.tick()
+                    items(ExplorePaging.TAGS, key = { it }) { tag ->
+                        val isSelected = selectedTag == tag
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                if (!isSelected) haptics.tick()
                                 exploreViewModel.selectTag(tag)
                             },
-                            label = "#$tag"
+                            label = { Text("#$tag") },
+                            shape = if (isSelected) {
+                                VividExpressiveShapes.ChipSelected
+                            } else {
+                                VividExpressiveShapes.ChipUnselected
+                            },
+                            leadingIcon = if (isSelected) {
+                                { Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)) }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         )
                     }
                 }
