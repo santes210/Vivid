@@ -63,6 +63,40 @@ val WORKER_PIN_VALUE = providers.gradleProperty("vividWorkerPin")
     .get()
     .trim()
 
+// Web client ID (oauth_client client_type 3) leído del google-services.json
+// que CI restaura ANTES de Gradle. Se mete en BuildConfig para que R8 /
+// shrinkResources no puedan borrar el string: AuthScreen lo buscaba por
+// getIdentifier("default_web_client_id") y el release lo eliminaba por
+// "no usado", dejando el botón en "Google Sign-In no está configurado".
+@Suppress("UNCHECKED_CAST")
+fun webClientIdFromGoogleServices(): String {
+    val jsonFile = file("google-services.json")
+    if (!jsonFile.isFile) return ""
+    return try {
+        val root = groovy.json.JsonSlurper().parse(jsonFile) as Map<*, *>
+        val clients = root["client"] as? List<*> ?: return ""
+        clients.asSequence()
+            .mapNotNull { it as? Map<*, *> }
+            .flatMap { client ->
+                (client["oauth_client"] as? List<*> ?: emptyList<Any>())
+                    .asSequence()
+                    .mapNotNull { it as? Map<*, *> }
+            }
+            .firstOrNull { (it["client_type"] as? Number)?.toInt() == 3 }
+            ?.get("client_id") as? String
+            ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+}
+
+val GOOGLE_WEB_CLIENT_ID_VALUE = webClientIdFromGoogleServices()
+logger.lifecycle(
+    "Google Web client ID: " +
+        if (GOOGLE_WEB_CLIENT_ID_VALUE.isBlank()) "MISSING"
+        else "present"
+)
+
 // =========================================================
 //  VERSIONADO (esquema MAJOR.MINOR.PATCH-build)
 // =========================================================
@@ -158,6 +192,13 @@ android {
         // Pins SHA-256 opcionales del dominio del Worker (ver arriba). Vacío
         // por defecto: sin pinning. WorkerStorageProvider los aplica con OkHttp.
         buildConfigField("String", "WORKER_PIN", "\"$WORKER_PIN_VALUE\"")
+        // Web client ID de Google (oauth_client type 3). Vacío si el JSON
+        // no lo trae: la UI muestra el aviso en vez de crashear.
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"${GOOGLE_WEB_CLIENT_ID_VALUE.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        )
     }
 
     signingConfigs {
