@@ -6,18 +6,20 @@ Uso:
     python3 scripts/validate-google-services.py [ruta/al/google-services.json]
     (por defecto: vivid-app/app/google-services.json)
 
-Comprueba las tres condiciones que el login con Google necesita y que,
-si faltan, producen el clásico "error de Google sign-in" en runtime:
+Comprueba las condiciones que el login con Google necesita:
 
-  1. Contiene la app Android com.vivid.app.
-  2. Tiene un oauth_client con client_type 3 (Web client): sin él el
-     plugin google-services NO genera `default_web_client_id` y la app
-     muestra "Google Sign-In no está configurado".
-  3. Registra al menos una huella SHA-1 (certificate_hash): si el APK se
-     firma con un keystore cuyo SHA-1 no está en Firebase Console (y por
-     tanto no aparece en el JSON), Google devuelve DEVELOPER_ERROR.
+  1. Contiene la app Android com.vivid.app.           → error (rompe el build)
+  2. Tiene un oauth_client con client_type 3 (Web).   → error (rompe el build)
+     Sin él el plugin google-services NO genera
+     `default_web_client_id` y el botón falla siempre.
+  3. Registra al menos una huella SHA-1.              → WARNING, no error
+     Muchos google-services.json de producción NO
+     traen certificate_hash aunque Google Sign-In
+     funcione (el SHA-1 vive en Firebase Console, no
+     siempre se re-exporta al JSON). Bloquear el APK
+     por eso tumba CI entero. Se avisa y se sigue.
 
-Para usarlo en CI (build-apk.yml / build.yml), después de restaurar el secret:
+Para usarlo en CI, después de restaurar el secret:
 
     - name: Validate google-services.json
       run: python3 scripts/validate-google-services.py vivid-app/app/google-services.json
@@ -41,6 +43,7 @@ def validate(path: Path) -> int:
         return 1
 
     errors = []
+    warnings = []
     clients = cfg.get("client", [])
     android = [
         c for c in clients
@@ -72,25 +75,27 @@ def validate(path: Path) -> int:
             and o.get("android_client_info", {}).get("certificate_hash")
         ]
         if not hashes:
-            errors.append(
-                "El JSON no registra ninguna huella SHA-1. Google rechaza el "
-                "sign-in (DEVELOPER_ERROR) de cualquier APK firmado con un "
-                "keystore no registrado. Agrega el SHA-1 del keystore de release "
-                "(y el del de debug) en Firebase Console → Configuración del "
-                "proyecto → Tus apps → Huellas del certificado, y vuelve a "
-                "descargar el google-services.json."
+            warnings.append(
+                "El JSON no trae huella SHA-1 (certificate_hash). Eso NO impide "
+                "compilar, pero 'Continuar con Google' falla con DEVELOPER_ERROR "
+                "si el SHA-1 del APK no está en Firebase Console → Configuración "
+                "del proyecto → Tus apps → Huellas del certificado. Agrégalo "
+                "(release y debug) y vuelve a descargar google-services.json."
             )
         else:
             print("SHA-1 registrados en el JSON (debe incluir el del keystore del APK):")
             for h in hashes:
                 print(f"  - {h}")
 
+    for w in warnings:
+        print(f"::warning::{w}")
+
     if errors:
         for e in errors:
             print(f"::error::{e}")
         return 1
 
-    print(f"OK: google-services.json apto para Google Sign-In ({PACKAGE}).")
+    print(f"OK: google-services.json apto para compilar ({PACKAGE}).")
     return 0
 
 
