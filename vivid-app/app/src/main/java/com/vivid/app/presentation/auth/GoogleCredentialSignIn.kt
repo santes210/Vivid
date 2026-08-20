@@ -3,6 +3,7 @@ package com.vivid.app.presentation.auth
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
@@ -16,6 +17,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,15 +39,21 @@ sealed interface GoogleSignInOutcome {
  * Login con Google usando **Credential Manager** (androidx.credentials).
  *
  * Sustituye a `GoogleSignIn` / `GoogleSignInOptions` de play-services-auth, que
- * Google marcó como deprecado y está apagando: la Activity de Sign-In clásica
- * dejará de funcionar y el flujo antiguo se rompería solo.
+ * Google marcó como deprecado y está apagando.
  *
- * Flujo (el recomendado por Firebase + Credential Manager):
- *  1. [GetGoogleIdOption] con `filterByAuthorizedAccounts = true`: si el usuario
- *     ya usó una cuenta con esta app, entra de un toque.
- *  2. Si no hay ninguna cuenta autorizada (NoCredentialException) se reintenta
- *     con [GetSignInWithGoogleOption], el "botón Sign in with Google", que
- *     muestra todas las cuentas del dispositivo y permite añadir una nueva.
+ * Flujo para el botón **"Continuar con Google"** (no One Tap):
+ *  1. [GetSignInWithGoogleOption]: la hoja completa de cuentas. Es lo que
+ *     documenta Google para un botón explícito y funciona para cuentas que
+ *     nunca habían autorizado esta app.
+ *  2. Si el sistema no tiene credenciales que ofrecer, se reintenta con
+ *     [GetGoogleIdOption] (`filterByAuthorizedAccounts = false`) para cubrir
+ *     dispositivos donde la hoja del botón no está disponible.
+ *
+ * El flujo anterior empezaba con `filterByAuthorizedAccounts = true` (One Tap).
+ * En cuentas nuevas eso lanza GetCredentialException (a menudo error 16 /
+ * "Cannot find a matching credential") en vez de NoCredentialException, y el
+ * fallback a la hoja completa NUNCA corría: exactamente el "error de Google
+ * sign-in" en cuentas nuevas.
  *
  * El ID token resultante se cambia por una sesión de Firebase en
  * `AuthViewModel.loginWithGoogle()` (GoogleAuthProvider.getCredential).
@@ -57,6 +65,8 @@ sealed interface GoogleSignInOutcome {
  */
 object GoogleCredentialSignIn {
 
+    private const val TAG = "GoogleCredentialSignIn"
+
     /** Scope propio para el "clear" al cerrar sesión (fire and forget). */
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -66,41 +76,29 @@ object GoogleCredentialSignIn {
      */
     suspend fun requestIdToken(context: Context): GoogleSignInOutcome {
         val activity = context.findActivity()
-            ?: return GoogleSignInOutcome.Failure(
-                "No se pudo abrir el selector de cuentas de Google."
-            )
+            ?: return GoogleSignInOutcome.Failure(GoogleSignInMessages.NO_ACTIVITY)
 
         val serverClientId = webClientIdOrEmpty(context)
         if (serverClientId.isBlank()) {
-            return GoogleSignInOutcome.Failure(
-                "Google Sign-In no está configurado: agrega tu Web client ID en " +
-                    "Firebase y actualiza google-services.json."
-            )
+            return GoogleSignInOutcome.Failure(GoogleSignInMessages.MISSING_WEB_CLIENT)
         }
 
         val credentialManager = CredentialManager.create(activity)
 
-        // 1) Cuentas ya autorizadas en esta app: login en un toque.
-        val authorizedAccounts = GetGoogleIdOption.Builder()
-            .setServerClientId(serverClientId)
-            .setFilterByAuthorizedAccounts(true)
-            // Sin auto-select: el botón siempre muestra el selector para que se
-            // pueda entrar con otra cuenta (el flujo antiguo hacía signOut()
-            // antes de abrir el intent justo por esto).
-            .setAutoSelectEnabled(false)
-            .build()
-
-        // requestCredential devuelve null cuando no hay ninguna credencial que ofrecer.
-        requestCredential(credentialManager, activity, authorizedAccounts)
+        // 1) Botón "Continuar con Google": hoja completa de cuentas.
+        val signInButton = GetSignInWithGoogleOption.Builder(serverClientId).build()
+        requestCredential(credentialManager, activity, signInButton)
             ?.let { return it }
 
-        // 2) Sin cuentas autorizadas: hoja completa "Sign in with Google".
-        val allAccounts = GetSignInWithGoogleOption.Builder(serverClientId).build()
+        // 2) Fallback: bottom sheet con TODAS las cuentas del dispositivo
+        //    (no solo las ya autorizadas: las cuentas nuevas tienen que verse).
+        val allAccounts = GetGoogleIdOption.Builder()
+            .setServerClientId(serverClientId)
+            .setFilterByAuthorizedAccounts(false)
+            .setAutoSelectEnabled(false)
+            .build()
         return requestCredential(credentialManager, activity, allAccounts)
-            ?: GoogleSignInOutcome.Failure(
-                "No hay ninguna cuenta de Google disponible en este dispositivo. " +
-                    "Agrega una en Ajustes y vuelve a intentarlo."
-            )
+            ?: GoogleSignInOutcome.Failure(GoogleSignInMessages.NO_ACCOUNTS)
     }
 
     /**
@@ -142,8 +140,8 @@ object GoogleCredentialSignIn {
      * Lanza una petición concreta.
      *
      * Devuelve `null` (y solo en ese caso) cuando el sistema no tiene ninguna
-     * credencial que ofrecer, para que el llamante pueda reintentar con la hoja
-     * completa de cuentas.
+     * credencial que ofrecer, para que el llamante pueda reintentar con la otra
+     * hoja de cuentas. Cancelar o un error real NO devuelven null.
      */
     private suspend fun requestCredential(
         credentialManager: CredentialManager,
@@ -156,12 +154,28 @@ object GoogleCredentialSignIn {
 
         return try {
             credentialManager.getCredential(activity, request).credential.toOutcome()
-        } catch (e: NoCredentialException) {
-            null
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: GetCredentialCancellationException) {
             GoogleSignInOutcome.Cancelled
+        } catch (e: NoCredentialException) {
+            Log.i(TAG, "Sin credenciales para ${option.javaClass.simpleName}, se reintenta")
+            null
         } catch (e: GetCredentialException) {
-            GoogleSignInOutcome.Failure(e.message ?: "No se pudo iniciar sesión con Google.")
+            if (GoogleSignInMessages.isNoCredentialFailure(e.type, e.message)) {
+                Log.i(TAG, "Sin credenciales (${e.type}) para ${option.javaClass.simpleName}, se reintenta")
+                null
+            } else {
+                Log.e(TAG, "GetCredential falló type=${e.type} option=${option.javaClass.simpleName}", e)
+                GoogleSignInOutcome.Failure(
+                    GoogleSignInMessages.fromCredentialManager(e.type, e.message)
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "GetCredential inesperado option=${option.javaClass.simpleName}", e)
+            GoogleSignInOutcome.Failure(
+                GoogleSignInMessages.fromCredentialManager(e.javaClass.name, e.message)
+            )
         }
     }
 
@@ -173,15 +187,16 @@ object GoogleCredentialSignIn {
                 val googleCredential = GoogleIdTokenCredential.createFrom(data)
                 val idToken = googleCredential.idToken
                 if (idToken.isBlank()) {
-                    GoogleSignInOutcome.Failure("Google no devolvió un token válido.")
+                    GoogleSignInOutcome.Failure(GoogleSignInMessages.EMPTY_TOKEN)
                 } else {
                     GoogleSignInOutcome.Success(idToken)
                 }
             } catch (e: GoogleIdTokenParsingException) {
-                GoogleSignInOutcome.Failure("Google devolvió una respuesta que no se pudo leer.")
+                Log.e(TAG, "No se pudo parsear el ID token de Google", e)
+                GoogleSignInOutcome.Failure(GoogleSignInMessages.UNREADABLE_TOKEN)
             }
         }
-        return GoogleSignInOutcome.Failure("Google devolvió un tipo de credencial inesperado.")
+        return GoogleSignInOutcome.Failure(GoogleSignInMessages.UNEXPECTED_CREDENTIAL)
     }
 
     /** Credential Manager necesita la Activity, no un Context cualquiera. */
