@@ -28,8 +28,8 @@ object VideoCacheManager {
 
     private const val TAG = "VideoCacheManager"
     private const val CACHE_DIR_NAME = "vivid_video_cache"
-    private const val MAX_CACHE_BYTES = 500L * 1024L * 1024L // 500 MB
-    private const val CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L // 7 días
+    private const val MAX_CACHE_BYTES = 500L * 1024L * 1024L
+    private const val CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
 
     @Volatile
     private var simpleCache: SimpleCache? = null
@@ -37,16 +37,13 @@ object VideoCacheManager {
     @Volatile
     private var ttlChecked = false
 
-    /**
-     * Verifica (una vez por sesión) que el caché no tenga más de 7 días.
-     * Si caducó, se borra para que la próxima reproducción lo regenere
-     * (misma política que la caducidad de las URLs firmadas de B2).
-     */
     private fun ensureFreshCache(context: Context) {
         if (ttlChecked) return
         ttlChecked = true
+
         val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
         if (!cacheDir.exists()) return
+
         val lastModified = cacheDir.lastModified()
         if (System.currentTimeMillis() - lastModified > CACHE_TTL_MS) {
             android.util.Log.d(TAG, "Caché de video con más de 7 días, limpiando para regenerar")
@@ -54,54 +51,63 @@ object VideoCacheManager {
         }
     }
 
-    /** Devuelve el SimpleCache compartido (singleton por proceso). */
+    /** Devuelve el SimpleCache compartido por la app. */
     fun getCache(context: Context): SimpleCache {
         ensureFreshCache(context)
         simpleCache?.let { return it }
+
         synchronized(this) {
             simpleCache?.let { return it }
+
             val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
             val evictor = LeastRecentlyUsedCacheEvictor(MAX_CACHE_BYTES)
-            // Constructor con DatabaseProvider (el de 2 args está deprecado en
-            // media3 1.4.x). StandaloneDatabaseProvider crea su propia DB SQLite
-            // para el índice del caché.
-            return SimpleCache(cacheDir, evictor, StandaloneDatabaseProvider(context))
-                .also { simpleCache = it }
+
+            return SimpleCache(
+                cacheDir,
+                evictor,
+                StandaloneDatabaseProvider(context)
+            ).also { simpleCache = it }
         }
     }
 
-    /** True si la URL es remota (http/https) y por tanto cacheable. */
+    /** True si la URL es remota y por tanto se puede cachear. */
     fun isCacheable(url: String): Boolean =
         url.startsWith("http://", ignoreCase = true) ||
             url.startsWith("https://", ignoreCase = true)
 
     /**
-     * Clave de caché que ignora el query string.
-     *
-     * Backblaze B2 emite un token de autorización NUEVO cada vez que se firma
-     * una URL (`.../file/bucket/key?Authorization=...`). Con la clave por
-     * defecto (URL completa), el token distinto hacía que el SimpleCache
-     * fallara el lookup y se re-descargara el video completo en cada sesión.
-     * Ignorando el query, el mismo archivo cacheado se reutiliza mientras su
-     * contenido no cambie (las claves B2 son inmutables por path).
-     *
-     * Se corta el string a mano en vez de usar Uri.Builder.clearQuery(),
-     * que solo existe desde API 30 (minSdk es 26).
+     * Clave que ignora el Authorization de las URLs firmadas de B2.
      */
-    private val strippedQueryCacheKeyFactory = androidx.media3.datasource.cache.CacheKeyFactory { uri ->
-        val raw = uri.toString()
-        val queryIndex = raw.indexOf('?')
-        if (queryIndex >= 0) raw.substring(0, queryIndex) else raw
+    private fun cacheKeyFor(url: String): String = url.substringBefore('?')
+
+    private val strippedQueryCacheKeyFactory =
+        androidx.media3.datasource.cache.CacheKeyFactory { uri ->
+            cacheKeyFor(uri.toString())
+        }
+
+    /**
+     * Elimina del dispositivo el recurso reproducido por ExoPlayer.
+     *
+     * Solo toca cacheDir de Vivid; nunca Fotos/Galería ni almacenamiento externo.
+     */
+    fun removeCachedMedia(context: Context, uri: String) {
+        if (!isCacheable(uri)) return
+        runCatching {
+            getCache(context).removeResource(cacheKeyFor(uri))
+        }
     }
 
-    /** Crea una MediaSource con caché para [uri]. */
+    /** Crea una MediaSource usando caché. */
     fun buildCachedMediaSource(context: Context, uri: String): MediaSource {
         val cache = getCache(context)
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
 
-        val upstreamFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        val upstreamFactory = DefaultDataSource.Factory(
+            context,
+            httpDataSourceFactory
+        )
 
         val cacheDataSourceFactory = CacheDataSource.Factory()
             .setCache(cache)
@@ -113,17 +119,17 @@ object VideoCacheManager {
             .createMediaSource(MediaItem.fromUri(uri))
     }
 
-    /** Tamaño del directorio de caché de video en bytes. */
+    /** Tamaño total del caché de video/audio. */
     fun cacheSizeBytes(context: Context): Long {
         val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
         if (!cacheDir.exists()) return 0L
-        return cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+        return cacheDir.walkTopDown()
+            .filter { it.isFile }
+            .sumOf { it.length() }
     }
 
-    /**
-     * Borra TODO el caché de video. Se llama desde el botón "Borrar caché".
-     * Libera el SimpleCache y elimina el directorio.
-     */
+    /** Borra todo el caché de video/audio privado de Vivid. */
     fun clearCache(context: Context) {
         synchronized(this) {
             try {
@@ -132,7 +138,12 @@ object VideoCacheManager {
             }
             simpleCache = null
         }
+
         val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
-        runCatching { if (cacheDir.exists()) cacheDir.deleteRecursively() }
+        runCatching {
+            if (cacheDir.exists()) {
+                cacheDir.deleteRecursively()
+            }
+        }
     }
 }
