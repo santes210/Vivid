@@ -1,10 +1,9 @@
 package com.vivid.app.core.coil
 
 import android.content.Context
-import coil.ImageLoader
-import coil.disk.DiskCache
-import coil.memory.MemoryCache
-import coil.request.CachePolicy
+import coil3.ImageLoader
+import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,8 +20,8 @@ object VividImageLoaderModule {
     fun provideImageLoader(@ApplicationContext context: Context): ImageLoader {
         return ImageLoader.Builder(context)
             .memoryCache {
-                MemoryCache.Builder(context)
-                    .maxSizePercent(0.25)
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.25)
                     .build()
             }
             .diskCache {
@@ -31,7 +30,8 @@ object VividImageLoaderModule {
                     .maxSizeBytes(250L * 1024 * 1024) // 250MB
                     .build()
             }
-            .respectCacheHeaders(false)
+            // Coil 3 no respeta Cache-Control por defecto, que conserva la
+            // política de caché local previa (`respectCacheHeaders(false)`).
             .crossfade(true)
             .build()
     }

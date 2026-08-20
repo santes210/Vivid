@@ -11,7 +11,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 
 @Composable
 fun PostDetailScreen(postId: String, onBack: () -> Unit) {

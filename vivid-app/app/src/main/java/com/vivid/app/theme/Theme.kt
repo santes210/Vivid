@@ -19,7 +19,7 @@ import androidx.core.view.WindowCompat
 import com.vivid.app.util.LocaleManager
 
 /**
- * Theme principal Vivid — Material You 3 Expressive (M3 1.4.0 estable).
+ * Theme principal Vivid — Material You 3 Expressive (gestionado por el Compose BOM).
  *
  *   - dynamicColor: true → toma colores del wallpaper (Android 12+)
  *   - dynamicColor: false → usa la paleta de marca VividBrandColors
@@ -35,9 +35,9 @@ import com.vivid.app.util.LocaleManager
  * regenerar la paleta dinámica en cada recomposición (importante en gama baja).
  *
  * Versiones (controlado, sin alpha):
- *   - material3: 1.4.0 estable
- *   - composeBom: 2025.04.01 compatible
- *   - Kotlin/AGP sin cambios simultáneos
+ *   - Material 3: versión alineada por Compose BOM
+ *   - composeBom: 2026.08.00 (Compose 1.12)
+ *   - Kotlin 2.4 + AGP 9.1.1 / API 37
  */
 @Composable
 fun VividTheme(

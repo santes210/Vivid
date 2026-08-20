@@ -29,7 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.vivid.app.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.util.formatVoiceDuration
 import java.text.SimpleDateFormat

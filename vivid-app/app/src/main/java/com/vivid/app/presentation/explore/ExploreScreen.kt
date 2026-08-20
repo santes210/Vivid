@@ -48,7 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.vivid.app.R
 import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel

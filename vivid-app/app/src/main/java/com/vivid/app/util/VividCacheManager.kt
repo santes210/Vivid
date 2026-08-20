@@ -1,7 +1,7 @@
 package com.vivid.app.util
 
 import android.content.Context
-import coil.ImageLoader
+import coil3.ImageLoader
 import com.vivid.app.data.local.VividDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -120,7 +120,7 @@ object VividCacheManager {
     /**
      * Limpia TODOS los cachés: Room, Coil, archivos temporales y resetea timestamps.
      */
-    @OptIn(coil.annotation.ExperimentalCoilApi::class)
+    @OptIn(coil3.annotation.ExperimentalCoilApi::class)
     suspend fun clearAllCaches(
         context: Context,
         database: VividDatabase,

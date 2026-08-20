@@ -51,7 +51,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
