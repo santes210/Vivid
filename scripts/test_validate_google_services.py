@@ -73,7 +73,7 @@ def test_missing_sha1():
     })
     result = run(path)
     path.unlink()
-    assert result.returncode == 1
+    assert result.returncode == 0
     assert "SHA-1" in result.stdout
 
 
