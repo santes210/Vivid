@@ -119,11 +119,24 @@ package com.vivid.app.theme
  * es que tiene una dependencia de más.
  *
  * ---
- * ## Verificación pendiente
+ * ## Estado de verificación
  *
- * Estos cambios se escribieron sin poder ejecutar Gradle. Antes de publicar:
+ * Verificado en CI (PR #42, workflow `Build Vivid APK`): `assembleDebug` y
+ * `lintVitalRelease` en verde con material3 [MATERIAL3_VERSION].
+ *
+ * Dos trampas que costó descubrir y que conviene revisar en cada subida de
+ * alpha, porque son cambios silenciosos de API:
+ *
+ *  1. **`ButtonGroup`**: el estado del menú de overflow se llama `isShowing`.
+ *     Se llamaba `isExpanded` y lo renombraron en 1.5.0-alpha06.
+ *  2. **`RoundedPolygon.toShape()` de material3 es `@Composable`**, así que no
+ *     sirve para constantes de un `object` ni dentro de `drawBehind`. Por eso
+ *     existe `theme/PolygonShapes.kt` (`toVividShape()`), que además normaliza
+ *     con `calculateBounds()` en vez de asumir el espacio del polígono.
+ *
+ * Al cambiar de versión de material3:
  * ```
- * cd vivid-app && ./gradlew :app:assembleDebug && ./gradlew :app:lintDebug
+ * cd vivid-app && ./gradlew :app:assembleDebug && ./gradlew :app:lintVitalRelease
  * ```
  */
 object VividDesignSystem {
