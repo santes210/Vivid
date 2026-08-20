@@ -54,7 +54,7 @@ jobs:
 
           echo "Cloudflare Worker configurado correctamente."
 
-            # google-services.json ya NO está versionado: se inyecta desde el
+      # google-services.json ya NO está versionado: se inyecta desde el
       # secret GOOGLE_SERVICES_JSON_BASE64. Sin él, el release NO compila
       # a propósito (un APK de producción no debe llevar credenciales falsas).
       - name: Restore google-services.json
@@ -73,6 +73,10 @@ jobs:
             exit 1
           }
           echo "google-services.json restaurado desde el secret."
+
+      - name: Validate google-services.json for Google Sign-In
+        shell: bash
+        run: python3 scripts/validate-google-services.py vivid-app/app/google-services.json
 
       - name: Guard packed music is compressed
         shell: bash
@@ -236,6 +240,9 @@ jobs:
           echo "apk_path=$OUTPUT_APK" >> "$GITHUB_OUTPUT"
           echo "apk_bytes=$(wc -c < "$OUTPUT_APK")" >> "$GITHUB_OUTPUT"
           ls -lh "$OUTPUT_APK"
+
+          echo "Huella del APK (debe coincidir con Firebase Console → SHA-1):"
+          python3 scripts/apk-sha1.py "$OUTPUT_APK"
 
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
