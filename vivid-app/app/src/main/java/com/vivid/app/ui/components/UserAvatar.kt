@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.vivid.app.ui.motion.VividSharedKeys
+import com.vivid.app.ui.motion.vividSharedElement
 
 /**
  * List-safe avatar: Coil + URL only.
@@ -22,6 +24,12 @@ import coil3.compose.AsyncImage
  * Decoding `avatarBase64` with [android.graphics.BitmapFactory] inside
  * LazyColumn / grids pins full-size bitmaps on the heap and causes jank.
  * Callers should pass the remote URL (already cached by Coil).
+ *
+ * Pasando [userId] el avatar participa en la transición compartida
+ * avatar → perfil: el mismo círculo viaja del feed (o del chat, o del
+ * buscador) hasta la cabecera del perfil en vez de aparecer de golpe.
+ * Si el destino no está dentro de un `SharedTransitionLayout`, el modificador
+ * se ignora sin romper nada.
  */
 @Composable
 fun UserAvatar(
@@ -29,9 +37,15 @@ fun UserAvatar(
     name: String,
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
-    contentDescription: String? = name
+    contentDescription: String? = name,
+    userId: String? = null
 ) {
-    val shapeModifier = modifier.size(size).clip(CircleShape)
+    val sharedModifier = if (userId.isNullOrBlank()) {
+        modifier
+    } else {
+        modifier.vividSharedElement(VividSharedKeys.avatar(userId))
+    }
+    val shapeModifier = sharedModifier.size(size).clip(CircleShape)
     val letter = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     if (imageUrl.isNotBlank()) {
         AsyncImage(

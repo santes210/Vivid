@@ -17,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -28,7 +27,10 @@ import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.components.DoubleTapLikeBox
 import com.vivid.app.ui.components.UserAvatar
+import com.vivid.app.ui.components.VividLikeButton
+import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -168,12 +170,23 @@ internal fun InlineFollowButton(
 // ── Post author avatar ──
 
 @Composable
-internal fun PostAuthorAvatar(post: PostData) {
+internal fun PostAuthorAvatar(
+    post: PostData,
+    onClick: (() -> Unit)? = null
+) {
     UserAvatar(
         imageUrl = post.userProfilePicture,
         name = post.username,
+        // El avatar es el ancla de la transición compartida hacia el perfil:
+        // el mismo círculo crece hasta la cabecera en vez de cortar a negro.
+        userId = post.userId,
         size = 44.dp,
-        contentDescription = stringResource(R.string.avatar_description)
+        contentDescription = stringResource(R.string.avatar_description),
+        modifier = if (onClick == null) {
+            Modifier
+        } else {
+            Modifier.clip(CircleShape).clickable(onClick = onClick)
+        }
     )
 }
 
@@ -220,7 +233,7 @@ fun PostImage(
                 }
 
                 when {
-                    isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    isLoading -> LoadingIndicator()
                     hasError || bitmap == null -> Icon(
                         Icons.Default.BrokenImage,
                         contentDescription = stringResource(R.string.feed_loading_image_error),
@@ -320,6 +333,7 @@ internal fun PostCard(
     isFollowingAuthor: Boolean,
     hasPendingRequestToAuthor: Boolean,
     onOpenPost: (PostData) -> Unit,
+    onOpenAuthorProfile: (String) -> Unit = {},
     onOpenComments: (PostData) -> Unit,
     onOpenDetails: (PostData) -> Unit,
     onEditPost: (PostData) -> Unit,
@@ -333,15 +347,21 @@ internal fun PostCard(
     onMusicUrlExpired: (PostData) -> Unit = {},
     onVideoUrlExpired: (PostData) -> Unit = {}
 ) {
+    val haptics = rememberVividHaptics()
+
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Header ──
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PostAuthorAvatar(post)
+            PostAuthorAvatar(post) { onOpenAuthorProfile(post.userId) }
             Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onOpenAuthorProfile(post.userId) }
+            ) {
                 Text(post.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                 Text(formatTimestamp(post.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -350,13 +370,21 @@ internal fun PostCard(
                 InlineFollowButton(
                     isFollowing = isFollowingAuthor,
                     hasPendingRequest = hasPendingRequestToAuthor,
-                    onClick = { onToggleFollow(post.userId) }
+                    onClick = {
+                        haptics.toggle(!isFollowingAuthor)
+                        onToggleFollow(post.userId)
+                    }
                 )
             }
 
             var showMenu by remember { mutableStateOf(false) }
             Box {
-                IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.feed_more_options)) }
+                IconButton(
+                    onClick = {
+                        haptics.longPress()
+                        showMenu = true
+                    }
+                ) { Icon(Icons.Default.MoreVert, stringResource(R.string.feed_more_options)) }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     if (post.userId == currentUserId) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.feed_edit)) }, onClick = { showMenu = false; onEditPost(post) }, leadingIcon = { Icon(Icons.Default.Edit, null) })
@@ -376,7 +404,13 @@ internal fun PostCard(
         }
 
         // ── Media content ──
-        Box(modifier = Modifier.fillMaxWidth().clickable { onOpenPost(post) }) {
+        // Doble toque = like (nunca deslike) + corazón; un toque abre el post.
+        DoubleTapLikeBox(
+            isLiked = post.isLiked,
+            onLike = { onToggleLike(post) },
+            onTap = { onOpenPost(post) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             when {
                 post.isVideo && post.videoUrl.isNotBlank() -> PostVideoPlayer(
                     videoUrl = post.videoUrl,
@@ -400,26 +434,33 @@ internal fun PostCard(
 
         // ── Actions ──
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onToggleLike(post) }) {
-                Icon(
-                    if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    stringResource(R.string.feed_like),
-                    tint = if (post.isLiked) Color.Red else MaterialTheme.colorScheme.onSurface
-                )
-            }
+            VividLikeButton(
+                isLiked = post.isLiked,
+                onToggle = { onToggleLike(post) }
+            )
             IconButton(onClick = { onOpenComments(post) }) { Icon(Icons.Default.ChatBubbleOutline, stringResource(R.string.feed_comment)) }
             IconButton(onClick = { onOpenDetails(post) }) { Icon(Icons.Default.Info, stringResource(R.string.feed_details)) }
 
             Spacer(Modifier.weight(1f))
 
-            IconButton(onClick = { onToggleSave(post) }) {
+            IconButton(
+                onClick = {
+                    haptics.toggle(!post.isSaved)
+                    onToggleSave(post)
+                }
+            ) {
                 Icon(
                     if (post.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                     stringResource(R.string.feed_save),
                     tint = if (post.isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
             }
-            IconButton(onClick = { onShare(post) }) { Icon(Icons.Default.Share, stringResource(R.string.feed_share)) }
+            IconButton(
+                onClick = {
+                    haptics.confirm()
+                    onShare(post)
+                }
+            ) { Icon(Icons.Default.Share, stringResource(R.string.feed_share)) }
         }
 
         // ── Likes count ──

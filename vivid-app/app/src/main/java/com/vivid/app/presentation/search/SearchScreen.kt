@@ -176,6 +176,8 @@ fun UserSearchItem(
         UserAvatar(
             imageUrl = user.avatarUrl,
             name = user.displayName,
+            // Ancla de la transición avatar → perfil.
+            userId = user.uid,
             size = 52.dp
         )
 

@@ -2,15 +2,17 @@ package com.vivid.app.theme
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.toShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
 /**
- * Material You 3 Expressive — Shape system (formas con propósito).
+ * Material 3 Expressive — Shape system (formas con propósito).
  *
- * Inspirado en M3 Expressive (2025): las formas comunican jerarquía,
- * no solo “todo redondeado”. Cada radio tiene un rol semántico.
+ * Las formas comunican jerarquía, no solo “todo redondeado”. Cada radio
+ * tiene un rol semántico.
  *
  * Jerarquía Vivid:
  *  - Campos (TextField, Search): 16–20dp → cómodo al tacto, focus cambia a 20dp
@@ -70,4 +72,36 @@ object VividExpressiveShapes {
     val ChipUnselected: Shape = RoundedCornerShape(16.dp)
     val SelectedContainer: Shape = RoundedCornerShape(20.dp)
     val SelectedContainerActive: Shape = RoundedCornerShape(28.dp)
+}
+
+/**
+ * Formas poligonales de Material 3 Expressive ([MaterialShapes]).
+ *
+ * Son `RoundedPolygon` reales de la librería (androidx.graphics.shapes), no
+ * `RoundedCornerShape` disfrazados: se pueden interpolar entre sí y son las
+ * mismas que usan `LoadingIndicator` o los avatares de Material.
+ *
+ * Uso en Vivid:
+ *   - [EmptyStateContainer]: el "hueco" de los estados vacíos deja de ser un
+ *     cuadrado redondeado genérico.
+ *   - [Celebration]: confirmaciones y momentos positivos (perfil verificado,
+ *     publicación subida).
+ *   - [AvatarHighlight]: avatar de historia no vista / destacado.
+ *
+ * Todas son experimentales en material3 1.5.0-alpha: este archivo es el único
+ * punto de la app que las construye, así que una ruptura de API se arregla
+ * aquí y en ningún otro sitio.
+ */
+object VividMaterialShapes {
+    /** Galleta de 9 puntas: estados vacíos, ilustraciones de sección. */
+    val EmptyStateContainer: Shape = MaterialShapes.Cookie9Sided.toShape()
+
+    /** Explosión: confirmaciones, celebraciones, badges de logro. */
+    val Celebration: Shape = MaterialShapes.Burst.toShape()
+
+    /** Trébol: avatar destacado (historia nueva, cuenta recomendada). */
+    val AvatarHighlight: Shape = MaterialShapes.Clover4Leaf.toShape()
+
+    /** Pastilla suave: chips y contenedores de estado. */
+    val SoftPill: Shape = MaterialShapes.Pill.toShape()
 }

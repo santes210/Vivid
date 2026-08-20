@@ -51,6 +51,7 @@ fun FeedScreen(
     onOpenMessages: () -> Unit,
     onOpenRequests: () -> Unit = {},
     onOpenProfile: () -> Unit,
+    onOpenUserProfile: (userId: String) -> Unit = {},
     onOpenStoryViewer: (storyId: String) -> Unit = {},
     onCreateStory: () -> Unit = {}
 ) {
@@ -483,6 +484,7 @@ fun FeedScreen(
                                     isFollowingAuthor = post.userId in followingUserIds,
                                     hasPendingRequestToAuthor = post.userId in pendingFollowUserIds,
                                     onOpenPost = onOpenPost,
+                                    onOpenAuthorProfile = onOpenUserProfile,
                                     onOpenComments = onOpenComments,
                                     onOpenDetails = onOpenDetails,
                                     onEditPost = onEditPost,
@@ -500,7 +502,7 @@ fun FeedScreen(
                             if (isLoadingMore) {
                                 item {
                                     Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(modifier = Modifier.size(32.dp), color = MaterialTheme.colorScheme.primary)
+                                        LoadingIndicator(modifier = Modifier.size(38.dp))
                                     }
                                 }
                             }

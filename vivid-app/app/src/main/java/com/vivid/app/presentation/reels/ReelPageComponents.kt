@@ -41,7 +41,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
+import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.PushSender
@@ -93,6 +95,7 @@ internal fun ReelPage(
     val context = LocalContext.current
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val animationsEnabled = LocalVividAnimationsEnabled.current
+    val haptics = rememberVividHaptics()
     val firestore = remember { FirebaseFirestore.getInstance() }
     val scope = rememberCoroutineScope()
     val followRepository = remember { FollowRepository(firestore, FirebaseAuth.getInstance()) }
@@ -188,6 +191,7 @@ internal fun ReelPage(
                 if (now - lastTapTime < 300) {
                     // Doble tap = like
                     if (!isLiked) {
+                        haptics.confirm()
                         isLiked = true
                         likeCount++
                         showHeartAnimation = true
@@ -199,6 +203,7 @@ internal fun ReelPage(
                                 }
                         }
                     } else {
+                        haptics.tick()
                         showHeartAnimation = true
                     }
                 } else {
@@ -252,8 +257,9 @@ internal fun ReelPage(
             Icon(
                 Icons.Default.Favorite,
                 contentDescription = "Like",
-                tint = Color.Red.copy(alpha = 0.85f),
-                modifier = Modifier.size(84.dp)
+                // Acento de marca armonizado, no un Color.Red suelto.
+                tint = LocalVividAccents.current.like.copy(alpha = 0.9f),
+                modifier = Modifier.size(96.dp)
             )
         }
 
@@ -334,10 +340,11 @@ internal fun ReelPage(
                 ReelActionButton(
                     icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = "Like",
-                    tint = if (isLiked) Color.Red else Color.White,
+                    tint = if (isLiked) LocalVividAccents.current.like else Color.White,
                     count = if (SettingsManager.hideLikesCount) "—" else likeCount.toString(),
                     onClick = {
                         val newLiked = !isLiked
+                        haptics.toggle(newLiked)
                         isLiked = newLiked
                         likeCount = (likeCount + if (newLiked) 1 else -1).coerceAtLeast(0)
                         if (newLiked) showHeartAnimation = true
@@ -355,13 +362,19 @@ internal fun ReelPage(
                     contentDescription = "Comentarios",
                     tint = Color.White,
                     count = commentCount.toString(),
-                    onClick = { showComments = true }
+                    onClick = {
+                        haptics.tick()
+                        showComments = true
+                    }
                 )
                 ReelActionButton(
                     icon = Icons.Default.Share,
                     contentDescription = "Compartir",
                     tint = Color.White,
-                    onClick = { shareReel(context = context, reel = reel) }
+                    onClick = {
+                        haptics.confirm()
+                        shareReel(context = context, reel = reel)
+                    }
                 )
                 ReelActionButton(
                     icon = if (isMuted) Icons.Default.VolumeOff else Icons.Default.MusicNote,

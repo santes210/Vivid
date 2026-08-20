@@ -19,11 +19,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividShapes
 
 /**
- * Estados unificados Material You 3 Expressive — formas chidas con propósito.
- * 28dp hero cards, 16dp squircle, tonal hierarchy, sin sombras arbitrarias.
+ * Estados unificados de Vivid (cargando / vacío / error / esqueleto).
+ *
+ * Usan componentes reales de Material 3 Expressive:
+ *   - `LoadingIndicator` y `ContainedLoadingIndicator`, que muestran una
+ *     secuencia de polígonos que se transforman entre sí. Material los
+ *     recomienda sobre `CircularProgressIndicator` para esperas cortas
+ *     (< 5 s), que es el 95 % de lo que hace esta app.
+ *   - `MaterialShapes` para el contenedor del estado vacío
+ *     ([VividMaterialShapes.EmptyStateContainer]).
  */
 
 @Composable
@@ -37,11 +45,7 @@ fun VividLoadingState(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp),
-                strokeWidth = 3.dp
-            )
+            LoadingIndicator(modifier = Modifier.size(48.dp))
             if (showMessage) {
                 Spacer(Modifier.height(16.dp))
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -68,9 +72,10 @@ fun VividEmptyState(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // Squircle expresivo 32dp hero + tonal primaryContainer
             Surface(
-                shape = VividExpressiveShapes.HeroCardLarge, // 32dp
+                // Polígono real de MaterialShapes, no un cuadrado redondeado.
+                shape = VividMaterialShapes.EmptyStateContainer,
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(96.dp)
+                modifier = Modifier.size(104.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(44.dp))

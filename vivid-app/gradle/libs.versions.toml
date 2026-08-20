@@ -7,6 +7,15 @@ agp = "9.1.1"
 # fuente de verdad de los plugins Compose y Serialization.
 kotlin = "2.4.10"
 composeBom = "2026.08.00"
+# Material 3 Expressive (MotionScheme, MaterialShapes, LoadingIndicator,
+# ButtonGroup, FloatingToolbar, WideNavigationRail, MaterialExpressiveTheme)
+# NO existe en material3 estable: 1.4.0 es baseline M3. Las APIs viven en la
+# rama 1.5.0-alpha, así que se fija a mano y se saca del control del BoM.
+# Al ser alpha, subir de versión puede romper firmas: los usos están
+# concentrados en theme/Shape.kt, theme/Theme.kt, theme/Motion.kt,
+# navigation/VividNavigation.kt, ui/components/VividStates.kt,
+# presentation/explore/ExploreScreen.kt y presentation/feed/PostDetailScreen.kt.
+material3 = "1.5.0-alpha26"
 coreKtx = "1.15.0"
 coreSplashscreen = "1.0.1"
 lifecycleRuntimeKtx = "2.8.7"
@@ -39,8 +48,9 @@ androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-# Material 3 queda sin versión explícita para que la gobierne el Compose BOM.
-androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+# Material 3 con versión explícita (ver nota de `material3` arriba): el BoM
+# resolvería 1.4.x, que no trae las APIs Expressive.
+androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
 # Coil 3 cambió tanto sus coordenadas Maven como el paquete Kotlin a coil3.

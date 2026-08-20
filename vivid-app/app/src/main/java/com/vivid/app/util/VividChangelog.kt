@@ -20,6 +20,19 @@ object VividChangelog {
 
     val releases: List<VividRelease> = listOf(
         VividRelease(
+            version = "2.4.0",
+            notes = listOf(
+                "Nueva identidad visual: paleta Vivid Sunset (magenta y ámbar sobre neutros cálidos) cuando no usas color dinámico.",
+                "El corazón, el anillo de historias y el resto de acentos ahora se adaptan al color de tu fondo de pantalla sin dejar de ser reconocibles.",
+                "Al abrir una foto del grid, la miniatura crece hasta la pantalla completa; al tocar un avatar, viaja hasta el perfil.",
+                "Tocar el avatar de alguien en el feed ahora abre su perfil.",
+                "Doble toque sobre una foto para dar like, con corazón animado.",
+                "Respuesta háptica en likes, seguir, enviar y cambio de pestaña (se puede apagar en Ajustes → Apariencia).",
+                "Indicadores de carga y filtros de Explorar renovados con los componentes nuevos de Material 3 Expressive.",
+                "En tabletas, el menú lateral se puede expandir para ver las etiquetas."
+            )
+        ),
+        VividRelease(
             version = "2.3.0",
             notes = listOf(
                 "Idioma (español/inglés) y tamaño de fuente desde Ajustes → Apariencia.",

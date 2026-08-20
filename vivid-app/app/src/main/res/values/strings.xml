@@ -169,6 +169,11 @@
     <!-- ========== Explorar / búsqueda ========== -->
     <string name="explore_title">Explorar</string>
     <string name="explore_empty">No hay publicaciones para #%1$s</string>
+    <string name="explore_more_tags">Más temas</string>
+    <string name="cd_post_detail_image">Imagen de la publicación</string>
+    <string name="post_detail_open_profile">Ver perfil</string>
+    <string name="settings_haptics_title">Respuesta háptica</string>
+    <string name="settings_haptics_desc">Vibración breve al dar like, seguir o cambiar de pestaña</string>
     <string name="explore_error">No se pudieron cargar las publicaciones.</string>
     <string name="search_people_label">Buscar personas</string>
     <string name="search_min_chars">Escribe al menos 2 letras para buscar personas.</string>
