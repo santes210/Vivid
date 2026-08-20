@@ -119,19 +119,34 @@ object GoogleCredentialSignIn {
     }
 
     /**
-     * Web client ID de Google (`default_web_client_id`).
+     * Web client ID de Google.
      *
-     * Lo genera el plugin google-services durante el build a partir del
-     * `oauth_client` con `client_type 3` de google-services.json. Se lee por
-     * nombre (Resources.getIdentifier) porque el recurso puede NO existir en
-     * builds que usan un google-services.json placeholder sin oauth_client
-     * (PRs de forks sin acceso a secrets). Devuelve "" en ese caso y la UI
-     * muestra un aviso en vez de reventar.
+     * 1. [com.vivid.app.BuildConfig.GOOGLE_WEB_CLIENT_ID]: lo copia Gradle
+     *    desde google-services.json (oauth_client client_type 3) al compilar.
+     *    Sobrevive a R8 / shrinkResources. Es la fuente principal.
+     * 2. Recurso `default_web_client_id` (plugin google-services), leído por
+     *    nombre porque puede no existir en un JSON placeholder. El release
+     *    lo conserva con `res/values/keep.xml`.
+     *
+     * Devuelve "" si no hay ninguno: la UI muestra un aviso, no crashea.
      */
     fun webClientIdOrEmpty(context: Context): String {
+        com.vivid.app.BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
+            .takeIf { it.isNotEmpty() }
+            ?.let { return it }
+
         val resources = context.resources
-        val resId = resources.getIdentifier("default_web_client_id", "string", context.packageName)
-        return if (resId != 0) resources.getString(resId) else ""
+        val resId = resources.getIdentifier(
+            "default_web_client_id",
+            "string",
+            context.packageName
+        )
+        if (resId != 0) {
+            val fromRes = resources.getString(resId).trim()
+            if (fromRes.isNotEmpty()) return fromRes
+        }
+        Log.e(TAG, "Web client ID ausente: BuildConfig vacío y default_web_client_id no está en resources")
+        return ""
     }
 
     // ── Internals ──────────────────────────────────────────────────────────
