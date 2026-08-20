@@ -354,91 +354,89 @@ service cloud.firestore {
     //  Chats
     // ─────────────────────────────────────────────────
     match /chats/{chatId} {
-      function hasValidParticipants(data) {
-        return data.participants is list
-          && data.participants.size() == 2;
-      }
+  function hasValidParticipants(data) {
+    return data.participants is list
+      && data.participants.size() == 2;
+  }
 
-      function isParticipant() {
-        return signedIn()
-          && request.auth.uid in resource.data.participants;
-      }
+  function isParticipant() {
+    return signedIn()
+      && request.auth.uid in resource.data.participants;
+  }
 
-      // OJO: la regla de read NO puede exigir participants.size() == 2.
-      // La lista de chats consulta con whereArrayContains("participants", uid)
-      // y, en queries de lista, Firestore debe poder probar la regla solo con
-      // las restricciones de la query. array-contains prueba la pertenencia,
-      // pero nada prueba el tamaño del array, así que un size() == 2 aquí
-      // rechaza TODA la query con PERMISSION_DENIED. La validación de tamaño
-      // vive en create/update, que es donde protege la integridad del dato.
-      allow read: if isParticipant();
+  allow read: if isParticipant();
 
-      allow create: if signedIn()
-        && hasValidParticipants(request.resource.data)
-        && request.auth.uid in request.resource.data.participants;
+  allow create: if signedIn()
+    && hasValidParticipants(request.resource.data)
+    && request.auth.uid in request.resource.data.participants;
 
-      // Un participante puede actualizar metadata y la preview, pero nunca
-      // agregar o quitar usuarios. La comparación es por conjunto para seguir
-      // aceptando APKs anteriores que invertían el orden [emisor, receptor].
-      allow update: if isParticipant()
-        && hasValidParticipants(request.resource.data)
-        && request.resource.data.participants.hasOnly(resource.data.participants)
-        && resource.data.participants.hasOnly(request.resource.data.participants);
+  allow update: if isParticipant()
+    && hasValidParticipants(request.resource.data)
+    && request.resource.data.participants.hasOnly(resource.data.participants)
+    && resource.data.participants.hasOnly(request.resource.data.participants);
 
-      allow delete: if false;
+  allow delete: if false;
 
-      match /messages/{messageId} {
-        function chatPath() {
-          return /databases/$(database)/documents/chats/$(chatId);
-        }
-        function existingChatParticipants() {
-          return get(chatPath()).data.participants;
-        }
-        function resultingChatParticipants() {
-          // getAfter permite crear el chat padre y el primer mensaje en la
-          // misma transacción, eliminando la carrera que rompía el primer envío.
-          return getAfter(chatPath()).data.participants;
-        }
-        function inExistingChat() {
-          return signedIn()
-            && exists(chatPath())
-            && get(chatPath()).data.participants is list
-            && request.auth.uid in existingChatParticipants();
-        }
-        function inResultingChat() {
-          return signedIn()
-            && existsAfter(chatPath())
-            && getAfter(chatPath()).data.participants is list
-            && request.auth.uid in resultingChatParticipants();
-        }
-
-        allow read: if inExistingChat();
-
-        allow create: if inResultingChat()
-          && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.receiverId in resultingChatParticipants()
-          && request.resource.data.get('type', 'text') in ['text', 'image', 'voice', 'story_reply'];
-
-        // Acuses / reacción / URLs firmadas: cualquier participante.
-        // Editar texto: solo el emisor, solo type=text, y debe marcar lastEditedAt.
-        allow update: if inExistingChat() && (
-          onlyChanges(['isRead', 'isDelivered', 'reaction', 'imageUrl', 'voiceUrl'])
-          || (
-            resource.data.senderId == request.auth.uid
-            && resource.data.get('type', 'text') == 'text'
-            && onlyChanges(['text', 'lastEditedAt'])
-            && request.resource.data.text is string
-            && request.resource.data.text.size() > 0
-            && request.resource.data.text.size() < 4000
-            && request.resource.data.lastEditedAt is int
-            && request.resource.data.lastEditedAt > resource.data.get('lastEditedAt', 0)
-          )
-        );
-
-        // Borrar solo lo propio (la UI ya solo ofrece la opción al autor).
-        allow delete: if inExistingChat()
-          && resource.data.senderId == request.auth.uid;
-      }
+  match /messages/{messageId} {
+    function chatPath() {
+      return /databases/$(database)/documents/chats/$(chatId);
     }
+
+    function existingChatParticipants() {
+      return get(chatPath()).data.participants;
+    }
+
+    function resultingChatParticipants() {
+      return getAfter(chatPath()).data.participants;
+    }
+
+    function inExistingChat() {
+      return signedIn()
+        && exists(chatPath())
+        && get(chatPath()).data.participants is list
+        && request.auth.uid in existingChatParticipants();
+    }
+
+    function inResultingChat() {
+      return signedIn()
+        && existsAfter(chatPath())
+        && getAfter(chatPath()).data.participants is list
+        && request.auth.uid in resultingChatParticipants();
+    }
+
+    allow read: if inExistingChat();
+
+    allow create: if inResultingChat()
+      && request.resource.data.senderId == request.auth.uid
+      && request.resource.data.receiverId in resultingChatParticipants()
+      && request.resource.data.get('type', 'text')
+        in ['text', 'image', 'voice', 'story_reply'];
+
+    allow update: if inExistingChat() && (
+      onlyChanges([
+        'isRead',
+        'isDelivered',
+        'reaction',
+        'imageUrl',
+        'voiceUrl'
+      ])
+      || (
+        resource.data.senderId == request.auth.uid
+        && resource.data.get('type', 'text') == 'text'
+        && onlyChanges(['text', 'lastEditedAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() < 4000
+        && request.resource.data.lastEditedAt is int
+        && request.resource.data.lastEditedAt >
+          resource.data.get('lastEditedAt', 0)
+      )
+    );
+
+    allow delete: if inExistingChat()
+      && resource.data.senderId == request.auth.uid;
+  }
+}
+
   }
 }
