@@ -27,5 +27,15 @@ data class Message(
     /** Solo el emisor puede editar mensajes de texto no vacíos. */
     fun canBeEditedBy(userId: String): Boolean =
         userId.isNotBlank() && senderId == userId && type == "text" && text.isNotBlank()
-}
 
+    /**
+     * Claves B2 asociadas a adjuntos del mensaje.
+     *
+     * No se decide por [type]: además de foto/voz actuales, los mensajes de
+     * vídeo heredados pueden reutilizar [imageKey]. Así, borrar un mensaje
+     * propio no deja su binario en el bucket por una etiqueta de tipo distinta.
+     */
+    fun mediaStorageKeys(): List<String> = listOf(imageKey, voiceKey)
+        .filter { it.isNotBlank() }
+        .distinct()
+}
