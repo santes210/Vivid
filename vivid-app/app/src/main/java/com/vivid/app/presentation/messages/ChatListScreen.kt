@@ -540,6 +540,7 @@ private fun AvatarForChat(chat: ChatPreview) {
     com.vivid.app.ui.components.UserAvatar(
         imageUrl = chat.avatarUrl,
         name = chat.otherUserName,
+        userId = chat.otherUserId,
         size = 56.dp
     )
 }

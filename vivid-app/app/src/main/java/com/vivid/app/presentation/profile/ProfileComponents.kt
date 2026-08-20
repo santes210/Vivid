@@ -33,6 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
+import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.ui.haptics.rememberVividHaptics
+import com.vivid.app.ui.motion.VividSharedKeys
+import com.vivid.app.ui.motion.vividSharedElement
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -48,25 +52,26 @@ internal fun ProfileHeader(
     onToggleFollow: () -> Unit,
     onEditProfile: () -> Unit
 ) {
+    val haptics = rememberVividHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ── Avatar como elemento hero con anillo degradado ──
+        // ── Avatar como elemento hero con anillo de marca ──
+        // El anillo usa los acentos de producto (armonizados con el color
+        // dinámico); el círculo es el destino de la transición compartida que
+        // arranca en el avatar del feed, del chat o del buscador.
         Box(
             modifier = Modifier
+                .vividSharedElement(
+                    key = VividSharedKeys.avatar(profile.uid),
+                    zIndexInOverlay = 1f
+                )
                 .size(116.dp)
                 .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.tertiary
-                        )
-                    )
-                )
+                .background(Brush.sweepGradient(LocalVividAccents.current.storyRing))
                 .padding(3.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -171,7 +176,10 @@ internal fun ProfileHeader(
             }
         } else {
             Button(
-                onClick = onToggleFollow,
+                onClick = {
+                    haptics.toggle(!relationshipState.isFollowing)
+                    onToggleFollow()
+                },
                 modifier = Modifier.fillMaxWidth().height(44.dp),
                 enabled = !isFollowActionLoading,
                 shape = RoundedCornerShape(16.dp),
@@ -185,7 +193,7 @@ internal fun ProfileHeader(
                 )
             ) {
                 if (isFollowActionLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    LoadingIndicator(modifier = Modifier.size(24.dp))
                 } else {
                     val text = when {
                         relationshipState.isBlocked -> "Bloqueado"
@@ -408,11 +416,22 @@ internal fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64:
 @Composable
 internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
     var bitmap by remember(post.imageBase64) { mutableStateOf<Bitmap?>(null) }
+    val haptics = rememberVividHaptics()
     LaunchedEffect(post.imageBase64) {
         bitmap = if (post.imageBase64.isNotBlank()) try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } else null
     }
     Box(
-        modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(6.dp)).clickable { onClick() }.background(MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier
+            .aspectRatio(1f)
+            // La miniatura ES la imagen del detalle: crece hasta la pantalla
+            // completa en vez de que el detalle aparezca de la nada.
+            .vividSharedElement(VividSharedKeys.postImage(post.id))
+            .clip(RoundedCornerShape(6.dp))
+            .clickable {
+                haptics.tick()
+                onClick()
+            }
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
         contentAlignment = Alignment.Center
     ) {
         when {

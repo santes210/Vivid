@@ -16,6 +16,7 @@ object SettingsManager {
     private const val KEY_THEME = "selected_theme"
     private const val KEY_DYNAMIC_COLOR = "dynamic_color"
     private const val KEY_SMOOTH_ANIMATIONS = "smooth_animations"
+    private const val KEY_HAPTICS = "haptic_feedback"
     private const val KEY_AUTOPLAY_REELS = "autoplay_reels"
     private const val KEY_SHOW_REELS_IN_FEED = "show_reels_in_feed"
     private const val KEY_HD_UPLOADS = "hd_uploads"
@@ -40,6 +41,14 @@ object SettingsManager {
     var dynamicColorEnabled by mutableStateOf(true)
         private set
     var smoothAnimationsEnabled by mutableStateOf(true)
+        private set
+    /**
+     * Respuesta háptica en gestos y acciones (like, seguir, enviar, cambiar de
+     * pestaña). Activada por defecto: en Android el háptico es parte del
+     * lenguaje de interacción, no un adorno. Se puede apagar en
+     * Ajustes → Apariencia para quien lo encuentre molesto o le consuma batería.
+     */
+    var hapticFeedbackEnabled by mutableStateOf(true)
         private set
     var autoplayReels by mutableStateOf(true)
         private set
@@ -86,6 +95,7 @@ object SettingsManager {
         selectedThemeOption = prefs.getString(KEY_THEME, "Sistema") ?: "Sistema"
         dynamicColorEnabled = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
         smoothAnimationsEnabled = prefs.getBoolean(KEY_SMOOTH_ANIMATIONS, true)
+        hapticFeedbackEnabled = prefs.getBoolean(KEY_HAPTICS, true)
         autoplayReels = prefs.getBoolean(KEY_AUTOPLAY_REELS, true)
         showReelsInFeed = prefs.getBoolean(KEY_SHOW_REELS_IN_FEED, true)
         hdUploadsEnabled = prefs.getBoolean(KEY_HD_UPLOADS, false)
@@ -139,6 +149,12 @@ object SettingsManager {
         smoothAnimationsEnabled = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_SMOOTH_ANIMATIONS, value).apply()
+    }
+
+    fun setHapticFeedback(context: Context, value: Boolean) {
+        hapticFeedbackEnabled = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_HAPTICS, value).apply()
     }
 
     fun setAutoplayReels(context: Context, value: Boolean) {

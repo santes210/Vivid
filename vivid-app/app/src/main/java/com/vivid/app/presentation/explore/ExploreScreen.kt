@@ -11,21 +11,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -54,8 +53,12 @@ import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.search.SearchViewModel
 import com.vivid.app.presentation.search.UserSearchItem
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.ui.haptics.rememberVividHaptics
+import com.vivid.app.ui.motion.VividSharedKeys
+import com.vivid.app.ui.motion.vividSharedElement
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +80,7 @@ fun ExploreScreen(
         }
     }
 
+    val haptics = rememberVividHaptics()
     val posts = exploreViewModel.posts.collectAsLazyPagingItems()
     val users = searchViewModel.users.collectAsLazyPagingItems()
     val searching = ExplorePaging.isValidUserQuery(ExplorePaging.normalizeQuery(searchQuery))
@@ -118,7 +122,9 @@ fun ExploreScreen(
                 when {
                     users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            ContainedLoadingIndicator(
+                                polygons = VividMaterialShapes.LoadingSequence
+                            )
                         }
                     }
                     users.loadState.refresh is LoadState.Error && users.itemCount == 0 -> {
@@ -159,7 +165,7 @@ fun ExploreScreen(
                                         Modifier.fillMaxWidth().padding(16.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                                        LoadingIndicator(Modifier.size(32.dp))
                                     }
                                 }
                             }
@@ -167,22 +173,38 @@ fun ExploreScreen(
                     }
                 }
             } else {
-                LazyRow(
+                // Filtros por tema con ButtonGroup de M3 Expressive: al pulsar,
+                // el botón se ensancha y comprime a sus vecinos (shape morph),
+                // y los que no caben se van solos a un menú de overflow — dos
+                // cosas que una LazyRow de FilterChips no hace.
+                ButtonGroup(
+                    overflowIndicator = { menuState ->
+                        FilledIconButton(
+                            onClick = {
+                                haptics.tick()
+                                // En material3 1.5.0-alpha el estado del menú
+                                // de ButtonGroup se llama isShowing (antes era
+                                // isExpanded).
+                                if (menuState.isShowing) menuState.dismiss() else menuState.show()
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.MoreHoriz,
+                                contentDescription = stringResource(R.string.explore_more_tags)
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(ExplorePaging.TAGS, key = { it }) { tag ->
-                        FilterChip(
-                            selected = selectedTag == tag,
-                            onClick = { exploreViewModel.selectTag(tag) },
-                            label = { Text("#$tag") },
-                            leadingIcon = if (selectedTag == tag) {
-                                { Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)) }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                    ExplorePaging.TAGS.forEach { tag ->
+                        toggleableItem(
+                            checked = selectedTag == tag,
+                            onCheckedChange = {
+                                haptics.tick()
+                                exploreViewModel.selectTag(tag)
+                            },
+                            label = "#$tag"
                         )
                     }
                 }
@@ -190,7 +212,9 @@ fun ExploreScreen(
                 when {
                     posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            ContainedLoadingIndicator(
+                                polygons = VividMaterialShapes.LoadingSequence
+                            )
                         }
                     }
                     posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {
@@ -227,14 +251,22 @@ fun ExploreScreen(
                                     modifier = Modifier
                                         .aspectRatio(1f)
                                         .semantics { contentDescription = postCd }
-                                        .clickable { onPostClick(post.id) },
+                                        .clickable {
+                                            haptics.tick()
+                                            onPostClick(post.id)
+                                        },
                                     shape = MaterialTheme.shapes.extraLarge
                                 ) {
                                     if (post.imageUrl.isNotBlank()) {
                                         AsyncImage(
                                             model = post.imageUrl,
                                             contentDescription = postCd,
-                                            modifier = Modifier.fillMaxSize(),
+                                            // Ancla de la transición grid → detalle.
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .vividSharedElement(
+                                                    VividSharedKeys.postImage(post.id)
+                                                ),
                                             contentScale = ContentScale.Crop
                                         )
                                     } else {
@@ -253,7 +285,7 @@ fun ExploreScreen(
                                         modifier = Modifier.aspectRatio(1f),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        LoadingIndicator(Modifier.size(28.dp))
                                     }
                                 }
                             }

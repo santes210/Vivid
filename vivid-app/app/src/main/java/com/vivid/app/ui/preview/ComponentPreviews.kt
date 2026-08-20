@@ -1,0 +1,171 @@
+package com.vivid.app.ui.preview
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.ui.components.UserAvatar
+import com.vivid.app.ui.components.VividEmptyState
+import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.VividLikeButton
+import com.vivid.app.ui.components.VividLoadingState
+import com.vivid.app.ui.components.VividOfflineBanner
+import com.vivid.app.ui.components.VividSkeletonListItem
+
+/**
+ * Previews de los componentes compartidos.
+ *
+ * Todos son interactivos en el panel de Android Studio ("Run preview"), así
+ * que el rebote del like o el tinte del avatar se pueden revisar sin instalar
+ * la app.
+ */
+
+@VividPreviewA11y
+@Composable
+private fun LikeButtonPreview() {
+    VividPreviewSurface {
+        var liked by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            VividLikeButton(isLiked = liked, onToggle = { liked = !liked })
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (liked) "Te gusta" else "Toca el corazón",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@VividPreview
+@Composable
+private fun AvatarsPreview() {
+    VividPreviewSurface {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            UserAvatar(imageUrl = "", name = "Ana", size = 40.dp)
+            UserAvatar(imageUrl = "", name = "Bruno", size = 56.dp)
+            UserAvatar(imageUrl = "", name = "", size = 56.dp)
+        }
+    }
+}
+
+@VividPreview
+@Composable
+private fun LoadingStatePreview() {
+    VividPreviewSurface {
+        VividLoadingState(message = "Cargando publicaciones…")
+    }
+}
+
+@VividPreviewA11y
+@Composable
+private fun EmptyStatePreview() {
+    VividPreviewSurface {
+        VividEmptyState(
+            icon = Icons.Outlined.PhotoCamera,
+            title = "Todavía no hay nada por aquí",
+            subtitle = "Cuando publiques tu primera foto aparecerá en tu perfil.",
+            actionLabel = "Crear publicación",
+            onAction = {}
+        )
+    }
+}
+
+@VividPreview
+@Composable
+private fun ErrorStatePreview() {
+    VividPreviewSurface {
+        VividErrorState(onRetry = {})
+    }
+}
+
+@VividPreview
+@Composable
+private fun OfflineBannerPreview() {
+    VividPreviewSurface(padding = 0) {
+        VividOfflineBanner()
+    }
+}
+
+@VividPreview
+@Composable
+private fun SkeletonPreview() {
+    VividPreviewSurface(padding = 0) {
+        Column {
+            repeat(3) { VividSkeletonListItem() }
+        }
+    }
+}
+
+/**
+ * Muestrario de la paleta: sirve para revisar de un vistazo que los pares
+ * `container` / `on…` tienen contraste suficiente en claro y en oscuro.
+ */
+@VividPreview
+@Composable
+private fun BrandPalettePreview() {
+    VividPreviewSurface {
+        val scheme = MaterialTheme.colorScheme
+        val accents = LocalVividAccents.current
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow("primary", scheme.primary, scheme.onPrimary)
+            SwatchRow("primaryContainer", scheme.primaryContainer, scheme.onPrimaryContainer)
+            SwatchRow("secondaryContainer", scheme.secondaryContainer, scheme.onSecondaryContainer)
+            SwatchRow("tertiaryContainer", scheme.tertiaryContainer, scheme.onTertiaryContainer)
+            SwatchRow("errorContainer", scheme.errorContainer, scheme.onErrorContainer)
+            SwatchRow("surfaceContainer", scheme.surfaceContainer, scheme.onSurface)
+            SwatchRow("accent · like", accents.like, Color.White)
+            SwatchRow("accent · verificado", accents.verified, Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                accents.storyRing.forEach { ringColor ->
+                    Surface(
+                        color = ringColor,
+                        shape = VividMaterialShapes.Celebration,
+                        modifier = Modifier.size(44.dp)
+                    ) {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwatchRow(name: String, container: Color, onContainer: Color) {
+    Surface(
+        color = container,
+        contentColor = onContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().height(44.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Spacer(Modifier.width(12.dp))
+            Text(
+                name,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
+            )
+        }
+    }
+}

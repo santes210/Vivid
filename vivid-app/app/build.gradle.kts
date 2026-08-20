@@ -111,7 +111,7 @@ logger.lifecycle(
 //                       sufijo para no simular builds que no existen.
 // Changelog para usuarios: com.vivid.app.util.VividChangelog (en código,
 // sin .md) → se muestra en Ajustes → Acerca de → Novedades.
-val VIVID_VERSION_BASE = "2.2.0"
+val VIVID_VERSION_BASE = "2.4.0"
 
 // En GitHub Actions, GITHUB_RUN_NUMBER crece automáticamente en cada ejecución del workflow.
 // Para una compilación manual se puede usar: ./gradlew assembleRelease -PvividVersionCode=1234
@@ -290,6 +290,14 @@ kotlin {
         jvmTarget.set(JvmTarget.JVM_17)
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            // Material 3 Expressive (material3 1.5.0-alpha): MotionScheme,
+            // MaterialShapes, LoadingIndicator, WideNavigationRail,
+            // MaterialExpressiveTheme. Se opta a nivel de módulo porque el
+            // tema los usa desde la raíz del árbol de composición.
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
+            // Transiciones de elemento compartido (grid → detalle,
+            // avatar → perfil): ui/motion/VividSharedTransition.kt.
+            "-opt-in=androidx.compose.animation.ExperimentalSharedTransitionApi",
             "-opt-in=androidx.media3.common.util.UnstableApi"
         )
     }
@@ -306,6 +314,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.graphics.shapes)
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.navigation.compose)
 

@@ -30,6 +30,7 @@ import com.vivid.app.ui.components.VividSettingsGroup
 import com.vivid.app.ui.components.VividSettingsItem
 import com.vivid.app.ui.components.VividSettingsScaffold
 import com.vivid.app.ui.components.VividSettingsSwitchItem
+import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.VividCacheManager
 import com.vivid.app.util.VividChangelog
@@ -311,6 +312,8 @@ fun AparienciaSettingsScreen(
     val selectedTheme = SettingsManager.selectedThemeOption
     val dynamic = SettingsManager.dynamicColorEnabled
     val smooth = SettingsManager.smoothAnimationsEnabled
+    val haptic = SettingsManager.hapticFeedbackEnabled
+    val haptics = rememberVividHaptics()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLangDialog by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
@@ -371,6 +374,23 @@ fun AparienciaSettingsScreen(
                         onCheckedChange = { checked ->
                             SettingsManager.setSmoothAnimations(context, checked)
                             scope.launch { onShowSnackbar(if (checked) "Animaciones activadas" else "Movimiento reducido") }
+                        },
+                        showDivider = true
+                    )
+                    VividSettingsSwitchItem(
+                        title = stringResource(com.vivid.app.R.string.settings_haptics_title),
+                        subtitle = stringResource(com.vivid.app.R.string.settings_haptics_desc),
+                        icon = Icons.Outlined.Vibration,
+                        checked = haptic,
+                        onCheckedChange = { checked ->
+                            SettingsManager.setHapticFeedback(context, checked)
+                            if (checked) haptics.confirm()
+                            scope.launch {
+                                onShowSnackbar(
+                                    if (checked) "Respuesta háptica activada"
+                                    else "Respuesta háptica desactivada"
+                                )
+                            }
                         }
                     )
                 }

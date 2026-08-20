@@ -3,115 +3,126 @@ package com.vivid.app.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Paleta de fallback (cuando el dispositivo NO soporta Material You dinámico,
- * es decir Android <12 o el usuario desactivó el color dinámico).
+ * Paleta de marca "Vivid Sunset" — GENERADA, no editar a mano.
  *
- * Tokens Material 3 Expressive (1.4.0):
- *   - primary / onPrimary / primaryContainer / onPrimaryContainer
- *   - secondary / tertiary / error (y sus containers)
- *   - surface con roles tonales expresivos: surface, surfaceContainer*,
- *     surfaceVariant, surfaceTint — sin transparencias arbitrarias.
+ *   Fuente: scripts/generate_vivid_palette.py
+ *   Regenerar:
+ *     python3 scripts/generate_vivid_palette.py > \
+ *       vivid-app/app/src/main/java/com/vivid/app/theme/VividColors.kt
  *
- * Estos se usan solo si el sistema no provee dynamicColor.
- * En Android 12+ el theme toma los colores del wallpaper automáticamente
- * via dynamicLight/DarkColorScheme (que ya incluye surfaceContainer*).
+ * Se usa cuando NO hay Material You dinámico (Android < 12, o el usuario
+ * desactivó "Color dinámico" en Ajustes → Apariencia). Con color dinámico,
+ * el esquema sale del wallpaper y solo se conservan los acentos de producto
+ * de [VividAccentColors], armonizados hacia el color del sistema.
+ *
+ * Construcción (ver el script para el detalle): matiz y croma fijos en OkLCh,
+ * tono = L* de CIELAB, exactamente el mismo eje de "tone" que usa HCT en
+ * Material. Resultado: rampas sin virajes de matiz y con contraste
+ * predecible entre pares on-/container.
+ *
+ * Semillas:
+ *   primary   magenta-coral (hue 6°, croma 0.23)   → identidad
+ *   secondary rosa apagado  (hue 8°, croma 0.075)  → soporte
+ *   tertiary  ámbar         (hue 68°, croma 0.15)  → atardecer / celebración
+ *   error     rojo          (hue 27°, croma 0.16)  → peligro, distinto al brand
+ *   neutral   gris CÁLIDO   (croma 0.008)          → las fotos respiran mejor
  */
+
+/** Roles M3 en tema claro. Tonos: primary 40/90, neutrales cálidos 99→90. */
 internal object VividBrandColors {
-    // Morado principal (Vivid) — inspirado en IG purple accent
-    val Primary              = Color(0xFF6750A4)
-    val OnPrimary            = Color(0xFFFFFFFF)
-    val PrimaryContainer     = Color(0xFFEADDFF)
-    val OnPrimaryContainer   = Color(0xFF21005D)
-
-    // Secundario (azul-violeta para highlights, capturas)
-    val Secondary            = Color(0xFF625B71)
-    val OnSecondary          = Color(0xFFFFFFFF)
-    val SecondaryContainer   = Color(0xFFE8DEF8)
-    val OnSecondaryContainer = Color(0xFF1D192B)
-
-    // Terciario (rosa para accents de likes, hearts)
-    val Tertiary             = Color(0xFF7D5260)
-    val OnTertiary           = Color(0xFFFFFFFF)
-    val TertiaryContainer    = Color(0xFFFFD8E4)
-    val OnTertiaryContainer  = Color(0xFF31111D)
-
-    // Errores
-    val Error                = Color(0xFFB3261E)
-    val OnError              = Color(0xFFFFFFFF)
-    val ErrorContainer       = Color(0xFFF9DEDC)
-    val OnErrorContainer     = Color(0xFF410E0B)
-
-    // Fondos y superficies — jerarquía tonal expresiva (M3 Expressive)
-    // Ver M3 spec: https://m3.material.io/styles/color/roles
-    val Background           = Color(0xFFFFFBFE)
-    val OnBackground         = Color(0xFF1C1B1F)
-    val Surface              = Color(0xFFFFFBFE)
-    val OnSurface            = Color(0xFF1C1B1F)
-    val SurfaceVariant       = Color(0xFFE7E0EC)
-    val OnSurfaceVariant     = Color(0xFF49454F)
-    val Outline              = Color(0xFF79747E)
-    val OutlineVariant       = Color(0xFFCAC4D0)
-    val SurfaceTint          = Primary
-
-    // Roles tonales de superficie — jerarquía expresiva
-    // surfaceContainerLowest  = fondo más claro, casi blanco (sutil)
-    // surfaceContainerLow     = tarjetas secundarias, chips no seleccionados
-    // surfaceContainer        = navegación, barras
-    // surfaceContainerHigh    = modales, bottom sheets
-    // surfaceContainerHighest = campos, controles activos
-    val SurfaceContainerLowest   = Color(0xFFFFFFFF)
-    val SurfaceContainerLow      = Color(0xFFF7F2FA)
-    val SurfaceContainer         = Color(0xFFF3EDF7)
-    val SurfaceContainerHigh     = Color(0xFFECE6F0)
-    val SurfaceContainerHighest  = Color(0xFFE6E0E9)
-
-    val InverseSurface       = Color(0xFF1C1B1F)
-    val InverseOnSurface     = Color(0xFFF4EFF4)
-    val InversePrimary       = Color(0xFFD0BCFF)
-    val Scrim                = Color(0xFF000000)
+    val Primary                 = Color(0xFFB71454)  // primary 40
+    val OnPrimary               = Color(0xFFFFFFFF)  // primary 100
+    val PrimaryContainer        = Color(0xFFFFD8E0)  // primary 90
+    val OnPrimaryContainer      = Color(0xFF3E0218)  // primary 10
+    val Secondary               = Color(0xFF854E59)  // secondary 40
+    val OnSecondary             = Color(0xFFFFFFFF)  // secondary 100
+    val SecondaryContainer      = Color(0xFFFFD9DE)  // secondary 90
+    val OnSecondaryContainer    = Color(0xFF390917)  // secondary 10
+    val Tertiary                = Color(0xFF875303)  // tertiary 40
+    val OnTertiary              = Color(0xFFFFFFFF)  // tertiary 100
+    val TertiaryContainer       = Color(0xFFFFDCB8)  // tertiary 90
+    val OnTertiaryContainer     = Color(0xFF2B1700)  // tertiary 10
+    val Error                   = Color(0xFFAC322D)  // error 40
+    val OnError                 = Color(0xFFFFFFFF)  // error 100
+    val ErrorContainer          = Color(0xFFFFDAD4)  // error 90
+    val OnErrorContainer        = Color(0xFF400203)  // error 10
+    val Background              = Color(0xFFFFFBFA)  // neutral 99
+    val OnBackground            = Color(0xFF1F1B19)  // neutral 10
+    val Surface                 = Color(0xFFFFFBFA)  // neutral 99
+    val OnSurface               = Color(0xFF1F1B19)  // neutral 10
+    val SurfaceVariant          = Color(0xFFF2DEDB)  // neutral_variant 90
+    val OnSurfaceVariant        = Color(0xFF534340)  // neutral_variant 30
+    val Outline                 = Color(0xFF847370)  // neutral_variant 50
+    val OutlineVariant          = Color(0xFFD5C2BF)  // neutral_variant 80
+    val SurfaceContainerLowest  = Color(0xFFFFFFFF)  // neutral 100
+    val SurfaceContainerLow     = Color(0xFFF9F2F0)  // neutral 96
+    val SurfaceContainer        = Color(0xFFF3ECEA)  // neutral 94
+    val SurfaceContainerHigh    = Color(0xFFEDE7E4)  // neutral 92
+    val SurfaceContainerHighest = Color(0xFFE8E1DF)  // neutral 90
+    val SurfaceBright           = Color(0xFFFFF8F6)  // neutral 98
+    val SurfaceDim              = Color(0xFFDFD9D6)  // neutral 87
+    val InverseSurface          = Color(0xFF342F2E)  // neutral 20
+    val InverseOnSurface        = Color(0xFFF6EFED)  // neutral 95
+    val InversePrimary          = Color(0xFFFFAFC1)  // primary 80
+    val Scrim                   = Color(0xFF000000)  // neutral 0
+    val SurfaceTint             = Primary
 }
 
-/** Variantes oscuras para los mismos tokens */
+/** Roles M3 en tema oscuro. Tonos: primary 80/30, neutrales cálidos 6→22. */
 internal object VividBrandColorsDark {
-    val Primary              = Color(0xFFD0BCFF)
-    val OnPrimary            = Color(0xFF381E72)
-    val PrimaryContainer     = Color(0xFF4F378B)
-    val OnPrimaryContainer   = Color(0xFFEADDFF)
+    val Primary                 = Color(0xFFFFAFC1)  // primary 80
+    val OnPrimary               = Color(0xFF64062B)  // primary 20
+    val PrimaryContainer        = Color(0xFF8C0D3F)  // primary 30
+    val OnPrimaryContainer      = Color(0xFFFFD8E0)  // primary 90
+    val Secondary               = Color(0xFFF5B6C0)  // secondary 80
+    val OnSecondary             = Color(0xFF52202B)  // secondary 20
+    val SecondaryContainer      = Color(0xFF6B3741)  // secondary 30
+    val OnSecondaryContainer    = Color(0xFFFFD9DE)  // secondary 90
+    val Tertiary                = Color(0xFFFFB863)  // tertiary 80
+    val OnTertiary              = Color(0xFF482A01)  // tertiary 20
+    val TertiaryContainer       = Color(0xFF663D01)  // tertiary 30
+    val OnTertiaryContainer     = Color(0xFFFFDCB8)  // tertiary 90
+    val Error                   = Color(0xFFFFB2A8)  // error 80
+    val OnError                 = Color(0xFF660609)  // error 20
+    val ErrorContainer          = Color(0xFF8F0F13)  // error 30
+    val OnErrorContainer        = Color(0xFFFFDAD4)  // error 90
+    val Background              = Color(0xFF171211)  // neutral 6
+    val OnBackground            = Color(0xFFE8E1DF)  // neutral 90
+    val Surface                 = Color(0xFF171211)  // neutral 6
+    val OnSurface               = Color(0xFFE8E1DF)  // neutral 90
+    val SurfaceVariant          = Color(0xFF534340)  // neutral_variant 30
+    val OnSurfaceVariant        = Color(0xFFD5C2BF)  // neutral_variant 80
+    val Outline                 = Color(0xFF9F8D8A)  // neutral_variant 60
+    val OutlineVariant          = Color(0xFF534340)  // neutral_variant 30
+    val SurfaceContainerLowest  = Color(0xFF110D0C)  // neutral 4
+    val SurfaceContainerLow     = Color(0xFF1F1B19)  // neutral 10
+    val SurfaceContainer        = Color(0xFF231F1D)  // neutral 12
+    val SurfaceContainerHigh    = Color(0xFF2E2927)  // neutral 17
+    val SurfaceContainerHighest = Color(0xFF393432)  // neutral 22
+    val SurfaceBright           = Color(0xFF3D3836)  // neutral 24
+    val SurfaceDim              = Color(0xFF171211)  // neutral 6
+    val InverseSurface          = Color(0xFFE8E1DF)  // neutral 90
+    val InverseOnSurface        = Color(0xFF342F2E)  // neutral 20
+    val InversePrimary          = Color(0xFFB71454)  // primary 40
+    val Scrim                   = Color(0xFF000000)  // neutral 0
+    val SurfaceTint             = Primary
+}
 
-    val Secondary            = Color(0xFFCCC2DC)
-    val OnSecondary          = Color(0xFF332D41)
-    val SecondaryContainer   = Color(0xFF4A4458)
-    val OnSecondaryContainer = Color(0xFFE8DEF8)
-
-    val Tertiary             = Color(0xFFEFB8C8)
-    val OnTertiary           = Color(0xFF492532)
-    val TertiaryContainer    = Color(0xFF633B48)
-    val OnTertiaryContainer  = Color(0xFFFFD8E4)
-
-    val Error                = Color(0xFFF2B8B7)
-    val OnError              = Color(0xFF601410)
-    val ErrorContainer       = Color(0xFF8C1D18)
-    val OnErrorContainer     = Color(0xFFF9DEDC)
-
-    val Background           = Color(0xFF141218)
-    val OnBackground         = Color(0xFFE6E0E9)
-    val Surface              = Color(0xFF141218)
-    val OnSurface            = Color(0xFFE6E0E9)
-    val SurfaceVariant       = Color(0xFF49454F)
-    val OnSurfaceVariant     = Color(0xFFCAC4D0)
-    val Outline              = Color(0xFF938F99)
-    val OutlineVariant       = Color(0xFF49454F)
-    val SurfaceTint          = Primary
-
-    // Roles tonales oscuros — escala inversa expresiva
-    val SurfaceContainerLowest   = Color(0xFF0F0D13)
-    val SurfaceContainerLow      = Color(0xFF1C1B1F)
-    val SurfaceContainer         = Color(0xFF211F26)
-    val SurfaceContainerHigh     = Color(0xFF2B2930)
-    val SurfaceContainerHighest  = Color(0xFF36343B)
-
-    val InverseSurface       = Color(0xFFE6E0E9)
-    val InverseOnSurface     = Color(0xFF322F35)
-    val InversePrimary       = Color(0xFF6750A4)
-    val Scrim                = Color(0xFF000000)
+/**
+ * Acentos de producto. NO son roles de Material: son constantes de marca que
+ * deben sobrevivir al color dinámico (un corazón de like verde porque el
+ * wallpaper es verde sería un bug de producto, no una feature).
+ *
+ * [com.vivid.app.theme.harmonizeWith] los inclina ligeramente hacia el color
+ * del sistema para que convivan con la paleta dinámica sin perder identidad.
+ */
+object VividAccentColors {
+    val Like           = Color(0xFFFB266B)
+    val LikeDark       = Color(0xFFFF7693)
+    val StoryRingStart = Color(0xFFFF4484)
+    val StoryRingMid   = Color(0xFFFF6C47)
+    val StoryRingEnd   = Color(0xFFEDA109)
+    val Verified       = Color(0xFF008BCD)
+    val Online         = Color(0xFF23974B)
+    val Live           = Color(0xFFEB3138)
 }

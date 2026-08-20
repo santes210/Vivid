@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.launch
 
@@ -161,8 +162,11 @@ fun StoriesRow(
 @Composable
 private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
     // Los colores del tema SE LEEN FUERA del Canvas (contexto @Composable).
+    // Anillo de historias = acento de producto (magenta → coral → ámbar),
+    // armonizado con el color dinámico. Es la misma rampa que el avatar hero
+    // del perfil, así la marca se reconoce en los dos sitios.
     val primary = MaterialTheme.colorScheme.primary
-    val tertiary = MaterialTheme.colorScheme.tertiary
+    val storyRing = LocalVividAccents.current.storyRing
     val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     val surfaceHigh = MaterialTheme.colorScheme.surfaceContainerHigh
     val onPrimary = MaterialTheme.colorScheme.onPrimary
@@ -180,9 +184,7 @@ private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
                 Canvas(modifier = Modifier.size(64.dp)) {
                     val strokeWidth = 3.dp.toPx()
                     drawCircle(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(primary, tertiary)
-                        ),
+                        brush = androidx.compose.ui.graphics.Brush.sweepGradient(storyRing),
                         radius = size.minDimension / 2 - strokeWidth,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
@@ -265,7 +267,7 @@ private fun StorySegmentsRing(
     trackColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
 ) {
     // tertiary se lee fuera del Canvas (no se puede leer el tema dentro de DrawScope)
-    val tertiary = MaterialTheme.colorScheme.tertiary
+    val storyRing = LocalVividAccents.current.storyRing
 
     Canvas(modifier = modifier) {
         val strokeWidth = 4.dp.toPx()
@@ -296,9 +298,7 @@ private fun StorySegmentsRing(
         for (index in 0 until segments) {
             val start = -90f + index * (segmentSweep + gap)
             drawArc(
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(activeColor, tertiary)
-                ),
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(storyRing),
                 startAngle = start,
                 sweepAngle = segmentSweep,
                 useCenter = false,

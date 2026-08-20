@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,6 +12,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +58,11 @@ import com.vivid.app.presentation.messages.ChatListScreen
 import com.vivid.app.presentation.messages.ChatScreen
 import com.vivid.app.presentation.profile.*
 import com.vivid.app.presentation.reels.ReelsScreen
+import com.vivid.app.theme.VividMotion
+import com.vivid.app.ui.components.pressMorphShape
+import com.vivid.app.ui.haptics.rememberVividHaptics
+import com.vivid.app.ui.motion.VividSharedTransitionHost
+import com.vivid.app.ui.motion.sharedComposable
 import com.vivid.app.presentation.search.SearchScreen
 import com.vivid.app.presentation.explore.ExploreScreen
 import com.vivid.app.presentation.search.SearchUser
@@ -213,6 +218,10 @@ fun VividNavigation(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = if (isImmersive) WindowInsets(0, 0, 0, 0) else WindowInsets.navigationBars
     ) { innerPadding ->
+        // Toda la navegación vive dentro de un SharedTransitionLayout: es el
+        // requisito para que miniatura→detalle y avatar→perfil sean el mismo
+        // elemento moviéndose y no dos pantallas distintas.
+        VividSharedTransitionHost {
         Row(Modifier.fillMaxSize()) {
             if (showRail) {
                 VividNavigationRail(
@@ -289,18 +298,23 @@ fun VividNavigation(
                     }
                 )
             }
-            composable(Screen.Feed.route) {
+            sharedComposable(Screen.Feed.route) {
                 FeedScreen(
                     onOpenMessages = { navController.navigate(Screen.Messages.route) },
                     onOpenRequests = { navController.navigate(Screen.FollowRequests.route) },
                     onOpenProfile = { navController.navigate(Screen.Profile.route) },
+                    // Tocar el avatar del autor abre su perfil con transición
+                    // compartida (antes el avatar del feed no hacía nada).
+                    onOpenUserProfile = { userId ->
+                        navController.navigate("profile/${Uri.encode(userId)}")
+                    },
                     onOpenStoryViewer = { storyId ->
                         navController.navigate("story_viewer/${Uri.encode(storyId)}")
                     },
                     onCreateStory = { navController.navigate(Screen.CreateStory.route) }
                 )
             }
-            composable(Screen.Search.route) {
+            sharedComposable(Screen.Search.route) {
                 ExploreScreen(
                     onPostClick = { postId -> navController.navigate("post/$postId") },
                     onProfileClick = { userId -> navController.navigate("profile/$userId") }
@@ -363,7 +377,7 @@ fun VividNavigation(
                     initialReelId = deepLinkReelId
                 )
             }
-            composable(Screen.Profile.route) {
+            sharedComposable(Screen.Profile.route) {
                 ProfileScreen(
                     userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty(),
                     onLogout = {
@@ -375,7 +389,7 @@ fun VividNavigation(
                     onSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
-            composable(
+            sharedComposable(
                 route = Screen.OtherProfile.route,
                 arguments = listOf(navArgument("userId") { type = NavType.StringType })
             ) { backStackEntry ->
@@ -480,12 +494,18 @@ fun VividNavigation(
             composable(Screen.CloseFriends.route) {
                 CloseFriendsScreen(onBack = { navController.popBackStack() })
             }
-            composable(
+            sharedComposable(
                 route = "post/{postId}",
                 arguments = listOf(navArgument("postId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val pid = backStackEntry.arguments?.getString("postId") ?: ""
-                PostDetailScreen(postId = pid, onBack = { navController.popBackStack() })
+                PostDetailScreen(
+                    postId = pid,
+                    onBack = { navController.popBackStack() },
+                    onOpenProfile = { userId ->
+                        navController.navigate("profile/${Uri.encode(userId)}")
+                    }
+                )
             }
             composable(Screen.BlockedUsers.route) {
                 BlockedUsersScreen(onBack = { navController.popBackStack() })
@@ -522,6 +542,7 @@ fun VividNavigation(
                 )
             }
         }
+        }
     }
     }
 }
@@ -549,7 +570,7 @@ private fun VividBottomBar(
     destinations: List<VividDestination>,
     onNavigate: (Screen) -> Unit
 ) {
-    val animationsEnabled = LocalVividAnimationsEnabled.current
+    val haptics = rememberVividHaptics()
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp
@@ -566,9 +587,11 @@ private fun VividBottomBar(
             val pillWidthPx = with(LocalDensity.current) { CREATE_PILL_WIDTH.toPx() }
 
             val targetOffset = itemWidth * safeIndex + (itemWidth - pillWidthPx) / 2f
+            // El indicador usa el MotionScheme del tema (spring expresivo), no
+            // un tween a ojo: se mueve igual que el resto de componentes M3.
             val animatedOffset by animateFloatAsState(
                 targetValue = targetOffset,
-                animationSpec = if (animationsEnabled) tween(durationMillis = 320) else snap(),
+                animationSpec = VividMotion.spatial(),
                 label = "navPillOffset"
             )
 
@@ -595,10 +618,18 @@ private fun VividBottomBar(
                         contentAlignment = Alignment.Center
                     ) {
                         if (dest.screen == Screen.Create) {
-                            // Acción principal: botón "Crear" de mayor énfasis
+                            // Acción principal: botón "Crear" de mayor énfasis.
+                            // Al pulsarlo su silueta se transforma de círculo a
+                            // galleta de 9 puntas (MaterialShapes + Morph): el
+                            // estado se comunica con la forma, no con un tinte.
+                            val createInteractions = remember { MutableInteractionSource() }
                             Surface(
-                                onClick = { onNavigate(dest.screen) },
-                                shape = RoundedCornerShape(20.dp),
+                                onClick = {
+                                    haptics.confirm()
+                                    onNavigate(dest.screen)
+                                },
+                                interactionSource = createInteractions,
+                                shape = pressMorphShape(createInteractions),
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 tonalElevation = 4.dp,
@@ -623,7 +654,11 @@ private fun VividBottomBar(
                                     .selectable(
                                         selected = isSelected,
                                         role = Role.Tab,
-                                        onClick = { onNavigate(dest.screen) }
+                                        onClick = {
+                                            // Tick discreto al cambiar de sección.
+                                            if (!isSelected) haptics.tick()
+                                            onNavigate(dest.screen)
+                                        }
                                     )
                                     .semantics(mergeDescendants = true) {
                                         stateDescription = if (isSelected) "Seleccionado" else "No seleccionado"
@@ -663,6 +698,14 @@ private fun VividBottomBar(
 private val CREATE_PILL_WIDTH = 56.dp
 private val NAV_BAR_HEIGHT = 60.dp
 
+/**
+ * Rail de navegación para tabletas y plegables abiertos.
+ *
+ * Usa `WideNavigationRail` de M3 Expressive, que sustituye al `NavigationRail`
+ * clásico: puede colapsar (solo iconos) o expandirse (icono + etiqueta) con un
+ * botón de menú, que es el patrón que Material define hoy para pantallas
+ * anchas. El destino "Crear" se mantiene como FAB, la acción principal.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VividNavigationRail(
@@ -670,53 +713,77 @@ private fun VividNavigationRail(
     destinations: List<VividDestination>,
     onNavigate: (Screen) -> Unit
 ) {
-    NavigationRail(
+    val haptics = rememberVividHaptics()
+    val scope = rememberCoroutineScope()
+    // El propio rail es el dueño de su estado colapsado/expandido; los items
+    // solo leen `targetValue` para decidir si muestran la etiqueta.
+    val railState = rememberWideNavigationRailState()
+    val expanded = railState.targetValue == WideNavigationRailValue.Expanded
+
+    WideNavigationRail(
         modifier = Modifier.focusGroup(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        windowInsets = WindowInsets(0, 0, 0, 0)
-    ) {
-        Spacer(Modifier.height(12.dp))
-        destinations.forEach { dest ->
-            val isSelected = currentRoute == dest.screen.route
-            if (dest.screen == Screen.Create) {
-                // Acción principal destacada en el rail
-                Spacer(Modifier.height(8.dp))
-                FloatingActionButton(
-                    onClick = { onNavigate(dest.screen) },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(56.dp)
+        state = railState,
+        header = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        scope.launch { railState.toggle() }
+                    },
+                    modifier = Modifier.padding(start = 24.dp, top = 8.dp)
                 ) {
-                    Icon(VividIcons.Create, contentDescription = dest.screen.title)
-                }
-                Spacer(Modifier.height(8.dp))
-            } else {
-                NavigationRailItem(
-                    selected = isSelected,
-                    onClick = { onNavigate(dest.screen) },
-                    icon = {
-                        Icon(
-                            imageVector = if (isSelected) dest.activeIcon else dest.inactiveIcon,
-                            contentDescription = null
-                        )
-                    },
-                    label = {
-                        Text(
-                            dest.screen.title,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        )
-                    },
-                    colors = NavigationRailItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.MenuOpen else Icons.Filled.Menu,
+                        contentDescription = if (expanded) "Colapsar menú" else "Expandir menú"
                     )
-                )
+                }
+                val createDestination = destinations.firstOrNull { it.screen == Screen.Create }
+                if (createDestination != null) {
+                    Spacer(Modifier.height(8.dp))
+                    val fabInteractions = remember { MutableInteractionSource() }
+                    FloatingActionButton(
+                        onClick = {
+                            haptics.confirm()
+                            onNavigate(createDestination.screen)
+                        },
+                        shape = pressMorphShape(fabInteractions),
+                        interactionSource = fabInteractions,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(VividIcons.Create, contentDescription = createDestination.screen.title)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
             }
+        }
+    ) {
+        destinations.forEach { dest ->
+            if (dest.screen == Screen.Create) return@forEach
+            val isSelected = currentRoute == dest.screen.route
+            WideNavigationRailItem(
+                railExpanded = expanded,
+                selected = isSelected,
+                onClick = {
+                    if (!isSelected) haptics.tick()
+                    onNavigate(dest.screen)
+                },
+                icon = {
+                    Icon(
+                        imageVector = if (isSelected) dest.activeIcon else dest.inactiveIcon,
+                        contentDescription = null
+                    )
+                },
+                label = {
+                    Text(
+                        dest.screen.title,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    )
+                }
+            )
         }
     }
 }
@@ -729,4 +796,45 @@ private fun NavHostController.openChatWithUser(user: SearchUser) {
     previousBackStackEntry?.savedStateHandle?.set("avatarBase64", user.avatarBase64)
     previousBackStackEntry?.savedStateHandle?.set("avatarUrl", user.avatarUrl)
     navigate("chat/${Uri.encode(chatId)}/${Uri.encode(user.uid)}/${Uri.encode(name)}")
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Previews de la navegación
+// ─────────────────────────────────────────────────────────────
+
+private val previewDestinations = listOf(
+    VividDestination(Screen.Feed, Icons.Filled.Home, Icons.Outlined.Home),
+    VividDestination(Screen.Search, Icons.Filled.Search, Icons.Outlined.Search),
+    VividDestination(Screen.Create, VividIcons.Create, VividIcons.Create),
+    VividDestination(Screen.Reels, Icons.Filled.PlayArrow, Icons.Outlined.PlayArrow),
+    VividDestination(Screen.Profile, Icons.Filled.Person, Icons.Outlined.Person)
+)
+
+@com.vivid.app.ui.preview.VividPreviewA11y
+@Composable
+private fun VividBottomBarPreview() {
+    com.vivid.app.ui.preview.VividPreviewSurface(padding = 0) {
+        VividBottomBar(
+            currentRoute = Screen.Feed.route,
+            destinations = previewDestinations,
+            onNavigate = {}
+        )
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(
+    name = "Rail (tablet)",
+    showBackground = true,
+    widthDp = 220,
+    heightDp = 520
+)
+@Composable
+private fun VividNavigationRailPreview() {
+    com.vivid.app.ui.preview.VividPreviewSurface(padding = 0) {
+        VividNavigationRail(
+            currentRoute = Screen.Search.route,
+            destinations = previewDestinations,
+            onNavigate = {}
+        )
+    }
 }
