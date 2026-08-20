@@ -79,7 +79,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           # API 36: compileSdk/targetSdk del proyecto (AGP 8.13 + Gradle 8.13).
           sdkmanager \
-            "platforms;android-37" \
+            "platforms;android-37.0" \
             "build-tools;36.0.0" \
             "platform-tools"
 
