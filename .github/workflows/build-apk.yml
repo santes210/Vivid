@@ -110,7 +110,7 @@ jobs:
           # API 36: compileSdk/targetSdk del proyecto (obligatorio en Google Play
           # para toda actualización a partir del 31 de agosto de 2026).
           sdkmanager \
-            "platforms;android-37" \
+            "platforms;android-37.0" \
             "build-tools;36.0.0" \
             "platform-tools"
 
