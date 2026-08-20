@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  shrinkResources (release) borra strings que no se referencian como R.string.xxx.
+  Google Sign-In lee default_web_client_id por nombre (getIdentifier) para no
+  romper builds cuyo google-services.json no trae oauth_client type 3.
+  Sin este keep, el release APK pierde el Web client ID y el botón muestra
+  "Google Sign-In no está configurado".
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/default_web_client_id" />
