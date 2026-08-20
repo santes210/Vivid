@@ -30,6 +30,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Test google-services.json validator
+        shell: bash
+        run: python3 scripts/test_validate_google_services.py
+
       - name: Validate Worker URL
         shell: bash
         run: |
@@ -43,7 +47,7 @@ jobs:
             echo "Cloudflare Worker configurado correctamente."
           fi
 
-            # google-services.json ya NO está versionado: se inyecta desde el
+      # google-services.json ya NO está versionado: se inyecta desde el
       # secret GOOGLE_SERVICES_JSON_BASE64. Sin él, el release NO compila
       # a propósito (un APK de producción no debe llevar credenciales falsas).
       - name: Restore google-services.json
@@ -62,6 +66,10 @@ jobs:
             exit 1
           }
           echo "google-services.json restaurado desde el secret."
+
+      - name: Validate google-services.json for Google Sign-In
+        shell: bash
+        run: python3 scripts/validate-google-services.py vivid-app/app/google-services.json
 
       - name: Setup JDK 17
         # v5: v4 está deprecado y GitHub ya lo avisa en cada run.
