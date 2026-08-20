@@ -359,9 +359,13 @@ service cloud.firestore {
       && data.participants.size() == 2;
   }
 
+    // OJO: no comprobar `participants is list` aquí. Las queries de lista
+  // (ChatListScreen: whereArrayContains("participants", uid)) solo se
+  // autorizan si la regla queda GARANTIZADA por el filtro. Un `is list`
+  // extra hace que Firestore rechace TODA la query (PERMISSION_DENIED)
+  // aunque el usuario sí esté en participants.
   function isParticipant() {
     return signedIn()
-      && resource.data.participants is list
       && request.auth.uid in resource.data.participants;
   }
 
