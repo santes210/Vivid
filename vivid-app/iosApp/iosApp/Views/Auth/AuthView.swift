@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import FirebaseCore
 import FirebaseAuth
 import GoogleSignIn
 
@@ -15,6 +16,7 @@ struct AuthView: View {
     @State private var isAnimating = false
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var currentNonce: String?
 
     var body: some View {
         ZStack {
@@ -66,6 +68,9 @@ struct AuthView: View {
                     SignInWithAppleButton(
                         onRequest: { request in
                             request.requestedScopes = [.fullName, .email]
+                            let nonce = UUID().uuidString
+                            currentNonce = nonce
+                            request.nonce = nonce
                         },
                         onCompletion: { result in
                             handleAppleSignIn(result)
@@ -136,45 +141,47 @@ struct AuthView: View {
             return
         }
 
-        GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { [self] result, error in
-            if let error = error {
-                let nsError = error as NSError
-                if nsError.code == GIDSignInError.Code.canceled.rawValue {
-                    // Usuario canceló — no es error
+        GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { result, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    let nsError = error as NSError
+                    if nsError.code == GIDSignInError.canceled.rawValue {
+                        // Usuario canceló — no es error
+                        self.isLoading = false
+                        return
+                    }
+                    self.errorMessage = "Error al iniciar sesión con Google: \(error.localizedDescription)"
                     self.isLoading = false
                     return
                 }
-                self.errorMessage = "Error al iniciar sesión con Google: \(error.localizedDescription)"
-                self.isLoading = false
-                return
-            }
 
-            guard let user = result?.user,
-                  let idToken = user.idToken?.tokenString else {
-                self.errorMessage = "No se pudo obtener el token de Google."
-                self.isLoading = false
-                return
-            }
-
-            let credential = GoogleAuthProvider.credential(
-                withIDToken: idToken,
-                accessToken: user.accessToken.tokenString
-            )
-
-            Auth.auth().signIn(with: credential) { authResult, error in
-                self.isLoading = false
-                if let error = error {
-                    self.errorMessage = "Error de Firebase: \(error.localizedDescription)"
+                guard let user = result?.user,
+                      let idToken = user.idToken?.tokenString else {
+                    self.errorMessage = "No se pudo obtener el token de Google."
+                    self.isLoading = false
                     return
                 }
-                guard let firebaseUser = authResult?.user else { return }
-                self.createUserIfNeeded(firebaseUser)
+
+                let credential = GoogleAuthProvider.credential(
+                    withIDToken: idToken,
+                    accessToken: user.accessToken.tokenString
+                )
+
+                Auth.auth().signIn(with: credential) { authResult, error in
+                    self.isLoading = false
+                    if let error = error {
+                        self.errorMessage = "Error de Firebase: \(error.localizedDescription)"
+                        return
+                    }
+                    guard let firebaseUser = authResult?.user else { return }
+                    self.createUserIfNeeded(firebaseUser)
+                }
             }
         }
     }
 
     // MARK: - Apple Sign-In
-
+    
     private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
         isLoading = true
         errorMessage = nil
@@ -189,10 +196,11 @@ struct AuthView: View {
                 return
             }
 
+            let nonce = currentNonce ?? UUID().uuidString
             let credential = OAuthProvider.credential(
                 withProviderID: "apple.com",
                 idToken: idTokenString,
-                rawNonce: nil
+                rawNonce: nonce
             )
 
             Auth.auth().signIn(with: credential) { authResult, error in
@@ -251,5 +259,47 @@ struct AuthView: View {
             isPrivate: false
         )
         appState.signIn(user: user)
+    }
+}
+
+/**
+ * Fondo con partículas decorativas animadas (efecto visual tipo Vivid).
+ */
+struct ParticleBackground: View {
+    @State private var particles: [Particle] = (0..<20).map { _ in Particle.random() }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                ForEach(particles) { particle in
+                    Circle()
+                        .fill(particle.color.opacity(0.15))
+                        .frame(width: particle.size, height: particle.size)
+                        .position(
+                            x: particle.x * geo.size.width,
+                            y: particle.y * geo.size.height
+                        )
+                        .blur(radius: 2)
+                }
+            }
+        }
+    }
+}
+
+struct Particle: Identifiable {
+    let id = UUID()
+    let x: CGFloat
+    let y: CGFloat
+    let size: CGFloat
+    let color: Color
+
+    static func random() -> Particle {
+        let colors: [Color] = [VividTheme.primary, VividTheme.secondary, VividTheme.accent]
+        return Particle(
+            x: .random(in: 0...1),
+            y: .random(in: 0...1),
+            size: .random(in: 20...80),
+            color: colors.randomElement()!
+        )
     }
 }

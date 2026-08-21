@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import GoogleSignIn
 
 /**
  * Pantalla de ajustes.
@@ -75,6 +77,8 @@ struct SettingsView: View {
         .alert("Cerrar sesión", isPresented: $showSignOutConfirmation) {
             Button("Cancelar", role: .cancel) {}
             Button("Cerrar sesión", role: .destructive) {
+                try? Auth.auth().signOut()
+                GIDSignIn.sharedInstance.signOut()
                 appState.signOut()
             }
         } message: {

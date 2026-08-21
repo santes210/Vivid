@@ -62,44 +62,53 @@ class FeedViewModel: ObservableObject {
 
     private func generateSamplePosts() -> [PostUI] {
         let usernames = ["maria_photo", "carlos.design", "luna_travels", "diego_music", "sofia.art"]
-        return (0..<5).map { i in
-            PostUI(
+        let captions = [
+            "Atardecer increíble 🌅 #nature",
+            "Nuevo diseño terminado ✨ #design",
+            "Explorando nuevas ciudades 🏙️",
+            "Música para el alma 🎵",
+            "Arte abstracto del día 🎨"
+        ]
+        let now = Date().timeIntervalSince1970 * 1000
+        var result: [PostUI] = []
+        for i in 0..<5 {
+            let post = PostUI(
                 id: "post_\(i)",
                 userId: "user_\(i)",
                 username: usernames[i % usernames.count],
                 userProfilePicture: "",
                 imageUrl: "",
-                caption: [
-                    "Atardecer increíble 🌅 #nature",
-                    "Nuevo diseño terminado ✨ #design",
-                    "Explorando nuevas ciudades 🏙️",
-                    "Música para el alma 🎵",
-                    "Arte abstracto del día 🎨"
-                ][i % 5],
+                caption: captions[i % 5],
                 likesCount: Int.random(in: 10...500),
                 commentsCount: Int.random(in: 0...50),
-                timestamp: Int64(Date().timeIntervalSince1970 * 1000) - Int64(i * 3600000),
+                timestamp: Int64(now) - Int64(i * 3600000),
                 isLiked: Bool.random(),
                 isVideo: i % 3 == 0,
                 videoUrl: "",
                 thumbnailUrl: ""
             )
+            result.append(post)
         }
+        return result
     }
 
     private func generateSampleStories() -> [StoryGroupUI] {
-        return (0..<8).map { i in
-            StoryGroupUI(
+        let usernames = ["ana", "pedro", "lucia", "jorge", "elena", "marco", "laura", "ivan"]
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        var result: [StoryGroupUI] = []
+        for i in 0..<8 {
+            let story = StoryUI(id: "s_\(i)_0", mediaUrl: "", type: "photo", caption: "", createdAt: now)
+            let group = StoryGroupUI(
                 id: "story_group_\(i)",
                 userId: "user_\(i)",
-                username: ["ana", "pedro", "lucia", "jorge", "elena", "marco", "laura", "ivan"][i],
+                username: usernames[i],
                 avatarUrl: "",
-                stories: [
-                    StoryUI(id: "s_\(i)_0", mediaUrl: "", type: "photo", caption: "", createdAt: Int64(Date().timeIntervalSince1970 * 1000))
-                ],
+                stories: [story],
                 hasUnseen: i < 5
             )
+            result.append(group)
         }
+        return result
     }
 }
 

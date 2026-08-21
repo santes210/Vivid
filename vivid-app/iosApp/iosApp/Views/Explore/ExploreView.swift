@@ -73,7 +73,7 @@ struct ExploreView: View {
                 }
             }
         }
-        .onChange(of: searchText) { _, newValue in
+        .onChange(of: searchText) { newValue in
             viewModel.search(query: newValue)
         }
     }

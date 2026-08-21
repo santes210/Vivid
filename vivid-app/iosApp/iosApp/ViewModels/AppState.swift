@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 /**
  * Estado global de la aplicación.
@@ -26,6 +27,31 @@ class AppState: ObservableObject {
         case create = "Crear"
         case reels = "Reels"
         case profile = "Perfil"
+    }
+
+    /// Restaura la sesión guardada de Firebase al arrancar la app.
+    func restoreSession() async {
+        if let currentUser = Auth.auth().currentUser {
+            let name = currentUser.displayName
+                ?? currentUser.email?.components(separatedBy: "@").first
+                ?? "usuario"
+            let user = User(
+                uid: currentUser.uid,
+                username: name,
+                displayName: currentUser.displayName ?? "Usuario",
+                bio: "",
+                avatarUrl: currentUser.photoURL?.absoluteString ?? "",
+                avatarBase64: "",
+                email: currentUser.email ?? "",
+                followersCount: 0,
+                followingCount: 0,
+                postsCount: 0,
+                isPrivate: false
+            )
+            signIn(user: user)
+        } else {
+            updateLoading(false)
+        }
     }
 
     func signIn(user: User) {

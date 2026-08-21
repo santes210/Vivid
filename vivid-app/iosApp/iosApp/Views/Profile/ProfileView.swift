@@ -127,7 +127,7 @@ struct ProfileView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 if viewModel.isCurrentUser {
                     NavigationLink(destination: SettingsView()) {
                         Image(systemName: "line.3.horizontal")

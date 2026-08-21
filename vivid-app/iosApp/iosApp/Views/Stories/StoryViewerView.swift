@@ -192,9 +192,9 @@ struct StoryViewerView: View {
 
     private func startProgressTimer() {
         progressTimer?.invalidate()
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self = self, !self.isPaused else { return }
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] _ in
+            DispatchQueue.main.async { [self] in
+                guard !self.isPaused else { return }
 
                 self.progress += 0.05 / self.storyDuration
 
