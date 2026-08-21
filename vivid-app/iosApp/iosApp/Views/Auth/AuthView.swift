@@ -86,7 +86,7 @@ struct AuthView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "g.circle.fill")
                                 .font(.system(size: 20))
-                                .foregroundStyle(.red, .yellow, .green, .blue)
+                                .foregroundStyle(VividTheme.accentGradient)
                             Text("Continuar con Google")
                                 .font(VividTheme.heading(16))
                         }
