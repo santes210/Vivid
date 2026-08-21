@@ -58,7 +58,9 @@ struct ExploreView: View {
                         // Resultados de búsqueda
                         LazyVStack(spacing: 0) {
                             ForEach(viewModel.searchResults) { user in
-                                UserSearchRow(user: user)
+                                NavigationLink(destination: ProfileView(userId: user.uid)) {
+                                    UserSearchRow(user: user)
+                                }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
                             }
@@ -137,7 +139,9 @@ struct UserSearchRow: View {
 
             Spacer()
 
-            Button("Seguir") {}
+            Button("Seguir") {
+                Task { _ = try? await FollowRepository().toggleFollow(targetUserId: user.uid) }
+            }
                 .font(.caption.bold())
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import FirebaseAuth
 import FirebaseFirestore
 
 @MainActor
@@ -11,21 +12,64 @@ class FeedViewModel: ObservableObject {
 
     private let postsRepository = PostRepository()
     private let storiesRepository = StoryRepository()
+    private let followRepository = FollowRepository()
     private var postsListener: ListenerRegistration?
     private var storiesListener: ListenerRegistration?
+    private var followingListener: ListenerRegistration?
 
     func loadFeed() async {
-        guard postsListener == nil else { return }
+        if posts.isEmpty { posts = LocalCacheStore.shared.loadPosts() }
+        guard followingListener == nil else { return }
         isLoading = true
-        postsListener = postsRepository.observePublicFeed { [weak self] result in
+        guard let uid = Auth.auth().currentUser?.uid else {
+            listenPublic()
+            return
+        }
+        followingListener = followRepository.observeFollowingIds(userId: uid) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self else { return }; self.isLoading = false
-                switch result { case .success(let posts): self.posts = posts.map { $0.asUI() }; case .failure(let error): self.error = error.localizedDescription }
+                guard let self else { return }
+                switch result {
+                case .success(let ids):
+                    let feedIds = ids + [uid]
+                    self.postsListener?.remove()
+                    self.postsListener = self.postsRepository.observeFollowingFeed(userIds: feedIds) { [weak self] postsResult in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            self.isLoading = false
+                            switch postsResult {
+                            case .success(let posts):
+                                let mapped = posts.map { $0.asUI() }
+                                self.posts = mapped
+                                LocalCacheStore.shared.savePosts(mapped)
+                            case .failure(let error): self.error = error.localizedDescription
+                            }
+                        }
+                    }
+                    if ids.isEmpty { self.listenPublic() }
+                case .failure:
+                    self.listenPublic()
+                }
             }
         }
         storiesListener = storiesRepository.observePublicActiveStories { [weak self] result in
             DispatchQueue.main.async {
                 switch result { case .success(let stories): self?.storyGroups = stories.groupedForUI(); case .failure(let error): self?.error = error.localizedDescription }
+            }
+        }
+    }
+
+    private func listenPublic() {
+        postsListener?.remove()
+        postsListener = postsRepository.observePublicFeed { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }; self.isLoading = false
+                switch result {
+                case .success(let posts):
+                    let mapped = posts.map { $0.asUI() }
+                    self.posts = mapped
+                    LocalCacheStore.shared.savePosts(mapped)
+                case .failure(let error): self.error = error.localizedDescription
+                }
             }
         }
     }
@@ -36,7 +80,7 @@ class FeedViewModel: ObservableObject {
         Task { do { try await postsRepository.toggleLike(postId: postId) } catch { self.error = error.localizedDescription } }
     }
 
-    func stop() { postsListener?.remove(); storiesListener?.remove(); postsListener = nil; storiesListener = nil }
+    func stop() { postsListener?.remove(); storiesListener?.remove(); followingListener?.remove(); postsListener = nil; storiesListener = nil; followingListener = nil }
 }
 
 enum TimeAgoFormatter {

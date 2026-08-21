@@ -51,6 +51,15 @@ struct MainTabView: View {
             .tag(AppState.AppTab.profile)
         }
         .tint(VividTheme.primary)
+        .onReceive(NotificationCenter.default.publisher(for: .vividDeepLink)) { note in
+            guard let link = note.object as? AppState.DeepLink else { return }
+            switch link {
+            case .profile: appState.selectedTab = .profile
+            case .reel: appState.selectedTab = .reels
+            case .chat, .post: appState.selectedTab = .feed
+            }
+            appState.pendingDeepLink = link
+        }
     }
 }
 

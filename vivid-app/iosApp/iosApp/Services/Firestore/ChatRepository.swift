@@ -27,16 +27,48 @@ final class ChatRepository {
 
     static func id(firstUserId: String, secondUserId: String) -> String { [firstUserId, secondUserId].sorted().joined(separator: "_") }
 
-    func sendMessage(receiverId: String, receiverName: String, receiverAvatar: String = "", text: String, senderName: String, senderAvatar: String = "", replyToStoryId: String = "") async throws -> String {
+    func sendMessage(
+        receiverId: String,
+        receiverName: String,
+        receiverAvatar: String = "",
+        text: String,
+        senderName: String,
+        senderAvatar: String = "",
+        replyToStoryId: String = "",
+        image: UploadedMedia? = nil,
+        voice: UploadedMedia? = nil,
+        voiceDurationMs: Int64 = 0
+    ) async throws -> String {
         guard let senderId = auth.currentUser?.uid else { throw FirebaseRepositoryError.unauthenticated }
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty, !receiverId.isEmpty, receiverId != senderId else { throw FirebaseRepositoryError.invalidInput("No se puede enviar este mensaje.") }
+        guard !receiverId.isEmpty, receiverId != senderId else { throw FirebaseRepositoryError.invalidInput("No se puede enviar este mensaje.") }
+        let type: String
+        if image != nil { type = "image" }
+        else if voice != nil { type = "voice" }
+        else if !replyToStoryId.isEmpty { type = "story_reply" }
+        else { type = "text" }
+        if type == "text" && body.isEmpty { throw FirebaseRepositoryError.invalidInput("No se puede enviar este mensaje.") }
         let chatId = Self.id(firstUserId: senderId, secondUserId: receiverId)
         let chat = db.collection("chats").document(chatId)
         let message = chat.collection("messages").document()
         let now = Int64(Date().timeIntervalSince1970 * 1_000)
-        let type = replyToStoryId.isEmpty ? "text" : "story_reply"
-        let preview = type == "text" ? body : "↳ Respondió a tu story"
+        let preview: String
+        switch type {
+        case "image": preview = "📷 Foto"
+        case "voice": preview = "🎤 Nota de voz"
+        case "story_reply": preview = "↳ Respondió a tu story"
+        default: preview = body
+        }
+        var payload: [String: Any] = ["senderId": senderId, "receiverId": receiverId, "text": body, "timestamp": now, "type": type, "isRead": false, "isDelivered": false, "replyToStoryId": replyToStoryId]
+        if let image {
+            payload["imageUrl"] = image.url
+            payload["imageKey"] = image.storageKey
+        }
+        if let voice {
+            payload["voiceUrl"] = voice.url
+            payload["voiceKey"] = voice.storageKey
+            payload["voiceDurationMs"] = voiceDurationMs
+        }
         let batch = db.batch()
         batch.setData([
             "participants": [senderId, receiverId], "participantNames": [senderId: senderName, receiverId: receiverName],
@@ -44,7 +76,7 @@ final class ChatRepository {
             "lastMessageType": type, "lastMessageSenderId": senderId, "lastTimestamp": now,
             "updatedAt": now, "createdAt": now, "unreadCounts": [senderId: 0, receiverId: 1]
         ], forDocument: chat, merge: true)
-        batch.setData(["senderId": senderId, "receiverId": receiverId, "text": body, "timestamp": now, "type": type, "isRead": false, "isDelivered": false, "replyToStoryId": replyToStoryId], forDocument: message)
+        batch.setData(payload, forDocument: message)
         try await batch.commitAsync()
         return chatId
     }

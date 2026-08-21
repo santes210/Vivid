@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 /**
  * Visor de stories con transición automática y gestos.
@@ -47,15 +48,9 @@ struct StoryViewerView: View {
 
             // Contenido de la story
             ZStack {
-                if currentStory.type == "video" {
-                    // En producción: AVPlayer para video
-                    Rectangle()
-                        .fill(VividTheme.surfaceVariant)
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 60))
-                                .foregroundStyle(.white.opacity(0.3))
-                        )
+                if currentStory.type == "video", let url = URL(string: currentStory.mediaUrl) {
+                    LoopingVideoPlayer(url: url, isPlaying: !isPaused, isMuted: false)
+                        .ignoresSafeArea()
                 } else {
                     AsyncImage(url: URL(string: currentStory.mediaUrl)) { image in
                         image.resizable().scaledToFill()
@@ -230,10 +225,19 @@ struct StoryViewerView: View {
     }
 
     private func sendReply() {
-        guard !replyText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        // En producción: enviar como mensaje vía ChatRepository
-        // con type = "story_reply" y replyToStoryId = currentStory.id
+        let text = replyText.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return }
         replyText = ""
+        Task {
+            let sender = Auth.auth().currentUser?.displayName ?? "Usuario"
+            _ = try? await ChatRepository().sendMessage(
+                receiverId: currentGroup.userId,
+                receiverName: currentGroup.username,
+                text: text,
+                senderName: sender,
+                replyToStoryId: currentStory.id
+            )
+        }
     }
 }
 

@@ -16,7 +16,7 @@ struct ReelsView: View {
 
             TabView(selection: $currentReelIndex) {
                 ForEach(Array(viewModel.reels.enumerated()), id: \.offset) { index, reel in
-                    ReelCard(reel: reel) { viewModel.toggleLike(reelId: reel.id) }
+                    ReelCard(reel: reel, isActive: index == currentReelIndex) { viewModel.toggleLike(reelId: reel.id) }
                         .tag(index)
                 }
             }
@@ -52,33 +52,29 @@ struct ReelsView: View {
 
 struct ReelCard: View {
     let reel: ReelUI
+    var isActive: Bool = true
     let onLike: () -> Void
     @State private var isLiked = false
     @State private var likesCount: Int
     @State private var isPaused = false
+    @State private var showComments = false
 
-    init(reel: ReelUI, onLike: @escaping () -> Void) {
+    init(reel: ReelUI, isActive: Bool = true, onLike: @escaping () -> Void) {
         self.reel = reel
+        self.isActive = isActive
         self.onLike = onLike
         _likesCount = State(initialValue: reel.likes)
     }
 
     var body: some View {
         ZStack {
-            // Video placeholder (en producción: AVPlayer)
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [.black, VividTheme.surfaceVariant, .black],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    Image(systemName: "play.rectangle.fill")
-                        .font(.system(size: 60))
-                        .foregroundStyle(.white.opacity(0.1))
-                )
+            if let url = URL(string: reel.videoUrl), !reel.videoUrl.isEmpty {
+                LoopingVideoPlayer(url: url, isPlaying: isActive && !isPaused, isMuted: false)
+                    .ignoresSafeArea()
+            } else {
+                Rectangle()
+                    .fill(LinearGradient(colors: [.black, VividTheme.surfaceVariant, .black], startPoint: .top, endPoint: .bottom))
+            }
 
             // Gradiente inferior para legibilidad
             LinearGradient(
@@ -106,11 +102,15 @@ struct ReelCard: View {
                         .frame(width: 36, height: 36)
                         .clipShape(Circle())
 
-                        Text("@\(reel.username)")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.white)
+                        NavigationLink(destination: ProfileView(userId: reel.userId)) {
+                            Text("@\(reel.username)")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                        }
 
-                        Button("Seguir") {}
+                        Button("Seguir") {
+                            Task { _ = try? await FollowRepository().toggleFollow(targetUserId: reel.userId) }
+                        }
                             .font(.caption.bold())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -143,7 +143,7 @@ struct ReelCard: View {
                         }
                     }
 
-                    Button(action: {}) {
+                    Button(action: { showComments = true }) {
                         VStack(spacing: 4) {
                             Image(systemName: "bubble.right")
                                 .font(.system(size: 26))
@@ -172,6 +172,9 @@ struct ReelCard: View {
         }
         .onTapGesture {
             isPaused.toggle()
+        }
+        .sheet(isPresented: $showComments) {
+            CommentsView(postId: reel.id, isReel: true, postOwnerUsername: reel.username)
         }
     }
 

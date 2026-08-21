@@ -22,6 +22,18 @@ final class PostRepository {
             .addSnapshotListener { snapshot, error in self.posts(snapshot, error, onChange) }
     }
 
+    func fetchPost(id: String) async throws -> FirestorePost? {
+        let snap = try await FirebaseAsync.value { completion in db.collection("posts").document(id).getDocument(completion: completion) }
+        return FirestorePost(document: snap)
+    }
+
+    func observeFollowingFeed(userIds: [String], limit: Int = 50, onChange: @escaping (Result<[FirestorePost], Error>) -> Void) -> ListenerRegistration? {
+        let ids = Array(Set(userIds)).prefix(10)
+        guard !ids.isEmpty else { onChange(.success([])); return nil }
+        return db.collection("posts").whereField("userId", in: Array(ids)).order(by: "timestamp", descending: true).limit(to: limit)
+            .addSnapshotListener { snapshot, error in self.posts(snapshot, error, onChange) }
+    }
+
     @discardableResult
     func observePost(id: String, onChange: @escaping (Result<FirestorePost?, Error>) -> Void) -> ListenerRegistration {
         db.collection("posts").document(id).addSnapshotListener { snapshot, error in
