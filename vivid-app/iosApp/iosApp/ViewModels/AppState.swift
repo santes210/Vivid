@@ -10,6 +10,14 @@ class AppState: ObservableObject {
     @Published var isLoading = true
     @Published var selectedTab: AppTab = .feed
     @Published var navigationPath = NavigationPath()
+    @Published var pendingDeepLink: DeepLink?
+
+    enum DeepLink: Equatable {
+        case profile(String)
+        case chat(String)
+        case post(String)
+        case reel(String)
+    }
 
     private let userRepository = UserRepository()
     private var userListener: ListenerRegistration?

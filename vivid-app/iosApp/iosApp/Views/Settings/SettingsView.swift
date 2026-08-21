@@ -95,6 +95,25 @@ struct SettingsView: View {
     }
 }
 
+struct PrivacySettingsView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isPrivate = false
+
+    var body: some View {
+        Form {
+            Toggle("Cuenta privada", isOn: $isPrivate)
+                .onChange(of: isPrivate) { value in
+                    Task { try? await FollowRepository().setPrivateAccount(value) }
+                }
+            Text("Si tu cuenta es privada, otras personas deben enviar una solicitud para seguirte y ver tus posts.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .navigationTitle("Privacidad")
+        .onAppear { isPrivate = appState.currentUser?.isPrivate ?? false }
+    }
+}
+
 struct SettingsRow: View {
     let icon: String
     let title: String

@@ -7,6 +7,8 @@ import SwiftUI
 struct FeedView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = FeedViewModel()
+    @State private var showStoryViewer = false
+    @State private var storyIndex = 0
 
     var body: some View {
         ZStack {
@@ -16,7 +18,10 @@ struct FeedView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     // Barra de stories
-                    StoriesBar(storyGroups: viewModel.storyGroups)
+                    StoriesBar(storyGroups: viewModel.storyGroups) { index in
+                        showStoryViewer = true
+                        storyIndex = index
+                    }
                         .padding(.vertical, 8)
 
                     Divider()
@@ -56,6 +61,9 @@ struct FeedView: View {
         .task {
             await viewModel.loadFeed()
         }
+        .fullScreenCover(isPresented: $showStoryViewer) {
+            StoryViewerView(storyGroups: viewModel.storyGroups, initialGroupIndex: storyIndex)
+        }
     }
 }
 
@@ -63,15 +71,14 @@ struct FeedView: View {
 
 struct StoriesBar: View {
     let storyGroups: [StoryGroupUI]
+    var onSelect: (Int) -> Void = { _ in }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                // Tu propia story
                 YourStoryButton()
-
-                ForEach(storyGroups) { group in
-                    StoryAvatar(group: group)
+                ForEach(Array(storyGroups.enumerated()), id: \.element.id) { index, group in
+                    Button { onSelect(index) } label: { StoryAvatar(group: group) }
                 }
             }
             .padding(.horizontal, 16)
@@ -183,6 +190,8 @@ struct PostCard: View {
     @State private var isLiked: Bool
     @State private var likesCount: Int
     @State private var showComments = false
+    @State private var showReport = false
+    @State private var isSaved = false
 
     init(post: PostUI, onLike: @escaping () -> Void) {
         self.post = post
@@ -195,18 +204,20 @@ struct PostCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header: avatar + username + timestamp
             HStack(spacing: 12) {
-                AsyncImage(url: URL(string: post.userProfilePicture)) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Circle().fill(VividTheme.surfaceVariant)
-                        .overlay(
-                            Text(String(post.username.prefix(1)).uppercased())
-                                .font(.caption.bold())
-                                .foregroundStyle(.white)
-                        )
+                NavigationLink(destination: ProfileView(userId: post.userId)) {
+                    AsyncImage(url: URL(string: post.userProfilePicture)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(VividTheme.surfaceVariant)
+                            .overlay(
+                                Text(String(post.username.prefix(1)).uppercased())
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                            )
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.username)
@@ -220,27 +231,24 @@ struct PostCard: View {
 
                 Spacer()
 
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.white.opacity(0.6))
-                    .padding(8)
+                Menu {
+                    Button("Reportar") { showReport = true }
+                    Button("Bloquear autor") { Task { try? await FollowRepository().blockUser(targetUserId: post.userId) } }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(8)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
             // Media
             ZStack {
-                if post.isVideo {
-                    AsyncImage(url: URL(string: post.thumbnailUrl)) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Rectangle().fill(VividTheme.surfaceVariant)
-                    }
-                    .frame(height: 360)
-                    .clipped()
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white.opacity(0.8))
+                if post.isVideo, let url = URL(string: post.videoUrl), !post.videoUrl.isEmpty {
+                    LoopingVideoPlayer(url: url, isPlaying: true, isMuted: true)
+                        .frame(height: 360)
+                        .clipped()
                 } else {
                     AsyncImage(url: URL(string: post.imageUrl)) { image in
                         image.resizable().scaledToFill()
@@ -277,8 +285,11 @@ struct PostCard: View {
 
                 Spacer()
 
-                Button(action: {}) {
-                    Image(systemName: "bookmark")
+                Button(action: {
+                    isSaved.toggle()
+                    Task { try? await ContentActionsRepository().toggleSave(postId: post.id) }
+                }) {
+                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
                         .font(.system(size: 22))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -312,6 +323,12 @@ struct PostCard: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 12)
+        }
+        .sheet(isPresented: $showComments) {
+            CommentsView(postId: post.id, postOwnerUsername: post.username)
+        }
+        .sheet(isPresented: $showReport) {
+            ReportSheet(targetType: "post", targetId: post.id)
         }
     }
 

@@ -31,6 +31,27 @@ final class ReelRepository {
         return ref.documentID
     }
 
+    @discardableResult
+    func observeComments(reelId: String, onChange: @escaping (Result<[FirestoreComment], Error>) -> Void) -> ListenerRegistration {
+        db.collection("reels").document(reelId).collection("comments").order(by: "timestamp")
+            .addSnapshotListener { snapshot, error in
+                if let error { onChange(.failure(error)); return }
+                onChange(.success(snapshot?.documents.compactMap { FirestoreComment(document: $0) } ?? []))
+            }
+    }
+
+    func addComment(reelId: String, text: String, username: String, avatarURL: String = "") async throws {
+        guard let uid = auth.currentUser?.uid else { throw FirebaseRepositoryError.unauthenticated }
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { throw FirebaseRepositoryError.invalidInput("El comentario está vacío.") }
+        let reel = db.collection("reels").document(reelId)
+        let comment = reel.collection("comments").document()
+        let batch = db.batch()
+        batch.setData(["userId": uid, "username": username, "text": body, "avatarUrl": avatarURL, "timestamp": Int64(Date().timeIntervalSince1970 * 1_000), "likesCount": 0], forDocument: comment)
+        batch.updateData(["comments": FieldValue.increment(Int64(1))], forDocument: reel)
+        try await batch.commitAsync()
+    }
+
     func toggleLike(reelId: String) async throws {
         guard let uid = auth.currentUser?.uid else { throw FirebaseRepositoryError.unauthenticated }
         let reel = db.collection("reels").document(reelId)

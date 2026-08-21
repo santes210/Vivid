@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import PhotosUI
 
 /**
  * Pantalla de perfil de usuario.
@@ -12,6 +13,7 @@ struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @State private var selectedTab: ProfileTab = .posts
     @State private var showEditProfile = false
+    @State private var followLabel = "Seguir"
 
     enum ProfileTab: String, CaseIterable {
         case posts = "Publicaciones"
@@ -31,6 +33,7 @@ struct ProfileView: View {
 
                     // Estadísticas
                     ProfileStats(
+                        userId: userId,
                         postsCount: viewModel.user?.postsCount ?? 0,
                         followersCount: viewModel.user?.followersCount ?? 0,
                         followingCount: viewModel.user?.followingCount ?? 0
@@ -63,21 +66,33 @@ struct ProfileView: View {
                         .padding(.horizontal, 16)
                     } else {
                         HStack(spacing: 12) {
-                            Button("Seguir") {}
+                            Button(followLabel) {
+                                Task {
+                                    if let result = try? await FollowRepository().toggleFollow(targetUserId: userId) {
+                                        await MainActor.run {
+                                            switch result {
+                                            case .followed: followLabel = "Siguiendo"
+                                            case .requested: followLabel = "Solicitado"
+                                            case .unfollowed, .requestCancelled: followLabel = "Seguir"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                                 .font(.subheadline.bold())
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                                 .background(Capsule().fill(VividTheme.primary))
 
-                            Button("Mensaje") {}
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(
-                                    Capsule().fill(.white.opacity(0.1))
-                                )
+                            NavigationLink(destination: ChatView(chat: ChatUI(id: ChatRepository.id(firstUserId: Auth.auth().currentUser?.uid ?? "", secondUserId: userId), chatId: ChatRepository.id(firstUserId: Auth.auth().currentUser?.uid ?? "", secondUserId: userId), otherUserId: userId, otherUserName: viewModel.user?.username ?? "Usuario", otherUserAvatar: viewModel.user?.avatarUrl ?? "", lastMessage: "", lastMessageTimestamp: 0, unreadCount: 0))) {
+                                Text("Mensaje")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Capsule().fill(.white.opacity(0.1)))
+                            }
                         }
                         .padding(.horizontal, 16)
                     }
@@ -143,7 +158,7 @@ struct ProfileView: View {
             await viewModel.loadProfile(userId: userId)
         }
         .sheet(isPresented: $showEditProfile) {
-            if let user = viewModel.user { EditProfileSheet(user: user) { username, displayName, bio in viewModel.saveProfile(username: username, displayName: displayName, bio: bio) } }
+            if let user = viewModel.user { EditProfileSheet(user: user) { username, displayName, bio, avatarURL in viewModel.saveProfile(username: username, displayName: displayName, bio: bio, avatarURL: avatarURL) } }
         }
     }
 
@@ -158,13 +173,16 @@ struct ProfileView: View {
 
 struct EditProfileSheet: View {
     let user: User
-    let onSave: (String, String, String) -> Void
+    let onSave: (String, String, String, String?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var username: String
     @State private var displayName: String
     @State private var bio: String
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var avatarURL: String?
+    @State private var uploading = false
 
-    init(user: User, onSave: @escaping (String, String, String) -> Void) {
+    init(user: User, onSave: @escaping (String, String, String, String?) -> Void) {
         self.user = user; self.onSave = onSave
         _username = State(initialValue: user.username); _displayName = State(initialValue: user.displayName); _bio = State(initialValue: user.bio)
     }
@@ -172,6 +190,21 @@ struct EditProfileSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                PhotosPicker(selection: $selectedItem, matching: .images) {
+                    Text(uploading ? "Subiendo avatar…" : "Cambiar foto de perfil")
+                }
+                .onChange(of: selectedItem) { item in
+                    Task {
+                        guard let item, let data = try? await item.loadTransferable(type: Data.self) else { return }
+                        uploading = true
+                        let url = FileManager.default.temporaryDirectory.appendingPathComponent("avatar-\(UUID().uuidString).jpg")
+                        try? data.write(to: url)
+                        if let uploaded = try? await MediaStorageRepository().upload(localURL: url, path: "avatars/\(user.uid)/\(UUID().uuidString).jpg") {
+                            avatarURL = uploaded.url
+                        }
+                        uploading = false
+                    }
+                }
                 TextField("Username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
                 TextField("Nombre", text: $displayName)
                 TextField("Bio", text: $bio, axis: .vertical).lineLimit(2...5)
@@ -179,7 +212,7 @@ struct EditProfileSheet: View {
             .navigationTitle("Editar perfil")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Guardar") { onSave(username, displayName, bio); dismiss() }.disabled(username.trimmingCharacters(in: .whitespaces).isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button("Guardar") { onSave(username, displayName, bio, avatarURL); dismiss() }.disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || uploading) }
             }
         }
     }
@@ -241,6 +274,7 @@ struct ProfileHeader: View {
 // MARK: - Profile Stats
 
 struct ProfileStats: View {
+    let userId: String
     let postsCount: Int
     let followersCount: Int
     let followingCount: Int
@@ -249,9 +283,13 @@ struct ProfileStats: View {
         HStack(spacing: 0) {
             StatItem(count: postsCount, label: "Publicaciones")
             Divider().frame(height: 30).background(.white.opacity(0.1))
-            StatItem(count: followersCount, label: "Seguidores")
+            NavigationLink(destination: FollowersFollowingView(userId: userId, initialTab: .followers)) {
+                StatItem(count: followersCount, label: "Seguidores")
+            }
             Divider().frame(height: 30).background(.white.opacity(0.1))
-            StatItem(count: followingCount, label: "Siguiendo")
+            NavigationLink(destination: FollowersFollowingView(userId: userId, initialTab: .following)) {
+                StatItem(count: followingCount, label: "Siguiendo")
+            }
         }
         .padding(.horizontal, 16)
     }

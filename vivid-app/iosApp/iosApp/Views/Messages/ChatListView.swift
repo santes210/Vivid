@@ -1,6 +1,8 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import PhotosUI
+import AVFoundation
 
 /**
  * Lista de chats (conversaciones).
@@ -46,19 +48,36 @@ struct ChatListView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {}) {
+                Button(action: { viewModel.showPicker = true }) {
                     Image(systemName: "square.and.pencil")
                         .foregroundStyle(.white)
                 }
             }
         }
+        .sheet(isPresented: $viewModel.showPicker) {
+            UserPickerView { user in
+                viewModel.showPicker = false
+                viewModel.pendingChat = ChatUI(id: ChatRepository.id(firstUserId: Auth.auth().currentUser?.uid ?? "", secondUserId: user.id), chatId: ChatRepository.id(firstUserId: Auth.auth().currentUser?.uid ?? "", secondUserId: user.id), otherUserId: user.id, otherUserName: user.username, otherUserAvatar: user.avatarURL, lastMessage: "", lastMessageTimestamp: 0, unreadCount: 0)
+            }
+        }
+        .background(
+            NavigationLink(
+                destination: Group {
+                    if let chat = viewModel.pendingChat { ChatView(chat: chat) }
+                },
+                isActive: Binding(
+                    get: { viewModel.pendingChat != nil },
+                    set: { if !$0 { viewModel.pendingChat = nil } }
+                )
+            ) { EmptyView() }
+        )
         .task {
             await viewModel.loadChats()
         }
     }
 }
 
-struct ChatUI: Identifiable {
+struct ChatUI: Identifiable, Hashable {
     let id: String
     let chatId: String
     let otherUserId: String
@@ -141,6 +160,7 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @State private var messageText = ""
     @FocusState private var isInputFocused: Bool
+    @State private var photoItem: PhotosPickerItem?
 
     var body: some View {
         ZStack {
@@ -175,10 +195,13 @@ struct ChatView: View {
 
                 // Input de mensaje
                 HStack(spacing: 12) {
-                    Button(action: {}) {
+                    PhotosPicker(selection: $photoItem, matching: .images) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 28))
                             .foregroundStyle(VividTheme.primary)
+                    }
+                    .onChange(of: photoItem) { item in
+                        Task { await viewModel.sendImage(item: item, chat: chat) }
                     }
 
                     TextField("Mensaje...", text: $messageText, axis: .vertical)
@@ -193,7 +216,7 @@ struct ChatView: View {
                         )
 
                     if messageText.isEmpty {
-                        Button(action: {}) {
+                        Button(action: { Task { await viewModel.sendVoicePlaceholder(chat: chat) } }) {
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 22))
                                 .foregroundStyle(.white.opacity(0.6))
@@ -234,6 +257,8 @@ struct MessageUI: Identifiable {
     let isDelivered: Bool
     let reaction: String
     let type: String
+    let imageURL: String
+    let voiceURL: String
 }
 
 struct MessageBubble: View {
@@ -245,15 +270,28 @@ struct MessageBubble: View {
             if isFromCurrentUser { Spacer(minLength: 60) }
 
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 2) {
-                Text(message.text)
-                    .font(.subheadline)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(isFromCurrentUser ? VividTheme.primary : .white.opacity(0.12))
-                    )
+                if message.type == "image", let url = URL(string: message.imageURL) {
+                    AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { ProgressView() }
+                        .frame(width: 180, height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                } else if message.type == "voice" {
+                    Label(message.text.isEmpty ? "Nota de voz" : message.text, systemImage: "waveform")
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(isFromCurrentUser ? VividTheme.primary : .white.opacity(0.12)))
+                } else {
+                    Text(message.type == "story_reply" ? "↳ \(message.text)" : message.text)
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(isFromCurrentUser ? VividTheme.primary : .white.opacity(0.12))
+                        )
+                }
 
                 HStack(spacing: 4) {
                     Text(TimeAgoFormatter.format(message.timestamp))
@@ -276,6 +314,8 @@ struct MessageBubble: View {
 @MainActor
 class ChatListViewModel: ObservableObject {
     @Published var chats: [ChatUI] = []
+    @Published var showPicker = false
+    @Published var pendingChat: ChatUI?
     private let repository = ChatRepository()
     private var listener: ListenerRegistration?
 
@@ -307,7 +347,7 @@ class ChatViewModel: ObservableObject {
         listener?.remove()
         listener = repository.observeMessages(chatId: chatId) { [weak self] result in
             DispatchQueue.main.async {
-                switch result { case .success(let messages): self?.messages = messages.map { MessageUI(id: $0.id, text: $0.text, senderId: $0.senderId, timestamp: $0.timestamp, isRead: $0.isRead, isDelivered: $0.isDelivered, reaction: $0.reaction, type: $0.type) }; case .failure(let error): self?.error = error.localizedDescription }
+                switch result { case .success(let messages): self?.messages = messages.map { MessageUI(id: $0.id, text: $0.text, senderId: $0.senderId, timestamp: $0.timestamp, isRead: $0.isRead, isDelivered: $0.isDelivered, reaction: $0.reaction, type: $0.type, imageURL: $0.imageURL, voiceURL: $0.voiceURL) }; case .failure(let error): self?.error = error.localizedDescription }
             }
         }
         do { try await repository.markMessagesRead(chatId: chatId) } catch { self.error = error.localizedDescription }
@@ -319,4 +359,22 @@ class ChatViewModel: ObservableObject {
     }
 
     func isFromCurrentUser(_ message: MessageUI) -> Bool { message.senderId == currentUserId }
+
+    func sendImage(item: PhotosPickerItem?, chat: ChatUI) async {
+        guard let item, let data = try? await item.loadTransferable(type: Data.self) else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-\(UUID().uuidString).jpg")
+        try? data.write(to: url)
+        do {
+            let uploaded = try await MediaStorageRepository().upload(localURL: url, path: "chats/\(chat.chatId)/\(UUID().uuidString).jpg")
+            let name = Auth.auth().currentUser?.displayName ?? "Usuario"
+            _ = try await repository.sendMessage(receiverId: chat.otherUserId, receiverName: chat.otherUserName, text: "", senderName: name, image: uploaded)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func sendVoicePlaceholder(chat: ChatUI) async {
+        let name = Auth.auth().currentUser?.displayName ?? "Usuario"
+        do {
+            _ = try await repository.sendMessage(receiverId: chat.otherUserId, receiverName: chat.otherUserName, text: "🎤 Nota de voz", senderName: name)
+        } catch { self.error = error.localizedDescription }
+    }
 }

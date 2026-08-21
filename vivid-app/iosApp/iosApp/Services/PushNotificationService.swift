@@ -44,4 +44,28 @@ final class PushNotificationService: NSObject, MessagingDelegate, UNUserNotifica
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) { registerCurrentToken() }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions { [.banner, .sound, .badge] }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let data = response.notification.request.content.userInfo
+        let type = (data["type"] as? String) ?? ""
+        let targetId = (data["targetId"] as? String) ?? (data["userId"] as? String) ?? (data["chatId"] as? String) ?? ""
+        await MainActor.run {
+            switch type {
+            case "follow", "follow_request", "profile":
+                NotificationCenter.default.post(name: .vividDeepLink, object: AppState.DeepLink.profile(targetId))
+            case "message", "story_reply":
+                NotificationCenter.default.post(name: .vividDeepLink, object: AppState.DeepLink.chat(targetId))
+            case "comment", "like", "post":
+                NotificationCenter.default.post(name: .vividDeepLink, object: AppState.DeepLink.post(targetId))
+            case "reel":
+                NotificationCenter.default.post(name: .vividDeepLink, object: AppState.DeepLink.reel(targetId))
+            default:
+                break
+            }
+        }
+    }
+}
+
+extension Notification.Name {
+    static let vividDeepLink = Notification.Name("vividDeepLink")
 }
