@@ -1,4 +1,7 @@
 import SwiftUI
+import AuthenticationServices
+import FirebaseAuth
+import GoogleSignIn
 
 /**
  * Pantalla de autenticación.
@@ -10,6 +13,8 @@ import SwiftUI
 struct AuthView: View {
     @EnvironmentObject var appState: AppState
     @State private var isAnimating = false
+    @State private var isLoading = false
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -45,28 +50,31 @@ struct AuthView: View {
 
                 Spacer()
 
+                // Error message
+                if let error = errorMessage {
+                    Text(error)
+                        .font(VividTheme.caption(13))
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 12)
+                }
+
                 // Botones de autenticación
                 VStack(spacing: 16) {
                     // Sign in with Apple
-                    Button(action: signInWithApple) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "apple.logo")
-                                .font(.system(size: 20))
-                            Text("Continuar con Apple")
-                                .font(VividTheme.heading(16))
+                    SignInWithAppleButton(
+                        onRequest: { request in
+                            request.requestedScopes = [.fullName, .email]
+                        },
+                        onCompletion: { result in
+                            handleAppleSignIn(result)
                         }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: VividTheme.cornerRadiusMD, style: .continuous)
-                                .fill(.white.opacity(0.15))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: VividTheme.cornerRadiusMD, style: .continuous)
-                                .strokeBorder(.white.opacity(0.2), lineWidth: 1)
-                        )
-                    }
+                    )
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: VividTheme.cornerRadiusMD, style: .continuous))
+                    .disabled(isLoading)
 
                     // Sign in with Google
                     Button(action: signInWithGoogle) {
@@ -89,66 +97,159 @@ struct AuthView: View {
                                 .strokeBorder(.white.opacity(0.2), lineWidth: 1)
                         )
                     }
+                    .disabled(isLoading)
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 60)
+            }
+
+            if isLoading {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.5)
             }
         }
         .onAppear { isAnimating = true }
     }
 
-    private func signInWithApple() {
-        // Integración con AuthenticationServices + Firebase Auth
-        // let provider = OAuthProvider(providerID: "apple.com")
-        // provider.getCredentialWith(nil) { credential, error in ... }
-        print("Sign in with Apple tapped")
-    }
+    // MARK: - Google Sign-In
 
     private func signInWithGoogle() {
-        // Integración con GoogleSignIn SDK + Firebase Auth
-        // GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController) { result, error in ... }
-        print("Sign in with Google tapped")
-    }
-}
+        isLoading = true
+        errorMessage = nil
 
-/**
- * Fondo con partículas decorativas animadas (efecto visual tipo Vivid).
- */
-struct ParticleBackground: View {
-    @State private var particles: [Particle] = (0..<20).map { _ in Particle.random() }
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            errorMessage = "Error de configuración de Google. Reintenta más tarde."
+            isLoading = false
+            return
+        }
 
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                ForEach(particles) { particle in
-                    Circle()
-                        .fill(particle.color.opacity(0.15))
-                        .frame(width: particle.size, height: particle.size)
-                        .position(
-                            x: particle.x * geo.size.width,
-                            y: particle.y * geo.size.height
-                        )
-                        .blur(radius: 2)
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else {
+            errorMessage = "No se pudo abrir la ventana de inicio de sesión."
+            isLoading = false
+            return
+        }
+
+        GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { [self] result, error in
+            if let error = error {
+                let nsError = error as NSError
+                if nsError.code == GIDSignInError.Code.canceled.rawValue {
+                    // Usuario canceló — no es error
+                    self.isLoading = false
+                    return
                 }
+                self.errorMessage = "Error al iniciar sesión con Google: \(error.localizedDescription)"
+                self.isLoading = false
+                return
+            }
+
+            guard let user = result?.user,
+                  let idToken = user.idToken?.tokenString else {
+                self.errorMessage = "No se pudo obtener el token de Google."
+                self.isLoading = false
+                return
+            }
+
+            let credential = GoogleAuthProvider.credential(
+                withIDToken: idToken,
+                accessToken: user.accessToken.tokenString
+            )
+
+            Auth.auth().signIn(with: credential) { authResult, error in
+                self.isLoading = false
+                if let error = error {
+                    self.errorMessage = "Error de Firebase: \(error.localizedDescription)"
+                    return
+                }
+                guard let firebaseUser = authResult?.user else { return }
+                self.createUserIfNeeded(firebaseUser)
             }
         }
     }
-}
 
-struct Particle: Identifiable {
-    let id = UUID()
-    let x: CGFloat
-    let y: CGFloat
-    let size: CGFloat
-    let color: Color
+    // MARK: - Apple Sign-In
 
-    static func random() -> Particle {
-        let colors: [Color] = [VividTheme.primary, VividTheme.secondary, VividTheme.accent]
-        return Particle(
-            x: .random(in: 0...1),
-            y: .random(in: 0...1),
-            size: .random(in: 20...80),
-            color: colors.randomElement()!
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        isLoading = true
+        errorMessage = nil
+
+        switch result {
+        case .success(let authorization):
+            guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let appleIDToken = appleIDCredential.identityToken,
+                  let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+                errorMessage = "No se pudo obtener el token de Apple."
+                isLoading = false
+                return
+            }
+
+            let credential = OAuthProvider.credential(
+                withProviderID: "apple.com",
+                idToken: idTokenString,
+                rawNonce: nil
+            )
+
+            Auth.auth().signIn(with: credential) { authResult, error in
+                self.isLoading = false
+                if let error = error {
+                    self.errorMessage = "Error al autenticar con Apple: \(error.localizedDescription)"
+                    return
+                }
+                guard let firebaseUser = authResult?.user else { return }
+
+                // Apple solo da el nombre completo en el primer login
+                var displayName = firebaseUser.displayName ?? ""
+                if displayName.isEmpty {
+                    let firstName = appleIDCredential.fullName?.givenName ?? ""
+                    let lastName = appleIDCredential.fullName?.familyName ?? ""
+                    displayName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+                    if displayName.isEmpty {
+                        displayName = firebaseUser.email?.components(separatedBy: "@").first ?? "usuario"
+                    }
+                }
+
+                let changeRequest = firebaseUser.createProfileChangeRequest()
+                changeRequest.displayName = displayName
+                changeRequest.commitChanges { _ in }
+
+                self.createUserIfNeeded(firebaseUser, displayName: displayName)
+            }
+
+        case .failure(let error):
+            isLoading = false
+            let nsError = error as NSError
+            if nsError.code != ASAuthorizationError.Code.canceled.rawValue {
+                errorMessage = "Error con Apple ID: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    // MARK: - Helper
+
+    private func createUserIfNeeded(_ firebaseUser: FirebaseAuth.User, displayName: String? = nil) {
+        let name = displayName ?? firebaseUser.displayName
+            ?? firebaseUser.email?.components(separatedBy: "@").first
+            ?? "usuario"
+
+        let user = User(
+            uid: firebaseUser.uid,
+            username: name,
+            displayName: name,
+            bio: "",
+            avatarUrl: firebaseUser.photoURL?.absoluteString ?? "",
+            avatarBase64: "",
+            email: firebaseUser.email ?? "",
+            followersCount: 0,
+            followingCount: 0,
+            postsCount: 0,
+            isPrivate: false
         )
+        appState.signIn(user: user)
     }
 }
