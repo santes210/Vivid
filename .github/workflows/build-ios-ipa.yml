@@ -1,26 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 #  Build iOS .ipa SIN FIRMA — para distribución con SideStore
 # ═══════════════════════════════════════════════════════════════════
-#
-#  NO NECESITA:
-#    ❌ Apple Developer Account ($99/año)
-#    ❌ Certificados de distribución (.p12)
-#    ❌ Provisioning profiles
-#    ❌ Mac física
-#    ❌ Secrets complicados de Apple
-#
-#  SÍ NECESITA:
-#    ✅ GitHub Actions (plan gratuito — 200 min/mes de macOS)
-#    ✅ SideStore instalado en el iPhone de destino (1 vez con Mac prestada)
-#
-#  FLUJO:
-#    1. GitHub Actions compila Vivid.ipa (sin firma) en runner macOS
-#    2. Descargas el .ipa desde Actions → Artifacts
-#    3. Lo pasas al iPhone (WhatsApp, AirDrop, Google Drive)
-#    4. SideStore lo firma con el Apple ID personal y lo instala
-#    5. SideStore re-firma cada 7 días automáticamente (sin Mac)
-#
-# ═══════════════════════════════════════════════════════════════════
 
 name: Build iOS .ipa (unsigned, for SideStore)
 
@@ -46,25 +26,34 @@ jobs:
 
       - name: Select Xcode version
         run: |
-          sudo xcode-select -s /Applications/Xcode_15.4.app
+          # Xcode 16 necesario: XcodeGen genera formato 77 (Xcode 16+)
+          echo "Versiones de Xcode disponibles:"
+          ls /Applications/ | grep -i xcode || true
+          # Usar la versión más reciente de Xcode disponible
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.0.app
+          elif [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app
+          else
+            echo "::error::No se encontro Xcode 16 en el runner"
+            exit 1
+          fi
           xcodebuild -version
 
-      # ── Instalar XcodeGen (genera .xcodeproj desde YAML) ────────
       - name: Install XcodeGen
         run: |
           brew install xcodegen
           xcodegen --version
 
-      # ── Restaurar GoogleService-Info.plist (opcional) ───────────
       - name: Restore GoogleService-Info.plist
         run: |
           SECRET="${{ secrets.IOS_GOOGLE_SERVICE_PLIST }}"
           if [ -z "$SECRET" ]; then
             echo "::warning::IOS_GOOGLE_SERVICE_PLIST no configurado."
-            echo "::warning::Firebase no estará disponible en el build."
-            echo "::warning::Para habilitarlo: Settings → Secrets → IOS_GOOGLE_SERVICE_PLIST"
-
-            # Crear un plist mínimo para que el build no falle
             cat > vivid-app/iosApp/iosApp/GoogleService-Info.plist <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -80,31 +69,23 @@ jobs:
             exit 0
           fi
           printf '%s' "$SECRET" | base64 --decode > vivid-app/iosApp/iosApp/GoogleService-Info.plist
-          echo "✅ GoogleService-Info.plist restaurado."
+          echo "GoogleService-Info.plist restaurado."
 
-      # ── Generar proyecto Xcode con XcodeGen ─────────────────────
-      # Esto crea iosApp.xcodeproj automáticamente desde project.yml
-      # Sin necesidad de Mac ni Xcode GUI.
       - name: Generate Xcode project
         working-directory: vivid-app/iosApp
         run: |
           xcodegen generate
-          echo "✅ Proyecto Xcode generado desde project.yml"
+          echo "Proyecto Xcode generado."
           ls -la *.xcodeproj/
 
-      # ── Instalar dependencias CocoaPods ──────────────────────────
-      # Genera iosApp.xcworkspace que incluye el proyecto + Firebase pods
       - name: Install CocoaPods dependencies
         working-directory: vivid-app/iosApp
         run: |
           gem install cocoapods --no-document
           pod install --repo-update
-          echo "✅ Workspace generado con pods"
+          echo "Workspace generado con pods."
           ls -la *.xcworkspace/
 
-      # ── Compilar .app SIN FIRMA ─────────────────────────────────
-      # CODE_SIGNING_REQUIRED=NO permite compilar sin certificado Apple.
-      # El .ipa resultante lo firma SideStore en el iPhone del usuario.
       - name: Build unsigned .app
         working-directory: vivid-app/iosApp
         run: |
@@ -120,7 +101,7 @@ jobs:
             | xcpretty --color
 
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "::error::Build falló. Mostrando errores:"
+            echo "::error::Build fallo."
             xcodebuild build \
               -workspace iosApp.xcworkspace \
               -scheme iosApp \
@@ -133,11 +114,8 @@ jobs:
               2>&1 | tail -100
             exit 1
           fi
+          echo "Build compilado sin firma."
 
-          echo "✅ Build compilado sin firma."
-
-      # ── Empaquetar como .ipa ────────────────────────────────────
-      # Un .ipa es simplemente un zip con estructura Payload/AppName.app
       - name: Package as .ipa
         run: |
           APP_PATH="$(find "$RUNNER_TEMP/DerivedData" \
@@ -146,18 +124,13 @@ jobs:
             -print -quit)"
 
           if [ -z "$APP_PATH" ]; then
-            echo "::error::No se encontró el .app compilado."
-            echo "Archivos .app encontrados:"
+            echo "::error::No se encontro el .app compilado."
             find "$RUNNER_TEMP/DerivedData" -name "*.app" -print || true
-            echo ""
-            echo "Directorio de productos:"
             find "$RUNNER_TEMP/DerivedData/Build/Products" -type f -maxdepth 3 -print || true
             exit 1
           fi
 
-          echo "📦 App encontrada: $APP_PATH"
-
-          # Estructura del .ipa
+          echo "App encontrada: $APP_PATH"
           PAYLOAD_DIR="$RUNNER_TEMP/Payload"
           mkdir -p "$PAYLOAD_DIR"
           cp -R "$APP_PATH" "$PAYLOAD_DIR/"
@@ -168,23 +141,17 @@ jobs:
 
           echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_ENV"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
-          echo "✅ .ipa creado: release-artifacts/$IPA_NAME"
+          echo ".ipa creado: release-artifacts/$IPA_NAME"
 
-      # ── Mostrar info del build ──────────────────────────────────
       - name: Show bundle info
         run: |
-          echo "═══════════════════════════════════════════════"
-          echo "  📦 Bundle info"
-          echo "═══════════════════════════════════════════════"
+          echo "=== Bundle info ==="
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist" 2>/dev/null || echo "Bundle ID: com.vivid.app"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Info.plist" 2>/dev/null || echo "Version: 2.4.0"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Info.plist" 2>/dev/null || echo "Build: 1"
           echo ""
-          echo "📏 Tamaño del .ipa: $(du -h "release-artifacts/$IPA_NAME" | cut -f1)"
-          echo ""
-          ls -lh "release-artifacts/$IPA_NAME"
+          echo "Tamano del .ipa:"
+          du -h "release-artifacts/$IPA_NAME"
 
-      # ── Subir .ipa como artefacto ───────────────────────────────
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
@@ -193,26 +160,9 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # ── Resumen ─────────────────────────────────────────────────
       - name: Summary
         run: |
           echo ""
-          echo "═══════════════════════════════════════════════"
-          echo "  ✅ Build completado exitosamente"
-          echo "═══════════════════════════════════════════════"
-          echo ""
-          echo "  📥 Para descargar el .ipa:"
-          echo "     Actions → Este workflow → Artifacts"
-          echo "     → vivid-ios-unsigned-${GITHUB_RUN_NUMBER}"
-          echo ""
-          echo "  📱 Para instalar en iPhone:"
-          echo "     1. Abre SideStore en el iPhone"
-          echo "     2. Toca el botón + (esquina)"
-          echo "     3. Selecciona el archivo Vivid.ipa"
-          echo "     4. Inicia sesión con tu Apple ID"
-          echo "     5. SideStore firma e instala la app ✅"
-          echo ""
-          echo "  ⏰ SideStore re-firma automáticamente"
-          echo "     cada 7 días (solo ábrelo 1 vez/semana)"
-          echo ""
-          echo "═══════════════════════════════════════════════"
+          echo "=== Build completado ==="
+          echo "Descarga el .ipa desde: Actions -> Artifacts"
+          echo "Instala con SideStore en tu iPhone"
