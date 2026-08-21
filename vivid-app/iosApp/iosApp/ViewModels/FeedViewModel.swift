@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import FirebaseAuth
 import FirebaseFirestore
 
 @MainActor

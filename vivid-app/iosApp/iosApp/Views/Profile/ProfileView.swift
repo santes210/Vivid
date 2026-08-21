@@ -345,7 +345,7 @@ class ProfileViewModel: ObservableObject {
         }
     }
 
-    func saveProfile(username: String, displayName: String, bio: String) {
-        Task { do { try await usersRepository.updateProfile(username: username, displayName: displayName, bio: bio) } catch { self.error = error.localizedDescription } }
+    func saveProfile(username: String, displayName: String, bio: String, avatarURL: String?) {
+        Task { do { try await usersRepository.updateProfile(username: username, displayName: displayName, bio: bio, avatarURL: avatarURL) } catch { self.error = error.localizedDescription } }
     }
 }
