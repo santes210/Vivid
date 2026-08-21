@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 /**
  * Pantalla de perfil de usuario.
@@ -9,6 +11,7 @@ struct ProfileView: View {
     let userId: String
     @StateObject private var viewModel = ProfileViewModel()
     @State private var selectedTab: ProfileTab = .posts
+    @State private var showEditProfile = false
 
     enum ProfileTab: String, CaseIterable {
         case posts = "Publicaciones"
@@ -37,7 +40,7 @@ struct ProfileView: View {
                     // Botones de acción
                     if viewModel.isCurrentUser {
                         HStack(spacing: 12) {
-                            Button("Editar perfil") {}
+                            Button("Editar perfil") { showEditProfile = true }
                                 .font(.subheadline.bold())
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
@@ -139,6 +142,9 @@ struct ProfileView: View {
         .task {
             await viewModel.loadProfile(userId: userId)
         }
+        .sheet(isPresented: $showEditProfile) {
+            if let user = viewModel.user { EditProfileSheet(user: user) { username, displayName, bio in viewModel.saveProfile(username: username, displayName: displayName, bio: bio) } }
+        }
     }
 
     private func tabIcon(_ tab: ProfileTab) -> String {
@@ -146,6 +152,35 @@ struct ProfileView: View {
         case .posts: return "square.grid.3x3"
         case .reels: return "play.rectangle"
         case .tagged: return "person.crop.rectangle"
+        }
+    }
+}
+
+struct EditProfileSheet: View {
+    let user: User
+    let onSave: (String, String, String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var username: String
+    @State private var displayName: String
+    @State private var bio: String
+
+    init(user: User, onSave: @escaping (String, String, String) -> Void) {
+        self.user = user; self.onSave = onSave
+        _username = State(initialValue: user.username); _displayName = State(initialValue: user.displayName); _bio = State(initialValue: user.bio)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField("Nombre", text: $displayName)
+                TextField("Bio", text: $bio, axis: .vertical).lineLimit(2...5)
+            }
+            .navigationTitle("Editar perfil")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Guardar") { onSave(username, displayName, bio); dismiss() }.disabled(username.trimmingCharacters(in: .whitespaces).isEmpty) }
+            }
         }
     }
 }
@@ -253,48 +288,26 @@ struct StatItem: View {
 class ProfileViewModel: ObservableObject {
     @Published var user: User? = nil
     @Published var userPosts: [PostUI] = []
-    @Published var isCurrentUser = true
+    @Published var isCurrentUser = false
     @Published var isLoading = false
+    @Published var error: String?
+    private let usersRepository = UserRepository()
+    private let postsRepository = PostRepository()
+    private var userListener: ListenerRegistration?
+    private var postsListener: ListenerRegistration?
 
     func loadProfile(userId: String) async {
-        isLoading = true
-        defer { isLoading = false }
-
-        // En producción: usar UserRepository
-        user = User(
-            uid: userId,
-            username: "vivid_user",
-            displayName: "Usuario Vivid",
-            bio: "✨ Compartiendo momentos en Vivid",
-            avatarUrl: "",
-            avatarBase64: "",
-            email: "",
-            followersCount: 128,
-            followingCount: 95,
-            postsCount: 24,
-            isPrivate: false
-        )
-
-        var result: [PostUI] = []
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
-        for i in 0..<12 {
-            let post = PostUI(
-                id: "profile_post_\(i)",
-                userId: userId,
-                username: user?.username ?? "",
-                userProfilePicture: "",
-                imageUrl: "",
-                caption: "",
-                likesCount: Int.random(in: 5...200),
-                commentsCount: Int.random(in: 0...30),
-                timestamp: now,
-                isLiked: false,
-                isVideo: i % 4 == 0,
-                videoUrl: "",
-                thumbnailUrl: ""
-            )
-            result.append(post)
+        userListener?.remove(); postsListener?.remove(); isLoading = true
+        isCurrentUser = Auth.auth().currentUser?.uid == userId
+        userListener = usersRepository.observeUser(id: userId) { [weak self] result in
+            DispatchQueue.main.async { guard let self else { return }; self.isLoading = false; switch result { case .success(let user): self.user = user.map(User.init(profile:)); case .failure(let error): self.error = error.localizedDescription } }
         }
-        userPosts = result
+        postsListener = postsRepository.observePosts(byUserId: userId) { [weak self] result in
+            DispatchQueue.main.async { if case .success(let posts) = result { self?.userPosts = posts.map { $0.asUI() } } }
+        }
+    }
+
+    func saveProfile(username: String, displayName: String, bio: String) {
+        Task { do { try await usersRepository.updateProfile(username: username, displayName: displayName, bio: bio) } catch { self.error = error.localizedDescription } }
     }
 }

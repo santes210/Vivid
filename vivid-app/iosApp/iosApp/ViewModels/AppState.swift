@@ -1,81 +1,63 @@
 import SwiftUI
 import Combine
 import FirebaseAuth
+import FirebaseFirestore
 
-/**
- * Estado global de la aplicación.
- * Equivalente al AppState en Android (ViewModel de nivel de aplicación).
- *
- * Gestiona:
- * - Sesión del usuario (auth)
- * - Tema y configuración visual
- * - Navegación de alto nivel
- */
 @MainActor
 class AppState: ObservableObject {
     @Published var currentUser: User? = nil
-    @Published var isAuthenticated: Bool = false
-    @Published var isLoading: Bool = true
+    @Published var isAuthenticated = false
+    @Published var isLoading = true
     @Published var selectedTab: AppTab = .feed
-
-    // Navegación
     @Published var navigationPath = NavigationPath()
 
-    enum AppTab: String, CaseIterable {
-        case feed = "Inicio"
-        case explore = "Explorar"
-        case create = "Crear"
-        case reels = "Reels"
-        case profile = "Perfil"
-    }
+    private let userRepository = UserRepository()
+    private var userListener: ListenerRegistration?
 
-    /// Restaura la sesión guardada de Firebase al arrancar la app.
+    enum AppTab: String, CaseIterable { case feed = "Inicio", explore = "Explorar", create = "Crear", reels = "Reels", profile = "Perfil" }
+
     func restoreSession() async {
-        if let currentUser = Auth.auth().currentUser {
-            let name = currentUser.displayName
-                ?? currentUser.email?.components(separatedBy: "@").first
-                ?? "usuario"
-            let user = User(
-                uid: currentUser.uid,
-                username: name,
-                displayName: currentUser.displayName ?? "Usuario",
-                bio: "",
-                avatarUrl: currentUser.photoURL?.absoluteString ?? "",
-                avatarBase64: "",
-                email: currentUser.email ?? "",
-                followersCount: 0,
-                followingCount: 0,
-                postsCount: 0,
-                isPrivate: false
-            )
-            signIn(user: user)
-        } else {
-            updateLoading(false)
-        }
+        guard let firebaseUser = Auth.auth().currentUser else { updateLoading(false); return }
+        observeProfile(uid: firebaseUser.uid, fallback: firebaseUser)
+        PushNotificationService.shared.registerCurrentToken()
+        Task { await PushNotificationService.shared.requestPermissionAndRegister() }
     }
 
     func signIn(user: User) {
-        self.currentUser = user
-        self.isAuthenticated = true
-        self.isLoading = false
+        currentUser = user
+        isAuthenticated = true
+        isLoading = false
+        observeProfile(uid: user.uid, fallback: Auth.auth().currentUser)
+        PushNotificationService.shared.registerCurrentToken()
+        Task { await PushNotificationService.shared.requestPermissionAndRegister() }
     }
 
     func signOut() {
-        self.currentUser = nil
-        self.isAuthenticated = false
-        self.selectedTab = .feed
-        self.navigationPath = NavigationPath()
+        if let uid = currentUser?.uid { PushNotificationService.shared.unregisterCurrentToken(for: uid) }
+        userListener?.remove(); userListener = nil
+        currentUser = nil; isAuthenticated = false; selectedTab = .feed; navigationPath = NavigationPath()
     }
 
-    func updateLoading(_ loading: Bool) {
-        self.isLoading = loading
+    func updateLoading(_ loading: Bool) { isLoading = loading }
+
+    private func observeProfile(uid: String, fallback: FirebaseAuth.User?) {
+        userListener?.remove()
+        userListener = userRepository.observeUser(id: uid) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let profile):
+                    if let profile { self.currentUser = User(profile: profile) }
+                    else { self.currentUser = User(firebaseUser: fallback) }
+                    self.isAuthenticated = true; self.isLoading = false
+                case .failure:
+                    self.currentUser = User(firebaseUser: fallback); self.isAuthenticated = self.currentUser != nil; self.isLoading = false
+                }
+            }
+        }
     }
 }
 
-/**
- * Modelo de usuario (reflejo del modelo Kotlin compartido).
- * En un proyecto real, este vendría del framework Shared.
- */
 struct User: Identifiable, Codable, Equatable {
     let uid: String
     var id: String { uid }
@@ -90,12 +72,18 @@ struct User: Identifiable, Codable, Equatable {
     var postsCount: Int
     var isPrivate: Bool
 
-    static func empty() -> User {
-        User(
-            uid: "", username: "", displayName: "", bio: "",
-            avatarUrl: "", avatarBase64: "", email: "",
-            followersCount: 0, followingCount: 0, postsCount: 0,
-            isPrivate: false
-        )
+    init(uid: String, username: String, displayName: String, bio: String, avatarUrl: String, avatarBase64: String, email: String, followersCount: Int, followingCount: Int, postsCount: Int, isPrivate: Bool) {
+        self.uid = uid; self.username = username; self.displayName = displayName; self.bio = bio; self.avatarUrl = avatarUrl; self.avatarBase64 = avatarBase64; self.email = email; self.followersCount = followersCount; self.followingCount = followingCount; self.postsCount = postsCount; self.isPrivate = isPrivate
     }
+
+    init(profile: VividUser) {
+        self.init(uid: profile.id, username: profile.username, displayName: profile.displayName, bio: profile.bio, avatarUrl: profile.avatarURL, avatarBase64: profile.avatarBase64, email: profile.email, followersCount: profile.followersCount, followingCount: profile.followingCount, postsCount: profile.postsCount, isPrivate: profile.isPrivate)
+    }
+
+    init?(firebaseUser: FirebaseAuth.User?) {
+        guard let firebaseUser else { return nil }
+        self.init(uid: firebaseUser.uid, username: firebaseUser.displayName ?? firebaseUser.email?.components(separatedBy: "@").first ?? "usuario", displayName: firebaseUser.displayName ?? "Usuario", bio: "", avatarUrl: firebaseUser.photoURL?.absoluteString ?? "", avatarBase64: "", email: firebaseUser.email ?? "", followersCount: 0, followingCount: 0, postsCount: 0, isPrivate: false)
+    }
+
+    static func empty() -> User { User(uid: "", username: "", displayName: "", bio: "", avatarUrl: "", avatarBase64: "", email: "", followersCount: 0, followingCount: 0, postsCount: 0, isPrivate: false) }
 }

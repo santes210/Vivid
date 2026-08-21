@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 /**
  * Lista de chats (conversaciones).
@@ -274,71 +276,47 @@ struct MessageBubble: View {
 @MainActor
 class ChatListViewModel: ObservableObject {
     @Published var chats: [ChatUI] = []
+    private let repository = ChatRepository()
+    private var listener: ListenerRegistration?
 
     func loadChats() async {
-        // En producción: usar ChatRepository
-        let names = ["Ana García", "Carlos López", "María Ruiz", "Pedro Sánchez", "Laura Díaz"]
-        let lastMessages = ["¡Hola! ¿Cómo estás?", "Nos vemos mañana", "Mira esta foto", "Jaja qué bueno", "Ok perfecto 👍"]
-        let now = Date().timeIntervalSince1970 * 1000
-        var result: [ChatUI] = []
-        for i in 0..<5 {
-            let chat = ChatUI(
-                id: "chat_\(i)",
-                chatId: "chat_\(i)",
-                otherUserId: "user_\(i)",
-                otherUserName: names[i],
-                otherUserAvatar: "",
-                lastMessage: lastMessages[i],
-                lastMessageTimestamp: Int64(now) - Int64(i * 1800000),
-                unreadCount: i < 2 ? Int.random(in: 1...5) : 0
-            )
-            result.append(chat)
+        guard let uid = Auth.auth().currentUser?.uid, listener == nil else { return }
+        listener = repository.observeChats(forUserId: uid) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if case .success(let chats) = result {
+                    self.chats = chats.compactMap { chat in
+                        guard let other = chat.otherParticipant(for: uid) else { return nil }
+                        return ChatUI(id: chat.id, chatId: chat.id, otherUserId: other, otherUserName: chat.participantNames[other] ?? "Usuario", otherUserAvatar: chat.participantAvatars[other] ?? "", lastMessage: chat.lastMessage, lastMessageTimestamp: chat.lastTimestamp, unreadCount: chat.unreadCounts[uid] ?? 0)
+                    }
+                }
+            }
         }
-        chats = result
     }
 }
 
 @MainActor
 class ChatViewModel: ObservableObject {
     @Published var messages: [MessageUI] = []
-    private let currentUserId = "current_user"
+    @Published var error: String?
+    private let repository = ChatRepository()
+    private var listener: ListenerRegistration?
+    private var currentUserId: String { Auth.auth().currentUser?.uid ?? "" }
 
     func loadMessages(chatId: String) async {
-        // En producción: usar ChatRepository
-        let sampleTexts = ["Hola!", "¿Cómo estás?", "Bien y tú?", "Todo genial", "¿Qué planes tienes?", "Nada especial", "¿Salimos?", "Sí, buena idea", "¿A qué hora?", "A las 8?"]
-        let now = Date().timeIntervalSince1970 * 1000
-        var result: [MessageUI] = []
-        for i in 0..<10 {
-            let msg = MessageUI(
-                id: "msg_\(i)",
-                text: sampleTexts[i],
-                senderId: i % 2 == 0 ? currentUserId : "other_user",
-                timestamp: Int64(now) - Int64((10 - i) * 60000),
-                isRead: true,
-                isDelivered: true,
-                reaction: "",
-                type: "text"
-            )
-            result.append(msg)
+        listener?.remove()
+        listener = repository.observeMessages(chatId: chatId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result { case .success(let messages): self?.messages = messages.map { MessageUI(id: $0.id, text: $0.text, senderId: $0.senderId, timestamp: $0.timestamp, isRead: $0.isRead, isDelivered: $0.isDelivered, reaction: $0.reaction, type: $0.type) }; case .failure(let error): self?.error = error.localizedDescription }
+            }
         }
-        messages = result
+        do { try await repository.markMessagesRead(chatId: chatId) } catch { self.error = error.localizedDescription }
     }
 
     func sendMessage(chatId: String, text: String, receiverId: String) {
-        let message = MessageUI(
-            id: "msg_\(messages.count)",
-            text: text,
-            senderId: currentUserId,
-            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
-            isRead: false,
-            isDelivered: false,
-            reaction: "",
-            type: "text"
-        )
-        messages.append(message)
+        let name = Auth.auth().currentUser?.displayName ?? Auth.auth().currentUser?.email?.components(separatedBy: "@").first ?? "Usuario"
+        Task { do { _ = try await repository.sendMessage(receiverId: receiverId, receiverName: "Usuario", text: text, senderName: name) } catch { self.error = error.localizedDescription } }
     }
 
-    func isFromCurrentUser(_ message: MessageUI) -> Bool {
-        message.senderId == currentUserId
-    }
+    func isFromCurrentUser(_ message: MessageUI) -> Bool { message.senderId == currentUserId }
 }

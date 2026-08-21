@@ -24,7 +24,7 @@ struct FeedView: View {
 
                     // Posts
                     ForEach(viewModel.posts) { post in
-                        PostCard(post: post)
+                        PostCard(post: post) { viewModel.toggleLike(postId: post.id) }
                             .padding(.vertical, 4)
                     }
 
@@ -179,12 +179,14 @@ struct PostUI: Identifiable {
 
 struct PostCard: View {
     let post: PostUI
+    let onLike: () -> Void
     @State private var isLiked: Bool
     @State private var likesCount: Int
     @State private var showComments = false
 
-    init(post: PostUI) {
+    init(post: PostUI, onLike: @escaping () -> Void) {
         self.post = post
+        self.onLike = onLike
         _isLiked = State(initialValue: post.isLiked)
         _likesCount = State(initialValue: post.likesCount)
     }
@@ -316,7 +318,7 @@ struct PostCard: View {
     private func toggleLike() {
         isLiked.toggle()
         likesCount += isLiked ? 1 : -1
-        // En producción: viewModel.toggleLike(postId: post.id)
+        onLike()
     }
 }
 

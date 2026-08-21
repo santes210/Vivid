@@ -76,7 +76,7 @@ struct CreateMenuView: View {
                         title: "Post",
                         color: .blue
                     ) {
-                        // Navegar a CreatePostView
+                        showCreateOptions = true
                     }
 
                     CreateOptionButton(
@@ -84,7 +84,7 @@ struct CreateMenuView: View {
                         title: "Reel",
                         color: .purple
                     ) {
-                        // Navegar a CreateReelView
+                        showCreateOptions = true
                     }
 
                     CreateOptionButton(
@@ -92,11 +92,12 @@ struct CreateMenuView: View {
                         title: "Story",
                         color: .orange
                     ) {
-                        // Navegar a CreateStoryView
+                        showCreateOptions = true
                     }
                 }
             }
         }
+        .fullScreenCover(isPresented: $showCreateOptions) { CameraView() }
     }
 }
 

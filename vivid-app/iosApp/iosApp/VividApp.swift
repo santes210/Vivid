@@ -1,27 +1,31 @@
 import SwiftUI
 import FirebaseCore
+import FirebaseMessaging
+import UIKit
 
-/**
- * Punto de entrada de la app Vivid para iOS.
- * Configura Firebase y el contenedor de dependencias compartidas.
- */
+final class VividAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        FirebaseApp.configure()
+        PushNotificationService.shared.configure()
+        return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Messaging.messaging().apnsToken = deviceToken
+    }
+}
+
 @main
 struct VividApp: App {
+    @UIApplicationDelegateAdaptor(VividAppDelegate.self) private var appDelegate
     @StateObject private var appState = AppState()
-
-    init() {
-        // Configurar Firebase (lee GoogleService-Info.plist automáticamente)
-        FirebaseApp.configure()
-    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(appState)
                 .preferredColorScheme(.dark)
-                .task {
-                    await appState.restoreSession()
-                }
+                .task { await appState.restoreSession() }
         }
     }
 }

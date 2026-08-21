@@ -17,6 +17,10 @@ struct VividUser: Identifiable, Equatable {
     let postsCount: Int
     let isPrivate: Bool
 
+    init(id: String, username: String, displayName: String, bio: String, avatarURL: String, avatarBase64: String, email: String, followersCount: Int, followingCount: Int, postsCount: Int, isPrivate: Bool) {
+        self.id = id; self.username = username; self.displayName = displayName; self.bio = bio; self.avatarURL = avatarURL; self.avatarBase64 = avatarBase64; self.email = email; self.followersCount = followersCount; self.followingCount = followingCount; self.postsCount = postsCount; self.isPrivate = isPrivate
+    }
+
     init?(document: DocumentSnapshot) {
         guard document.exists else { return nil }
         let data = document.data() ?? [:]
@@ -73,6 +77,28 @@ struct FirestorePost: Identifiable, Equatable {
         timestamp = data.int64("timestamp")
         isPrivate = data.bool("isPrivate")
         hashtags = data.stringArray("hashtags")
+    }
+}
+
+struct FirestoreComment: Identifiable, Equatable {
+    let id: String
+    let userId: String
+    let username: String
+    let text: String
+    let timestamp: Int64
+    let avatarURL: String
+    let likesCount: Int
+
+    init?(document: DocumentSnapshot) {
+        let data = document.data() ?? [:]
+        guard let userId = data.string("userId"), !userId.isEmpty else { return nil }
+        id = document.documentID
+        self.userId = userId
+        username = data.string("username") ?? "usuario"
+        text = data.string("text") ?? ""
+        timestamp = data.int64("timestamp")
+        avatarURL = data.string("avatarUrl") ?? ""
+        likesCount = data.int("likesCount")
     }
 }
 
