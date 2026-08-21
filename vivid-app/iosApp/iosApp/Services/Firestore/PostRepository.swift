@@ -22,6 +22,29 @@ final class PostRepository {
             .addSnapshotListener { snapshot, error in self.posts(snapshot, error, onChange) }
     }
 
+    func fetchPublicPage(before timestamp: Int64? = nil, limit: Int = 30) async throws -> [FirestorePost] {
+        var query: Query = db.collection("posts").whereField("isPrivate", isEqualTo: false).order(by: "timestamp", descending: true)
+        if let timestamp { query = query.whereField("timestamp", isLessThan: timestamp) }
+        let snapshot = try await FirebaseAsync.value { completion in query.limit(to: limit).getDocuments(completion: completion) }
+        return snapshot.documents.compactMap { FirestorePost(document: $0) }
+    }
+
+    /// Firestore limita `in` a grupos pequeños. Se dividen todos los amigos en
+    /// chunks, se ejecutan en paralelo y se hace un merge ordenado global.
+    func fetchFollowingPage(userIds: [String], before timestamp: Int64? = nil, limit: Int = 30) async throws -> [FirestorePost] {
+        let ids = Array(Set(userIds))
+        guard !ids.isEmpty else { return [] }
+        let chunks = stride(from: 0, to: ids.count, by: 10).map { Array(ids[$0..<min($0 + 10, ids.count)]) }
+        var result: [FirestorePost] = []
+        for chunk in chunks {
+            var query: Query = db.collection("posts").whereField("userId", in: chunk).order(by: "timestamp", descending: true)
+            if let timestamp { query = query.whereField("timestamp", isLessThan: timestamp) }
+            let snapshot = try await FirebaseAsync.value { completion in query.limit(to: limit).getDocuments(completion: completion) }
+            result.append(contentsOf: snapshot.documents.compactMap { FirestorePost(document: $0) })
+        }
+        return result.sorted { $0.timestamp > $1.timestamp }.prefix(limit).map { $0 }
+    }
+
     func fetchPost(id: String) async throws -> FirestorePost? {
         let snap = try await FirebaseAsync.value { completion in db.collection("posts").document(id).getDocument(completion: completion) }
         return FirestorePost(document: snap)
@@ -49,6 +72,11 @@ final class PostRepository {
                 if let error { onChange(.failure(error)); return }
                 onChange(.success(snapshot?.documents.compactMap { FirestoreComment(document: $0) } ?? []))
             }
+    }
+
+    func isLiked(postId: String) async throws -> Bool {
+        guard let uid = auth.currentUser?.uid else { return false }
+        return try await FirebaseAsync.value { completion in db.collection("posts").document(postId).collection("likes").document(uid).getDocument(completion: completion) }.exists
     }
 
     func toggleLike(postId: String) async throws {

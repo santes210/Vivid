@@ -17,12 +17,26 @@ final class ChatRepository {
     }
 
     @discardableResult
-    func observeMessages(chatId: String, limit: Int = 300, onChange: @escaping (Result<[FirestoreMessage], Error>) -> Void) -> ListenerRegistration {
-        db.collection("chats").document(chatId).collection("messages").order(by: "timestamp").limit(to: limit)
+    func observeMessages(chatId: String, limit: Int = 50, onChange: @escaping (Result<[FirestoreMessage], Error>) -> Void) -> ListenerRegistration {
+        // Se piden los más recientes en orden descendente y se invierten para UI.
+        db.collection("chats").document(chatId).collection("messages").order(by: "timestamp", descending: true).limit(to: limit)
             .addSnapshotListener { snapshot, error in
                 if let error { onChange(.failure(error)); return }
-                onChange(.success(snapshot?.documents.compactMap { FirestoreMessage(document: $0) } ?? []))
+                let messages = snapshot?.documents.compactMap { FirestoreMessage(document: $0) } ?? []
+                onChange(.success(Array(messages.reversed())))
             }
+    }
+
+    func fetchOlderMessages(chatId: String, before timestamp: Int64, limit: Int = 50) async throws -> [FirestoreMessage] {
+        let query = db.collection("chats").document(chatId).collection("messages")
+            .order(by: "timestamp", descending: true).whereField("timestamp", isLessThan: timestamp).limit(to: limit)
+        let snapshot = try await FirebaseAsync.value { completion in query.getDocuments(completion: completion) }
+        return Array(snapshot.documents.compactMap { FirestoreMessage(document: $0) }.reversed())
+    }
+
+    func fetchChat(id: String) async throws -> FirestoreChat? {
+        let snapshot = try await FirebaseAsync.value { completion in db.collection("chats").document(id).getDocument(completion: completion) }
+        return FirestoreChat(document: snapshot)
     }
 
     static func id(firstUserId: String, secondUserId: String) -> String { [firstUserId, secondUserId].sorted().joined(separator: "_") }
@@ -81,15 +95,41 @@ final class ChatRepository {
         return chatId
     }
 
+    func markMessagesDelivered(chatId: String) async throws {
+        guard let uid = auth.currentUser?.uid else { throw FirebaseRepositoryError.unauthenticated }
+        let messages = try await FirebaseAsync.value { completion in
+            db.collection("chats").document(chatId).collection("messages")
+                .whereField("receiverId", isEqualTo: uid).whereField("isDelivered", isEqualTo: false).limit(to: 450).getDocuments(completion: completion)
+        }
+        guard !messages.documents.isEmpty else { return }
+        let batch = db.batch(); messages.documents.forEach { batch.updateData(["isDelivered": true], forDocument: $0.reference) }
+        try await batch.commitAsync()
+    }
+
     func markMessagesRead(chatId: String) async throws {
         guard let uid = auth.currentUser?.uid else { throw FirebaseRepositoryError.unauthenticated }
         let chat = db.collection("chats").document(chatId)
-        // La lista visible ya está limitada; los mensajes históricos se actualizan
-        // individualmente al abrirse en lotes de hasta 500.
         let messages = try await FirebaseAsync.value { completion in chat.collection("messages").whereField("receiverId", isEqualTo: uid).whereField("isRead", isEqualTo: false).limit(to: 450).getDocuments(completion: completion) }
         let batch = db.batch()
-        messages.documents.forEach { batch.updateData(["isRead": true], forDocument: $0.reference) }
+        messages.documents.forEach { batch.updateData(["isRead": true, "isDelivered": true], forDocument: $0.reference) }
         batch.setData(["unreadCounts": [uid: 0]], forDocument: chat, merge: true)
         try await batch.commitAsync()
+    }
+
+    func react(chatId: String, messageId: String, reaction: String) async throws {
+        guard auth.currentUser != nil else { throw FirebaseRepositoryError.unauthenticated }
+        try await db.collection("chats").document(chatId).collection("messages").document(messageId)
+            .updateDataAsync(["reaction": reaction])
+    }
+
+    func editMessage(chatId: String, messageId: String, text: String) async throws {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { throw FirebaseRepositoryError.invalidInput("El mensaje está vacío.") }
+        try await db.collection("chats").document(chatId).collection("messages").document(messageId)
+            .updateDataAsync(["text": body, "lastEditedAt": Int64(Date().timeIntervalSince1970 * 1_000)])
+    }
+
+    func deleteMessage(chatId: String, messageId: String) async throws {
+        try await db.collection("chats").document(chatId).collection("messages").document(messageId).deleteAsync()
     }
 }

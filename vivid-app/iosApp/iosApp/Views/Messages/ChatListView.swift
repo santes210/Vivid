@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import FirebaseAuth
 import FirebaseFirestore
 import PhotosUI
@@ -161,6 +162,8 @@ struct ChatView: View {
     @State private var messageText = ""
     @FocusState private var isInputFocused: Bool
     @State private var photoItem: PhotosPickerItem?
+    @State private var editingMessage: MessageUI?
+    @State private var editedText = ""
 
     var body: some View {
         ZStack {
@@ -172,12 +175,27 @@ struct ChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 8) {
+                            if viewModel.canLoadOlder {
+                                Button(viewModel.isLoadingOlder ? "Cargando…" : "Cargar mensajes anteriores") {
+                                    Task { await viewModel.loadOlder(chatId: chat.chatId) }
+                                }
+                                .disabled(viewModel.isLoadingOlder)
+                                .font(.caption).foregroundStyle(.white.opacity(0.65))
+                            }
                             ForEach(viewModel.messages) { message in
-                                MessageBubble(
-                                    message: message,
-                                    isFromCurrentUser: viewModel.isFromCurrentUser(message)
-                                )
-                                .id(message.id)
+                                MessageBubble(message: message, isFromCurrentUser: viewModel.isFromCurrentUser(message))
+                                    .contextMenu {
+                                        ForEach(["❤️", "😂", "😮", "😢", "🔥"], id: \.self) { reaction in
+                                            Button(reaction) { viewModel.react(chatId: chat.chatId, messageId: message.id, reaction: reaction) }
+                                        }
+                                        if viewModel.isFromCurrentUser(message) && message.type == "text" {
+                                            Button { editedText = message.text; editingMessage = message } label: { Label("Editar", systemImage: "pencil") }
+                                        }
+                                        if viewModel.isFromCurrentUser(message) {
+                                            Button(role: .destructive) { viewModel.delete(chatId: chat.chatId, messageId: message.id) } label: { Label("Eliminar", systemImage: "trash") }
+                                        }
+                                    }
+                                    .id(message.id)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -216,10 +234,15 @@ struct ChatView: View {
                         )
 
                     if messageText.isEmpty {
-                        Button(action: { Task { await viewModel.sendVoicePlaceholder(chat: chat) } }) {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 22))
-                                .foregroundStyle(.white.opacity(0.6))
+                        Button(action: { Task { await viewModel.toggleVoiceRecording(chat: chat) } }) {
+                            HStack(spacing: 5) {
+                                if viewModel.audio.isRecording {
+                                    Text(viewModel.recordingTime).font(.caption.monospacedDigit())
+                                }
+                                Image(systemName: viewModel.audio.isRecording ? "stop.circle.fill" : "mic.fill")
+                                    .font(.system(size: 22))
+                            }
+                            .foregroundStyle(viewModel.audio.isRecording ? .red : .white.opacity(0.7))
                         }
                     } else {
                         Button(action: sendMessage) {
@@ -236,8 +259,15 @@ struct ChatView: View {
         }
         .navigationTitle(chat.otherUserName)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.loadMessages(chatId: chat.chatId)
+        .task { await viewModel.loadMessages(chatId: chat.chatId) }
+        .onDisappear { viewModel.audio.cancelRecording() }
+        .alert("Editar mensaje", isPresented: Binding(get: { editingMessage != nil }, set: { if !$0 { editingMessage = nil } })) {
+            TextField("Mensaje", text: $editedText)
+            Button("Cancelar", role: .cancel) { editingMessage = nil }
+            Button("Guardar") {
+                if let message = editingMessage { viewModel.edit(chatId: chat.chatId, messageId: message.id, text: editedText) }
+                editingMessage = nil
+            }
         }
     }
 
@@ -259,11 +289,14 @@ struct MessageUI: Identifiable {
     let type: String
     let imageURL: String
     let voiceURL: String
+    let voiceDurationMs: Int64
+    let lastEditedAt: Int64
 }
 
 struct MessageBubble: View {
     let message: MessageUI
     let isFromCurrentUser: Bool
+    @StateObject private var audio = AudioNoteService()
 
     var body: some View {
         HStack {
@@ -275,12 +308,18 @@ struct MessageBubble: View {
                         .frame(width: 180, height: 180)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 } else if message.type == "voice" {
-                    Label(message.text.isEmpty ? "Nota de voz" : message.text, systemImage: "waveform")
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                    Button {
+                        if let url = URL(string: message.voiceURL) { audio.togglePlayback(url: url) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
+                            Image(systemName: "waveform").font(.title3)
+                            Text(String(format: "%d:%02d", message.voiceDurationMs / 60_000, (message.voiceDurationMs / 1_000) % 60))
+                                .font(.caption.monospacedDigit())
+                        }
+                        .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 18).fill(isFromCurrentUser ? VividTheme.primary : .white.opacity(0.12)))
+                    }
                 } else {
                     Text(message.type == "story_reply" ? "↳ \(message.text)" : message.text)
                         .font(.subheadline)
@@ -294,12 +333,11 @@ struct MessageBubble: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text(TimeAgoFormatter.format(message.timestamp))
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.4))
-
+                    if !message.reaction.isEmpty { Text(message.reaction).font(.caption) }
+                    if message.lastEditedAt > 0 { Text("editado").font(.caption2).foregroundStyle(.white.opacity(0.35)) }
+                    Text(TimeAgoFormatter.format(message.timestamp)).font(.caption2).foregroundStyle(.white.opacity(0.4))
                     if isFromCurrentUser {
-                        Image(systemName: message.isRead ? "checkmark.circle.fill" : "checkmark")
+                        Image(systemName: message.isRead ? "checkmark.circle.fill" : (message.isDelivered ? "checkmark.circle" : "checkmark"))
                             .font(.system(size: 10))
                             .foregroundStyle(message.isRead ? VividTheme.accent : .white.opacity(0.4))
                     }
@@ -339,18 +377,56 @@ class ChatListViewModel: ObservableObject {
 class ChatViewModel: ObservableObject {
     @Published var messages: [MessageUI] = []
     @Published var error: String?
+    @Published var canLoadOlder = true
+    @Published var isLoadingOlder = false
+    let audio = AudioNoteService()
     private let repository = ChatRepository()
     private var listener: ListenerRegistration?
+    private var olderMessages: [MessageUI] = []
+    private var audioCancellable: AnyCancellable?
     private var currentUserId: String { Auth.auth().currentUser?.uid ?? "" }
+    var recordingTime: String { String(format: "%d:%02d", Int(audio.elapsed) / 60, Int(audio.elapsed) % 60) }
+
+    init() {
+        audioCancellable = audio.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+    }
 
     func loadMessages(chatId: String) async {
         listener?.remove()
         listener = repository.observeMessages(chatId: chatId) { [weak self] result in
             DispatchQueue.main.async {
-                switch result { case .success(let messages): self?.messages = messages.map { MessageUI(id: $0.id, text: $0.text, senderId: $0.senderId, timestamp: $0.timestamp, isRead: $0.isRead, isDelivered: $0.isDelivered, reaction: $0.reaction, type: $0.type, imageURL: $0.imageURL, voiceURL: $0.voiceURL) }; case .failure(let error): self?.error = error.localizedDescription }
+                switch result {
+                case .success(let messages):
+                    guard let self else { return }
+                    let recent = messages.map(Self.map)
+                    let recentIds = Set(recent.map(\.id))
+                    self.messages = self.olderMessages.filter { !recentIds.contains($0.id) } + recent
+                    self.canLoadOlder = messages.count >= 50
+                case .failure(let error): self?.error = error.localizedDescription
+                }
             }
         }
-        do { try await repository.markMessagesRead(chatId: chatId) } catch { self.error = error.localizedDescription }
+        do {
+            try await repository.markMessagesDelivered(chatId: chatId)
+            try await repository.markMessagesRead(chatId: chatId)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func loadOlder(chatId: String) async {
+        guard let oldest = messages.first, canLoadOlder, !isLoadingOlder else { return }
+        isLoadingOlder = true
+        do {
+            let loaded = try await repository.fetchOlderMessages(chatId: chatId, before: oldest.timestamp)
+            let mapped = loaded.map(Self.map)
+            olderMessages = mapped + olderMessages
+            messages = mapped + messages
+            canLoadOlder = loaded.count >= 50
+        } catch { self.error = error.localizedDescription }
+        isLoadingOlder = false
+    }
+
+    private static func map(_ value: FirestoreMessage) -> MessageUI {
+        MessageUI(id: value.id, text: value.text, senderId: value.senderId, timestamp: value.timestamp, isRead: value.isRead, isDelivered: value.isDelivered, reaction: value.reaction, type: value.type, imageURL: value.imageURL, voiceURL: value.voiceURL, voiceDurationMs: value.voiceDurationMs, lastEditedAt: value.lastEditedAt)
     }
 
     func sendMessage(chatId: String, text: String, receiverId: String) {
@@ -371,10 +447,24 @@ class ChatViewModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
-    func sendVoicePlaceholder(chat: ChatUI) async {
-        let name = Auth.auth().currentUser?.displayName ?? "Usuario"
+    func toggleVoiceRecording(chat: ChatUI) async {
+        if !audio.isRecording { _ = await audio.startRecording(); objectWillChange.send(); return }
+        guard let recording = audio.stopRecording() else { return }
         do {
-            _ = try await repository.sendMessage(receiverId: chat.otherUserId, receiverName: chat.otherUserName, text: "🎤 Nota de voz", senderName: name)
+            let uploaded = try await MediaStorageRepository().upload(localURL: recording.url, path: "chats/\(chat.chatId)/voice-\(UUID().uuidString).m4a", contentType: "audio/mp4")
+            let name = Auth.auth().currentUser?.displayName ?? "Usuario"
+            _ = try await repository.sendMessage(receiverId: chat.otherUserId, receiverName: chat.otherUserName, text: "", senderName: name, voice: uploaded, voiceDurationMs: recording.durationMs)
+            try? FileManager.default.removeItem(at: recording.url)
         } catch { self.error = error.localizedDescription }
+    }
+
+    func react(chatId: String, messageId: String, reaction: String) {
+        Task { do { try await repository.react(chatId: chatId, messageId: messageId, reaction: reaction) } catch { self.error = error.localizedDescription } }
+    }
+    func edit(chatId: String, messageId: String, text: String) {
+        Task { do { try await repository.editMessage(chatId: chatId, messageId: messageId, text: text) } catch { self.error = error.localizedDescription } }
+    }
+    func delete(chatId: String, messageId: String) {
+        Task { do { try await repository.deleteMessage(chatId: chatId, messageId: messageId) } catch { self.error = error.localizedDescription } }
     }
 }

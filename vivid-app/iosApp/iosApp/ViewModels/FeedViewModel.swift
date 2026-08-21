@@ -9,6 +9,8 @@ class FeedViewModel: ObservableObject {
     @Published var storyGroups: [StoryGroupUI] = []
     @Published var isLoading = false
     @Published var error: String? = nil
+    @Published var isLoadingMore = false
+    @Published var hasMore = true
 
     private let postsRepository = PostRepository()
     private let storiesRepository = StoryRepository()
@@ -16,9 +18,20 @@ class FeedViewModel: ObservableObject {
     private var postsListener: ListenerRegistration?
     private var storiesListener: ListenerRegistration?
     private var followingListener: ListenerRegistration?
+    private var feedUserIds: [String] = []
+    private var publicStories: [FirestoreStory] = []
+    private var closeFriendStories: [FirestoreStory] = []
+
+    private func updateStoryGroups() {
+        let unique = Dictionary((publicStories + closeFriendStories).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        storyGroups = Array(unique.values).groupedForUI()
+    }
 
     func loadFeed() async {
-        if posts.isEmpty { posts = LocalCacheStore.shared.loadPosts() }
+        if posts.isEmpty {
+            posts = LocalCacheStore.shared.loadPosts()
+            if !posts.isEmpty { Task { self.posts = await SignedURLRefreshService.shared.refresh(posts: self.posts) } }
+        }
         guard followingListener == nil else { return }
         isLoading = true
         guard let uid = Auth.auth().currentUser?.uid else {
@@ -30,22 +43,16 @@ class FeedViewModel: ObservableObject {
                 guard let self else { return }
                 switch result {
                 case .success(let ids):
-                    let feedIds = ids + [uid]
-                    self.postsListener?.remove()
-                    self.postsListener = self.postsRepository.observeFollowingFeed(userIds: feedIds) { [weak self] postsResult in
-                        DispatchQueue.main.async {
-                            guard let self else { return }
-                            self.isLoading = false
-                            switch postsResult {
-                            case .success(let posts):
-                                let mapped = posts.map { $0.asUI() }
-                                self.posts = mapped
-                                LocalCacheStore.shared.savePosts(mapped)
-                            case .failure(let error): self.error = error.localizedDescription
-                            }
-                        }
+                    self.feedUserIds = ids + [uid]
+                    Task {
+                        do {
+                            let page = try await self.postsRepository.fetchFollowingPage(userIds: self.feedUserIds)
+                            self.posts = page.map { $0.asUI() }; self.hasMore = page.count >= 30; self.isLoading = false
+                            self.closeFriendStories = (try? await self.storiesRepository.fetchCloseFriendsStories(ownerIds: ids)) ?? []
+                            self.updateStoryGroups()
+                            LocalCacheStore.shared.savePosts(self.posts)
+                        } catch { self.error = error.localizedDescription; self.isLoading = false }
                     }
-                    if ids.isEmpty { self.listenPublic() }
                 case .failure:
                     self.listenPublic()
                 }
@@ -53,7 +60,7 @@ class FeedViewModel: ObservableObject {
         }
         storiesListener = storiesRepository.observePublicActiveStories { [weak self] result in
             DispatchQueue.main.async {
-                switch result { case .success(let stories): self?.storyGroups = stories.groupedForUI(); case .failure(let error): self?.error = error.localizedDescription }
+                switch result { case .success(let stories): self?.publicStories = stories; self?.updateStoryGroups(); case .failure(let error): self?.error = error.localizedDescription }
             }
         }
     }
@@ -74,7 +81,20 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func refresh() async { stop(); await loadFeed() }
+    func refresh() async { stop(); posts = []; hasMore = true; await loadFeed() }
+
+    func loadMoreIfNeeded(current post: PostUI) async {
+        guard post.id == posts.last?.id, hasMore, !isLoadingMore, let last = posts.last else { return }
+        isLoadingMore = true
+        do {
+            let page = feedUserIds.isEmpty
+                ? try await postsRepository.fetchPublicPage(before: last.timestamp)
+                : try await postsRepository.fetchFollowingPage(userIds: feedUserIds, before: last.timestamp)
+            let existing = Set(posts.map(\.id)); posts.append(contentsOf: page.map { $0.asUI() }.filter { !existing.contains($0.id) })
+            hasMore = page.count >= 30; LocalCacheStore.shared.savePosts(posts)
+        } catch { self.error = error.localizedDescription }
+        isLoadingMore = false
+    }
 
     func toggleLike(postId: String) {
         Task { do { try await postsRepository.toggleLike(postId: postId) } catch { self.error = error.localizedDescription } }

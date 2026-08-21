@@ -1,5 +1,7 @@
 import SwiftUI
 import AVFoundation
+import PhotosUI
+import UniformTypeIdentifiers
 
 /**
  * Vista de cámara para iOS usando AVFoundation.
@@ -208,13 +210,25 @@ struct CapturePreviewView: View {
     @State private var destination = "Post"
     @State private var isPublishing = false
     @State private var publishError: String?
+    @State private var videoDuration: Double = 0
+    @State private var trimStart: Double = 0
+    @State private var trimEnd: Double = 0
+    @State private var musicURL: URL?
+    @State private var showMusicPicker = false
+    @State private var addWatermark = true
+    @State private var compression = "720p"
+    @State private var storyAudience = "public"
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // Preview de la imagen/video
-            // En producción: mostrar la imagen real o video player
+            if media.isVideo {
+                LoopingVideoPlayer(url: media.url, isPlaying: true, isMuted: false).ignoresSafeArea()
+            } else if let data = try? Data(contentsOf: media.url), let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFit().ignoresSafeArea()
+            }
+            LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom).ignoresSafeArea()
 
             VStack {
                 HStack {
@@ -232,13 +246,34 @@ struct CapturePreviewView: View {
                 Spacer()
 
                 // Caption input
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
+                    if media.isVideo && videoDuration > 0 {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack { Text("Recorte"); Spacer(); Text(String(format: "%.1f–%.1f s", trimStart, trimEnd)) }.font(.caption).foregroundStyle(.white)
+                            Slider(value: $trimStart, in: 0...max(0, trimEnd - 0.25))
+                            Slider(value: $trimEnd, in: min(videoDuration, trimStart + 0.25)...videoDuration)
+                            HStack {
+                                Button { showMusicPicker = true } label: { Label(musicURL == nil ? "Añadir música" : "Música lista", systemImage: "music.note") }
+                                Spacer()
+                                Toggle("Watermark", isOn: $addWatermark).labelsHidden()
+                                Picker("Calidad", selection: $compression) { Text("720p").tag("720p"); Text("1080p").tag("1080p") }.frame(width: 100)
+                            }
+                            .font(.caption).foregroundStyle(.white)
+                        }
+                        .padding(10).background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.45)))
+                    }
                     Picker("Destino", selection: $destination) {
                         Text("Post").tag("Post")
                         Text("Story").tag("Story")
                         if media.isVideo { Text("Reel").tag("Reel") }
                     }
                     .pickerStyle(.segmented)
+                    if destination == "Story" {
+                        Picker("Audiencia", selection: $storyAudience) {
+                            Label("Todos", systemImage: "person.2").tag("public")
+                            Label("Mejores amigos", systemImage: "star.fill").tag("close_friends")
+                        }.pickerStyle(.segmented)
+                    }
 
                     TextField("Escribe un pie de foto...", text: $caption)
                         .textFieldStyle(.plain)
@@ -270,6 +305,18 @@ struct CapturePreviewView: View {
                 }
             }
         }
+        .task {
+            guard media.isVideo else { return }
+            videoDuration = await MediaProcessingService.shared.duration(of: media.url)
+            trimEnd = videoDuration
+        }
+        .fileImporter(isPresented: $showMusicPicker, allowedContentTypes: [.audio]) { result in
+            guard case .success(let source) = result else { return }
+            let accessed = source.startAccessingSecurityScopedResource()
+            defer { if accessed { source.stopAccessingSecurityScopedResource() } }
+            let copy = FileManager.default.temporaryDirectory.appendingPathComponent("music-\(UUID().uuidString).\(source.pathExtension)")
+            do { try FileManager.default.copyItem(at: source, to: copy); musicURL = copy } catch { publishError = error.localizedDescription }
+        }
     }
 
     private func publish() {
@@ -277,19 +324,29 @@ struct CapturePreviewView: View {
         isPublishing = true; publishError = nil
         Task {
             do {
-                let extensionName = media.url.pathExtension.isEmpty ? (media.isVideo ? "mp4" : "jpg") : media.url.pathExtension
+                var uploadURL = media.url
+                if media.isVideo {
+                    var options = VideoEditOptions()
+                    options.start = trimStart; options.end = trimEnd; options.musicURL = musicURL
+                    options.watermark = addWatermark ? "Vivid · @\(user.username)" : nil
+                    options.preset = compression == "1080p" ? AVAssetExportPreset1920x1080 : AVAssetExportPreset1280x720
+                    uploadURL = try await MediaProcessingService.shared.processVideo(at: media.url, options: options)
+                }
+                let extensionName = uploadURL.pathExtension.isEmpty ? (media.isVideo ? "mp4" : "jpg") : uploadURL.pathExtension
                 let folder = destination.lowercased() + "s"
                 let path = "\(folder)/\(user.uid)/\(UUID().uuidString).\(extensionName)"
-                let uploaded = try await MediaStorageRepository().upload(localURL: media.url, path: path)
+                let uploaded = try await MediaStorageRepository().upload(localURL: uploadURL, path: path)
                 switch destination {
-                case "Story": _ = try await StoryRepository().createStory(media: uploaded, isVideo: media.isVideo, caption: caption, user: user.asFirestoreUser)
+                case "Story": _ = try await StoryRepository().createStory(media: uploaded, isVideo: media.isVideo, caption: caption, user: user.asFirestoreUser, audience: storyAudience)
                 case "Reel":
                     guard media.isVideo else { throw FirebaseRepositoryError.invalidInput("Un reel requiere un video.") }
                     _ = try await ReelRepository().createReel(video: uploaded, user: user.asFirestoreUser, caption: caption)
                 default: _ = try await PostRepository().createPost(media: uploaded, isVideo: media.isVideo, caption: caption, user: user.asFirestoreUser)
                 }
+                VividAnalytics.event("content_published", parameters: ["destination": destination.lowercased(), "is_video": media.isVideo])
                 await MainActor.run { isPublishing = false; onDismiss() }
             } catch {
+                VividAnalytics.error(feature: "content_publish", error: error)
                 await MainActor.run { isPublishing = false; publishError = error.localizedDescription }
             }
         }

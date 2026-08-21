@@ -51,6 +51,9 @@ struct MainTabView: View {
             .tag(AppState.AppTab.profile)
         }
         .tint(VividTheme.primary)
+        .sheet(item: $appState.pendingDeepLink) { link in
+            NavigationStack { DeepLinkDestinationView(link: link) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .vividDeepLink)) { note in
             guard let link = note.object as? AppState.DeepLink else { return }
             switch link {

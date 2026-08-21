@@ -31,8 +31,10 @@ struct FeedView: View {
                     ForEach(viewModel.posts) { post in
                         PostCard(post: post) { viewModel.toggleLike(postId: post.id) }
                             .padding(.vertical, 4)
+                            .onAppear { Task { await viewModel.loadMoreIfNeeded(current: post) } }
                     }
 
+                    if viewModel.isLoadingMore { ProgressView().tint(.white).padding() }
                     if viewModel.isLoading {
                         ProgressView()
                             .tint(.white)
@@ -182,6 +184,7 @@ struct PostUI: Identifiable {
     let isVideo: Bool
     let videoUrl: String
     let thumbnailUrl: String
+    var storageKey: String = ""
 }
 
 struct PostCard: View {
@@ -192,6 +195,7 @@ struct PostCard: View {
     @State private var showComments = false
     @State private var showReport = false
     @State private var isSaved = false
+    @State private var isMuted = true
 
     init(post: PostUI, onLike: @escaping () -> Void) {
         self.post = post
@@ -246,9 +250,11 @@ struct PostCard: View {
             // Media
             ZStack {
                 if post.isVideo, let url = URL(string: post.videoUrl), !post.videoUrl.isEmpty {
-                    LoopingVideoPlayer(url: url, isPlaying: true, isMuted: true)
-                        .frame(height: 360)
-                        .clipped()
+                    LoopingVideoPlayer(url: url, isPlaying: true, isMuted: isMuted)
+                        .frame(height: 360).clipped()
+                        .onTapGesture { isMuted.toggle() }
+                    VStack { Spacer(); HStack { Spacer(); Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill").padding(9).background(.black.opacity(0.55), in: Circle()).padding(12) } }
+                        .foregroundStyle(.white)
                 } else {
                     AsyncImage(url: URL(string: post.imageUrl)) { image in
                         image.resizable().scaledToFill()
@@ -327,9 +333,8 @@ struct PostCard: View {
         .sheet(isPresented: $showComments) {
             CommentsView(postId: post.id, postOwnerUsername: post.username)
         }
-        .sheet(isPresented: $showReport) {
-            ReportSheet(targetType: "post", targetId: post.id)
-        }
+        .sheet(isPresented: $showReport) { ReportSheet(targetType: "post", targetId: post.id) }
+        .task { isLiked = (try? await PostRepository().isLiked(postId: post.id)) ?? post.isLiked }
     }
 
     private func toggleLike() {

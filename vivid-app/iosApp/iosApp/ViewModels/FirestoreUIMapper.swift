@@ -10,13 +10,13 @@ extension User {
 
 extension FirestorePost {
     func asUI() -> PostUI {
-        PostUI(id: id, userId: userId, username: username, userProfilePicture: userProfilePicture, imageUrl: imageURL, caption: caption, likesCount: likesCount, commentsCount: commentsCount, timestamp: timestamp, isLiked: false, isVideo: isVideo, videoUrl: videoURL, thumbnailUrl: thumbnailURL)
+        PostUI(id: id, userId: userId, username: username, userProfilePicture: userProfilePicture, imageUrl: imageURL, caption: caption, likesCount: likesCount, commentsCount: commentsCount, timestamp: timestamp, isLiked: false, isVideo: isVideo, videoUrl: videoURL, thumbnailUrl: thumbnailURL, storageKey: storageKey)
     }
 }
 
 extension FirestoreReel {
     func asUI() -> ReelUI {
-        ReelUI(id: id, userId: userId, username: username, userAvatar: userAvatar, videoUrl: videoURL, thumbnailUrl: thumbnailURL, caption: caption, likes: likes, commentsCount: commentsCount)
+        ReelUI(id: id, userId: userId, username: username, userAvatar: userAvatar, videoUrl: videoURL, thumbnailUrl: thumbnailURL, caption: caption, likes: likes, commentsCount: commentsCount, timestamp: timestamp, storageKey: storageKey)
     }
 }
 

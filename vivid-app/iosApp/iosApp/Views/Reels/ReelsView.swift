@@ -44,8 +44,10 @@ struct ReelsView: View {
             }
         }
         .navigationBarHidden(true)
-        .task {
-            await viewModel.loadReels()
+        .task { await viewModel.loadReels() }
+        .onChange(of: currentReelIndex) { index in
+            viewModel.prefetch(around: index)
+            Task { await viewModel.loadMoreIfNeeded(index: index) }
         }
     }
 }
@@ -58,6 +60,7 @@ struct ReelCard: View {
     @State private var likesCount: Int
     @State private var isPaused = false
     @State private var showComments = false
+    @State private var isMuted = false
 
     init(reel: ReelUI, isActive: Bool = true, onLike: @escaping () -> Void) {
         self.reel = reel
@@ -69,7 +72,7 @@ struct ReelCard: View {
     var body: some View {
         ZStack {
             if let url = URL(string: reel.videoUrl), !reel.videoUrl.isEmpty {
-                LoopingVideoPlayer(url: url, isPlaying: isActive && !isPaused, isMuted: false)
+                LoopingVideoPlayer(url: url, isPlaying: isActive && !isPaused, isMuted: isMuted)
                     .ignoresSafeArea()
             } else {
                 Rectangle()
@@ -160,6 +163,11 @@ struct ReelCard: View {
                             .foregroundStyle(.white)
                     }
 
+                    Button(action: { isMuted.toggle() }) {
+                        Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 22)).foregroundStyle(.white)
+                    }
+
                     Button(action: {}) {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 22))
@@ -173,9 +181,8 @@ struct ReelCard: View {
         .onTapGesture {
             isPaused.toggle()
         }
-        .sheet(isPresented: $showComments) {
-            CommentsView(postId: reel.id, isReel: true, postOwnerUsername: reel.username)
-        }
+        .sheet(isPresented: $showComments) { CommentsView(postId: reel.id, isReel: true, postOwnerUsername: reel.username) }
+        .task { isLiked = (try? await ReelRepository().isLiked(reelId: reel.id)) ?? reel.isLiked }
     }
 
     private func toggleLike() {
@@ -195,6 +202,9 @@ struct ReelUI: Identifiable {
     let caption: String
     let likes: Int
     let commentsCount: Int
+    var timestamp: Int64 = 0
+    var isLiked: Bool = false
+    var storageKey: String = ""
 }
 
 @MainActor
@@ -202,15 +212,43 @@ class ReelsViewModel: ObservableObject {
     @Published var reels: [ReelUI] = []
     @Published var isLoading = false
     @Published var error: String?
+    @Published var isLoadingMore = false
+    @Published var hasMore = true
     private let repository = ReelRepository()
     private var listener: ListenerRegistration?
 
     func loadReels() async {
+        if reels.isEmpty {
+            reels = LocalCacheStore.shared.loadReels()
+            if !reels.isEmpty { Task { self.reels = await SignedURLRefreshService.shared.refresh(reels: self.reels) } }
+        }
         guard listener == nil else { return }
         isLoading = true
-        listener = repository.observePublicReels { [weak self] result in
-            DispatchQueue.main.async { guard let self else { return }; self.isLoading = false; switch result { case .success(let reels): self.reels = reels.map { $0.asUI() }; case .failure(let error): self.error = error.localizedDescription } }
+        listener = repository.observePublicReels(limit: 20) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }; self.isLoading = false
+                switch result {
+                case .success(let values): self.reels = values.map { $0.asUI() }; self.hasMore = values.count >= 20; LocalCacheStore.shared.saveReels(self.reels); self.prefetch(around: 0)
+                case .failure(let error): self.error = error.localizedDescription
+                }
+            }
         }
+    }
+
+    func loadMoreIfNeeded(index: Int) async {
+        guard index >= reels.count - 3, hasMore, !isLoadingMore, let timestamp = reels.last?.timestamp, timestamp > 0 else { return }
+        isLoadingMore = true
+        do {
+            let page = try await repository.fetchPublicPage(before: timestamp)
+            let ids = Set(reels.map(\.id)); reels.append(contentsOf: page.map { $0.asUI() }.filter { !ids.contains($0.id) })
+            hasMore = page.count >= 20; LocalCacheStore.shared.saveReels(reels)
+        } catch { self.error = error.localizedDescription }
+        isLoadingMore = false
+    }
+
+    func prefetch(around index: Int) {
+        let urls = reels.dropFirst(min(index + 1, reels.count)).prefix(2).compactMap { URL(string: $0.videoUrl) }
+        VideoPlayerPool.shared.prefetch(urls)
     }
 
     func toggleLike(reelId: String) { Task { do { try await repository.toggleLike(reelId: reelId) } catch { self.error = error.localizedDescription } } }

@@ -119,6 +119,7 @@ struct FirestoreStory: Identifiable, Equatable {
     let isPrivate: Bool
     let storageKey: String
     let viewersCount: Int
+    let audience: String
 
     init?(document: DocumentSnapshot) {
         let data = document.data() ?? [:]
@@ -139,6 +140,7 @@ struct FirestoreStory: Identifiable, Equatable {
         isPrivate = data.bool("isPrivate")
         storageKey = data.string("storageKey") ?? ""
         viewersCount = data.int("viewersCount")
+        audience = data.string("audience") ?? "public"
     }
 }
 

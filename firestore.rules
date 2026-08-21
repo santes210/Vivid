@@ -23,6 +23,14 @@ service cloud.firestore {
       );
     }
 
+    function canReadStory(authorId, isPrivate, audience) {
+      return canReadOwnedContent(authorId, isPrivate) && (
+        request.auth.uid == authorId
+        || audience != 'close_friends'
+        || exists(/databases/$(database)/documents/users/$(authorId)/closeFriends/$(request.auth.uid))
+      );
+    }
+
     function matchesAuthorPrivacy(authorId, isPrivate) {
       return isPrivate == getAfter(/databases/$(database)/documents/users/$(authorId)).data.get('isPrivate', false);
     }
@@ -81,6 +89,18 @@ service cloud.firestore {
       return !touches(field) || request.resource.data[field] >= oldNum(field);
     }
 
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.status == 'open';
+      allow read, update: if isAdmin();
+      allow delete: if false;
+    }
+
     // ─────────────────────────────────────────────────
     //  Likes (collection group)
     // ─────────────────────────────────────────────────
@@ -116,6 +136,10 @@ service cloud.firestore {
       // Solo el propio dueño puede borrar su cuenta
       // (AccountRepository.closeAccountAndPurgeData).
       allow delete: if isUser(userId);
+
+      match /closeFriends/{friendId} {
+        allow read, create, update, delete: if isUser(userId);
+      }
 
       match /followers/{docId} {
         allow read: if signedIn();
@@ -237,9 +261,10 @@ service cloud.firestore {
     //  Stories
     // ─────────────────────────────────────────────────
     match /stories/{storyId} {
-      allow read: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true));
+      allow read: if canReadStory(resource.data.userId, resource.data.get('isPrivate', true), resource.data.get('audience', 'public'));
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
+        && request.resource.data.get('audience', 'public') in ['public', 'close_friends']
         && matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate);
 
       // Solo el autor edita la story. Un tercero únicamente suma +1 a
@@ -249,7 +274,7 @@ service cloud.firestore {
           && request.resource.data.userId == resource.data.userId
           && (request.resource.data.isPrivate == true
             || matchesAuthorPrivacy(request.auth.uid, request.resource.data.isPrivate)))
-        || (canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true))
+        || (canReadStory(resource.data.userId, resource.data.get('isPrivate', true), resource.data.get('audience', 'public'))
           && onlyChanges(['viewersCount']) && incrementsByOne('viewersCount'))
       );
 
@@ -257,13 +282,14 @@ service cloud.firestore {
 
       // Vistas: quién vio la story
       match /viewers/{viewerId} {
-        allow read: if canReadOwnedContent(
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId,
-          get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true)
-        );
-        allow create, update: if canReadOwnedContent(
+        allow get: if isUser(viewerId) || (signedIn()
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid);
+        allow list: if signedIn()
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
+        allow create, update: if canReadStory(
             get(/databases/$(database)/documents/stories/$(storyId)).data.userId,
-            get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true)
+            get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true),
+            get(/databases/$(database)/documents/stories/$(storyId)).data.get('audience', 'public')
           ) && isUser(viewerId)
           && request.resource.data.get('uid', viewerId) == viewerId;
         allow delete: if isUser(viewerId)

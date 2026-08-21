@@ -5,11 +5,14 @@ import SwiftUI
  */
 struct RootView: View {
     @EnvironmentObject var appState: AppState
+    @AppStorage("onboarding.permissions.complete") private var permissionsComplete = false
 
     var body: some View {
         ZStack {
             if appState.isLoading {
                 SplashScreen()
+            } else if appState.isAuthenticated && !permissionsComplete {
+                PermissionOnboardingView(isComplete: $permissionsComplete)
             } else if appState.isAuthenticated {
                 MainTabView()
             } else {

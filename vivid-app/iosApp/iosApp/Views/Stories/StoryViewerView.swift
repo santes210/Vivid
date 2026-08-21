@@ -24,6 +24,8 @@ struct StoryViewerView: View {
     @State private var showReplyInput = false
     @State private var replyText = ""
     @State private var progressTimer: Timer? = nil
+    @State private var viewers: [StoryViewer] = []
+    @State private var showViewers = false
 
     private let storyDuration: Double = 5.0 // segundos por story
 
@@ -130,6 +132,12 @@ struct StoryViewerView: View {
 
                     Spacer()
 
+                    if currentGroup.userId == Auth.auth().currentUser?.uid {
+                        Button {
+                            Task { viewers = (try? await StoryRepository().fetchViewers(storyId: currentStory.id)) ?? []; showViewers = true }
+                        } label: { Image(systemName: "eye.fill").foregroundStyle(.white) }
+                    }
+
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 18, weight: .bold))
@@ -166,6 +174,14 @@ struct StoryViewerView: View {
             }
         }
         .onAppear { startProgressTimer() }
+        .task(id: currentStory.id) { try? await StoryRepository().markViewed(storyId: currentStory.id) }
+        .sheet(isPresented: $showViewers) {
+            NavigationStack {
+                List(viewers) { viewer in
+                    HStack { AsyncImage(url: URL(string: viewer.avatarURL)) { $0.resizable().scaledToFill() } placeholder: { Circle().fill(.gray.opacity(0.3)) }.frame(width: 38, height: 38).clipShape(Circle()); Text("@\(viewer.username)"); Spacer(); Text(TimeAgoFormatter.format(viewer.viewedAt)).font(.caption).foregroundStyle(.secondary) }
+                }.navigationTitle("Vieron tu story")
+            }
+        }
         .onDisappear { progressTimer?.invalidate() }
         .gesture(
             DragGesture()

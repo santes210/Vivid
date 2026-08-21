@@ -14,6 +14,12 @@ final class PushNotificationService: NSObject, MessagingDelegate, UNUserNotifica
 
     func configure() {
         Messaging.messaging().delegate = self
+        let reply = UNTextInputNotificationAction(identifier: "VIVID_REPLY", title: "Responder", options: [], textInputButtonTitle: "Enviar", textInputPlaceholder: "Mensaje…")
+        let markRead = UNNotificationAction(identifier: "VIVID_MARK_READ", title: "Marcar como leído", options: [])
+        let messageCategory = UNNotificationCategory(identifier: "VIVID_MESSAGE", actions: [reply, markRead], intentIdentifiers: [], options: [])
+        let view = UNNotificationAction(identifier: "VIVID_OPEN", title: "Ver", options: [.foreground])
+        let contentCategory = UNNotificationCategory(identifier: "VIVID_CONTENT", actions: [view], intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([messageCategory, contentCategory])
         UNUserNotificationCenter.current().delegate = self
     }
 
@@ -48,7 +54,16 @@ final class PushNotificationService: NSObject, MessagingDelegate, UNUserNotifica
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let data = response.notification.request.content.userInfo
         let type = (data["type"] as? String) ?? ""
-        let targetId = (data["targetId"] as? String) ?? (data["userId"] as? String) ?? (data["chatId"] as? String) ?? ""
+        let targetId = (data["targetId"] as? String) ?? (data["postId"] as? String) ?? (data["reelId"] as? String) ?? (data["userId"] as? String) ?? (data["chatId"] as? String) ?? ""
+        if response.actionIdentifier == "VIVID_MARK_READ", let chatId = data["chatId"] as? String {
+            try? await ChatRepository().markMessagesRead(chatId: chatId); return
+        }
+        if let reply = response as? UNTextInputNotificationResponse,
+           let receiverId = data["senderId"] as? String {
+            let senderName = Auth.auth().currentUser?.displayName ?? "Usuario"
+            _ = try? await ChatRepository().sendMessage(receiverId: receiverId, receiverName: data["senderName"] as? String ?? "Usuario", text: reply.userText, senderName: senderName)
+            return
+        }
         await MainActor.run {
             switch type {
             case "follow", "follow_request", "profile":

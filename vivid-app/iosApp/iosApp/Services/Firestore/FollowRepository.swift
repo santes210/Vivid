@@ -200,6 +200,21 @@ final class FollowRepository {
         }
     }
 
+    func setCloseFriend(userId: String, enabled: Bool) async throws {
+        guard !currentUserId.isEmpty, userId != currentUserId else { return }
+        let ref = db.collection("users").document(currentUserId).collection("closeFriends").document(userId)
+        if enabled { try await ref.setDataAsync(["userId": userId, "createdAt": Int64(Date().timeIntervalSince1970 * 1_000)]) }
+        else { try await ref.deleteAsync() }
+    }
+
+    func observeCloseFriendIds(onChange: @escaping (Result<Set<String>, Error>) -> Void) -> ListenerRegistration? {
+        guard !currentUserId.isEmpty else { onChange(.success([])); return nil }
+        return db.collection("users").document(currentUserId).collection("closeFriends").addSnapshotListener { snapshot, error in
+            if let error { onChange(.failure(error)); return }
+            onChange(.success(Set(snapshot?.documents.map(\.documentID) ?? [])))
+        }
+    }
+
     func setPrivateAccount(_ isPrivate: Bool) async throws {
         guard !currentUserId.isEmpty else { throw FirebaseRepositoryError.unauthenticated }
         try await db.collection("users").document(currentUserId).setDataAsync(["isPrivate": isPrivate, "updatedAt": Int64(Date().timeIntervalSince1970 * 1_000)], merge: true)

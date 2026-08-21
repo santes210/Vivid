@@ -13,10 +13,27 @@ final class ReelRepository {
             .addSnapshotListener { snapshot, error in self.reels(snapshot, error, onChange) }
     }
 
+    func fetchPublicPage(before timestamp: Int64? = nil, limit: Int = 20) async throws -> [FirestoreReel] {
+        var query: Query = db.collection("reels").whereField("isPrivate", isEqualTo: false).order(by: "timestamp", descending: true)
+        if let timestamp { query = query.whereField("timestamp", isLessThan: timestamp) }
+        let snapshot = try await FirebaseAsync.value { completion in query.limit(to: limit).getDocuments(completion: completion) }
+        return snapshot.documents.compactMap { FirestoreReel(document: $0) }
+    }
+
+    func isLiked(reelId: String) async throws -> Bool {
+        guard let uid = auth.currentUser?.uid else { return false }
+        return try await FirebaseAsync.value { completion in db.collection("reels").document(reelId).collection("likes").document(uid).getDocument(completion: completion) }.exists
+    }
+
     @discardableResult
     func observeReels(byUserId userId: String, limit: Int = 50, onChange: @escaping (Result<[FirestoreReel], Error>) -> Void) -> ListenerRegistration {
         db.collection("reels").whereField("userId", isEqualTo: userId).order(by: "timestamp", descending: true).limit(to: limit)
             .addSnapshotListener { snapshot, error in self.reels(snapshot, error, onChange) }
+    }
+
+    func fetchReel(id: String) async throws -> FirestoreReel? {
+        let snapshot = try await FirebaseAsync.value { completion in db.collection("reels").document(id).getDocument(completion: completion) }
+        return FirestoreReel(document: snapshot)
     }
 
     func createReel(video: UploadedMedia, user: VividUser, caption: String, thumbnailURL: String = "") async throws -> String {

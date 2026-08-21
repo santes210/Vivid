@@ -12,7 +12,10 @@ class AppState: ObservableObject {
     @Published var navigationPath = NavigationPath()
     @Published var pendingDeepLink: DeepLink?
 
-    enum DeepLink: Equatable {
+    enum DeepLink: Equatable, Identifiable {
+        var id: String {
+            switch self { case .profile(let id): return "profile:\(id)"; case .chat(let id): return "chat:\(id)"; case .post(let id): return "post:\(id)"; case .reel(let id): return "reel:\(id)" }
+        }
         case profile(String)
         case chat(String)
         case post(String)
@@ -28,7 +31,6 @@ class AppState: ObservableObject {
         guard let firebaseUser = Auth.auth().currentUser else { updateLoading(false); return }
         observeProfile(uid: firebaseUser.uid, fallback: firebaseUser)
         PushNotificationService.shared.registerCurrentToken()
-        Task { await PushNotificationService.shared.requestPermissionAndRegister() }
     }
 
     func signIn(user: User) {
@@ -37,7 +39,6 @@ class AppState: ObservableObject {
         isLoading = false
         observeProfile(uid: user.uid, fallback: Auth.auth().currentUser)
         PushNotificationService.shared.registerCurrentToken()
-        Task { await PushNotificationService.shared.requestPermissionAndRegister() }
     }
 
     func signOut() {
