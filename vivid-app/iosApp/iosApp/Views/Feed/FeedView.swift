@@ -46,7 +46,7 @@ struct FeedView: View {
         .navigationTitle("Vivid")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: ChatListView()) {
                     Image(systemName: "message.fill")
                         .foregroundStyle(.white)

@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseCore
 
 /**
  * Punto de entrada de la app Vivid para iOS.
@@ -9,7 +10,8 @@ struct VividApp: App {
     @StateObject private var appState = AppState()
 
     init() {
-        configureDependencies()
+        // Configurar Firebase (lee GoogleService-Info.plist automáticamente)
+        FirebaseApp.configure()
     }
 
     var body: some Scene {
@@ -17,12 +19,9 @@ struct VividApp: App {
             RootView()
                 .environmentObject(appState)
                 .preferredColorScheme(.dark)
+                .task {
+                    await appState.restoreSession()
+                }
         }
-    }
-
-    private func configureDependencies() {
-        // Firebase se configura aquí. En un proyecto real:
-        // FirebaseApp.configure()
-        // Luego se crea el SharedContainer con las implementaciones iOS.
     }
 }

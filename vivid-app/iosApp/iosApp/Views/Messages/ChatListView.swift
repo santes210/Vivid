@@ -43,7 +43,7 @@ struct ChatListView: View {
         .navigationTitle("Mensajes")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {}) {
                     Image(systemName: "square.and.pencil")
                         .foregroundStyle(.white)
@@ -161,8 +161,9 @@ struct ChatView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     }
-                    .onChange(of: viewModel.messages.count) { _, _ in
-                        if let lastMessage = viewModel.messages.last {
+                    .onChange(of: viewModel.messages.count) { newCount in
+                        if !viewModel.messages.isEmpty {
+                            let lastMessage = viewModel.messages[newCount - 1]
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
@@ -276,18 +277,24 @@ class ChatListViewModel: ObservableObject {
 
     func loadChats() async {
         // En producción: usar ChatRepository
-        chats = (0..<5).map { i in
-            ChatUI(
+        let names = ["Ana García", "Carlos López", "María Ruiz", "Pedro Sánchez", "Laura Díaz"]
+        let lastMessages = ["¡Hola! ¿Cómo estás?", "Nos vemos mañana", "Mira esta foto", "Jaja qué bueno", "Ok perfecto 👍"]
+        let now = Date().timeIntervalSince1970 * 1000
+        var result: [ChatUI] = []
+        for i in 0..<5 {
+            let chat = ChatUI(
                 id: "chat_\(i)",
                 chatId: "chat_\(i)",
                 otherUserId: "user_\(i)",
-                otherUserName: ["Ana García", "Carlos López", "María Ruiz", "Pedro Sánchez", "Laura Díaz"][i],
+                otherUserName: names[i],
                 otherUserAvatar: "",
-                lastMessage: ["¡Hola! ¿Cómo estás?", "Nos vemos mañana", "Mira esta foto", "Jaja qué bueno", "Ok perfecto 👍"][i],
-                lastMessageTimestamp: Int64(Date().timeIntervalSince1970 * 1000) - Int64(i * 1800000),
+                lastMessage: lastMessages[i],
+                lastMessageTimestamp: Int64(now) - Int64(i * 1800000),
                 unreadCount: i < 2 ? Int.random(in: 1...5) : 0
             )
+            result.append(chat)
         }
+        chats = result
     }
 }
 
@@ -298,18 +305,23 @@ class ChatViewModel: ObservableObject {
 
     func loadMessages(chatId: String) async {
         // En producción: usar ChatRepository
-        messages = (0..<10).map { i in
-            MessageUI(
+        let sampleTexts = ["Hola!", "¿Cómo estás?", "Bien y tú?", "Todo genial", "¿Qué planes tienes?", "Nada especial", "¿Salimos?", "Sí, buena idea", "¿A qué hora?", "A las 8?"]
+        let now = Date().timeIntervalSince1970 * 1000
+        var result: [MessageUI] = []
+        for i in 0..<10 {
+            let msg = MessageUI(
                 id: "msg_\(i)",
-                text: ["Hola!", "¿Cómo estás?", "Bien y tú?", "Todo genial", "¿Qué planes tienes?", "Nada especial", "¿Salimos?", "Sí, buena idea", "¿A qué hora?", "A las 8?"][i],
+                text: sampleTexts[i],
                 senderId: i % 2 == 0 ? currentUserId : "other_user",
-                timestamp: Int64(Date().timeIntervalSince1970 * 1000) - Int64((10 - i) * 60000),
+                timestamp: Int64(now) - Int64((10 - i) * 60000),
                 isRead: true,
                 isDelivered: true,
                 reaction: "",
                 type: "text"
             )
+            result.append(msg)
         }
+        messages = result
     }
 
     func sendMessage(chatId: String, text: String, receiverId: String) {

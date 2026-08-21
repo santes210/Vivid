@@ -22,6 +22,7 @@ struct StoryViewerView: View {
     @State private var isPaused = false
     @State private var showReplyInput = false
     @State private var replyText = ""
+    @State private var progressTimer: Timer? = nil
 
     private let storyDuration: Double = 5.0 // segundos por story
 
@@ -94,12 +95,6 @@ struct StoryViewerView: View {
                     .frame(maxWidth: .infinity)
                     .onTapGesture { nextStory() }
             }
-
-            // Mantener presionado → pausar
-            LongPressGesture(minimumDuration: 0.2)
-                .onChanged { pressing in
-                    isPaused = pressing
-                }
 
             // Overlay de UI
             VStack(spacing: 0) {
@@ -176,6 +171,7 @@ struct StoryViewerView: View {
             }
         }
         .onAppear { startProgressTimer() }
+        .onDisappear { progressTimer?.invalidate() }
         .gesture(
             DragGesture()
                 .onEnded { value in
@@ -184,18 +180,27 @@ struct StoryViewerView: View {
                     }
                 }
         )
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.2)
+                .onChanged { pressing in
+                    isPaused = pressing
+                }
+        )
     }
 
     // MARK: - Progress Timer
 
     private func startProgressTimer() {
-        Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
-            guard !isPaused else { return }
+        progressTimer?.invalidate()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] _ in
+            DispatchQueue.main.async { [self] in
+                guard !self.isPaused else { return }
 
-            progress += 0.05 / storyDuration
+                self.progress += 0.05 / self.storyDuration
 
-            if progress >= 1.0 {
-                nextStory()
+                if self.progress >= 1.0 {
+                    self.nextStory()
+                }
             }
         }
     }

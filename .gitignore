@@ -66,6 +66,10 @@ uploads/
 !KMP_MIGRATION_GUIDE.md
 !vivid-app/KMP_MIGRATION_GUIDE.md
 
+# iOS GoogleService-Info.plist — mismo tratamiento que google-services.json
+# Contiene API key y app id de iOS. Se inyecta desde secret en CI.
+**/GoogleService-Info.plist
+
 # iOS / Xcode
 *.xcworkspace
 *.xcodeproj/xcuserdata/

@@ -369,6 +369,7 @@ class CameraManager: NSObject, ObservableObject {
     }
 
     func focus(at point: CGPoint) {
+        // Guardar punto para indicador visual (en coordenadas de vista)
         focusPoint = point
         showFocusIndicator = true
 
@@ -379,7 +380,15 @@ class CameraManager: NSObject, ObservableObject {
         guard let device = videoDeviceInput?.device else { return }
         try? device.lockForConfiguration()
         if device.isFocusPointOfInterestSupported {
-            device.focusPointOfInterest = point
+            // AVFoundation necesita coordenadas normalizadas (0-1),
+            // pero el punto llega en coordenadas de vista desde SwiftUI.
+            // Como la previewLayer usa resizeAspectFill, asumimos que
+            // el punto ya está en el rango visible aproximado.
+            let normalizedPoint = CGPoint(
+                x: min(max(point.x / UIScreen.main.bounds.width, 0), 1),
+                y: min(max(point.y / UIScreen.main.bounds.height, 0), 1)
+            )
+            device.focusPointOfInterest = normalizedPoint
             device.focusMode = .autoFocus
         }
         device.unlockForConfiguration()
