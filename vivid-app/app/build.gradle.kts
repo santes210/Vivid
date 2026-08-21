@@ -304,6 +304,10 @@ kotlin {
 }
 
 dependencies {
+    // TODO [KMP]: Cuando los repositorios Android migren a las interfaces
+    // del módulo shared, descomentar esta línea:
+    // implementation(project(":shared"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)

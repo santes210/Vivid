@@ -7,8 +7,6 @@ pluginManagement {
         }
     }
     repositories {
-        // KSP plugin marker lives in Maven Central. The explicit Maven URL avoids Gradle resolving
-        // com.google.devtools.ksp only against Google's Android repository in some environments.
         maven(url = "https://repo.maven.apache.org/maven2") {
             name = "MavenCentralExplicit"
         }
@@ -31,3 +29,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Vivid"
 include(":app")
+// TODO [KMP]: Descomentar cuando el módulo shared esté listo para integrarse
+// con el build de Android:
+// include(":shared")

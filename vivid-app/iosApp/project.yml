@@ -1,0 +1,72 @@
+# ═══════════════════════════════════════════════════════════════════
+#  XcodeGen — Genera iosApp.xcodeproj automáticamente
+# ═══════════════════════════════════════════════════════════════════
+#  Este archivo reemplaza la necesidad de crear el proyecto en Xcode.
+#  Se ejecuta en GitHub Actions: `xcodegen generate` → iosApp.xcodeproj
+#  Después `pod install` → iosApp.xcworkspace (incluye Firebase pods)
+# ═══════════════════════════════════════════════════════════════════
+
+name: iosApp
+
+options:
+  bundleIdPrefix: com.vivid
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.4"
+  defaultConfig: Release
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "2.4.0"
+    CURRENT_PROJECT_VERSION: "1"
+    INFOPLIST_FILE: iosApp/Info.plist
+    GENERATE_INFOPLIST_FILE: false
+    # Importante: habilitar Swift Concurrency
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+        excludes:
+          - "**/.gitkeep"
+          - "Assets.xcassets"  # Se agrega abajo con buildPhase específico
+
+    resources:
+      - path: iosApp/Assets.xcassets
+        buildPhase: resources
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vivid.app
+        PRODUCT_NAME: Vivid
+        INFOPLIST_FILE: iosApp/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        # Permitir código sin firma (para SideStore)
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        # Optimización release
+        SWIFT_OPTIMIZATION_LEVEL: -O
+        SWIFT_COMPILATION_MODE: wholemodule
+
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: -Onone
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+
+    # Firebase + dependencias via CocoaPods (se configuran en el Podfile)
+    # El workspace los incluye automáticamente después de `pod install`.
+
+    info:
+      path: iosApp/Info.plist
+      properties:
+        UILaunchScreen:
+          UIColorName: LaunchBackground
