@@ -166,8 +166,10 @@ class ExploreViewModel: ObservableObject {
     }
 
     private func loadExploreContent() {
-        explorePosts = (0..<30).map { i in
-            PostUI(
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        var result: [PostUI] = []
+        for i in 0..<30 {
+            let post = PostUI(
                 id: "explore_\(i)",
                 userId: "user_\(i)",
                 username: "user_\(i)",
@@ -176,12 +178,14 @@ class ExploreViewModel: ObservableObject {
                 caption: "",
                 likesCount: Int.random(in: 50...5000),
                 commentsCount: Int.random(in: 0...200),
-                timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+                timestamp: now,
                 isLiked: false,
                 isVideo: i % 4 == 0,
                 videoUrl: "",
                 thumbnailUrl: ""
             )
+            result.append(post)
         }
+        explorePosts = result
     }
 }

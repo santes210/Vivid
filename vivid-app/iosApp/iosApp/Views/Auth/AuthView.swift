@@ -145,7 +145,10 @@ struct AuthView: View {
             DispatchQueue.main.async {
                 if let error = error {
                     let nsError = error as NSError
-                    if nsError.code == GIDSignInError.canceled.rawValue {
+                    // GIDSignInErrorDomain = "com.google.GIDSignIn", código -2 = cancelado.
+                    // Se compara por dominio/código para no depender del nombre del
+                    // enum Swift (cambia entre versiones del pod GoogleSignIn).
+                    if nsError.domain == "com.google.GIDSignIn" && nsError.code == -2 {
                         // Usuario canceló — no es error
                         self.isLoading = false
                         return

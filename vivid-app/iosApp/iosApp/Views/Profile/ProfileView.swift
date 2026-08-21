@@ -275,8 +275,10 @@ class ProfileViewModel: ObservableObject {
             isPrivate: false
         )
 
-        userPosts = (0..<12).map { i in
-            PostUI(
+        var result: [PostUI] = []
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        for i in 0..<12 {
+            let post = PostUI(
                 id: "profile_post_\(i)",
                 userId: userId,
                 username: user?.username ?? "",
@@ -285,12 +287,14 @@ class ProfileViewModel: ObservableObject {
                 caption: "",
                 likesCount: Int.random(in: 5...200),
                 commentsCount: Int.random(in: 0...30),
-                timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+                timestamp: now,
                 isLiked: false,
                 isVideo: i % 4 == 0,
                 videoUrl: "",
                 thumbnailUrl: ""
             )
+            result.append(post)
         }
+        userPosts = result
     }
 }

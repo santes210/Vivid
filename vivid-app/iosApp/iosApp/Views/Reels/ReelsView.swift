@@ -200,29 +200,34 @@ class ReelsViewModel: ObservableObject {
         defer { isLoading = false }
 
         // En producción: usar ContentRepository
-        reels = (0..<10).map { i in
-            ReelUI(
+        let usernames = ["maria", "carlos", "luna", "diego", "sofia", "pablo", "elena", "marco", "laura", "ivan"]
+        let captions = [
+            "Nuevo trend 🕺 #viral",
+            "Atardecer en la playa 🌅",
+            "Receta fácil 🍳 #food",
+            "Cover acústico 🎸",
+            "Outfit del día 👗",
+            "Skate session 🛹",
+            "Arte digital ✨",
+            "Dance challenge 💃",
+            "Travel vlog ✈️",
+            "Comedia 😂"
+        ]
+        var result: [ReelUI] = []
+        for i in 0..<10 {
+            let reel = ReelUI(
                 id: "reel_\(i)",
                 userId: "user_\(i)",
-                username: ["maria", "carlos", "luna", "diego", "sofia", "pablo", "elena", "marco", "laura", "ivan"][i],
+                username: usernames[i],
                 userAvatar: "",
                 videoUrl: "",
                 thumbnailUrl: "",
-                caption: [
-                    "Nuevo trend 🕺 #viral",
-                    "Atardecer en la playa 🌅",
-                    "Receta fácil 🍳 #food",
-                    "Cover acústico 🎸",
-                    "Outfit del día 👗",
-                    "Skate session 🛹",
-                    "Arte digital ✨",
-                    "Dance challenge 💃",
-                    "Travel vlog ✈️",
-                    "Comedia 😂"
-                ][i],
+                caption: captions[i],
                 likes: Int.random(in: 100...10000),
                 commentsCount: Int.random(in: 10...500)
             )
+            result.append(reel)
         }
+        reels = result
     }
 }
