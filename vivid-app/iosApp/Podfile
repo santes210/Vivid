@@ -8,7 +8,6 @@ target 'iosApp' do
   # Firebase (autenticación, Firestore, Storage, Messaging, Crashlytics, Analytics)
   pod 'Firebase/Auth', '~> 11.0'
   pod 'Firebase/Firestore', '~> 11.0'
-  pod 'Firebase/Storage', '~> 11.0'
   pod 'Firebase/Messaging', '~> 11.0'
   pod 'Firebase/Crashlytics', '~> 11.0'
   pod 'Firebase/Analytics', '~> 11.0'

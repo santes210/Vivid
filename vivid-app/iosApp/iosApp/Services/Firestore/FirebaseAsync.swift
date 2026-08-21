@@ -1,6 +1,5 @@
 import Foundation
 import FirebaseFirestore
-import FirebaseStorage
 
 /// Puentes pequeños para las APIs callback de Firebase. Mantienen los
 /// repositorios en async/await sin añadir dependencias externas.
@@ -56,17 +55,5 @@ extension DocumentReference {
 extension WriteBatch {
     func commitAsync() async throws {
         try await FirebaseAsync.write { completion in commit(completion: completion) }
-    }
-}
-
-extension StorageReference {
-    func putFileAsync(from url: URL, metadata: StorageMetadata? = nil) async throws -> StorageMetadata {
-        try await FirebaseAsync.value { completion in
-            putFile(from: url, metadata: metadata) { metadata, error in completion(metadata, error) }
-        }
-    }
-
-    func downloadURLAsync() async throws -> URL {
-        try await FirebaseAsync.value { completion in downloadURL(completion: completion) }
     }
 }

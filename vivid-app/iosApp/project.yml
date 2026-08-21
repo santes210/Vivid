@@ -26,6 +26,8 @@ settings:
     GENERATE_INFOPLIST_FILE: false
     # Importante: habilitar Swift Concurrency
     SWIFT_STRICT_CONCURRENCY: complete
+    # Inyectada por CI/local al compilar. Solo es la URL pública del Worker.
+    VIVID_WORKER_URL: ""
 
 targets:
   iosApp:
