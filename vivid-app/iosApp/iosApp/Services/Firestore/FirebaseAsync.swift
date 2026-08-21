@@ -5,7 +5,7 @@ import FirebaseFirestore
 /// repositorios en async/await sin añadir dependencias externas.
 enum FirebaseAsync {
     static func write(_ operation: (@escaping (Error?) -> Void) -> Void) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             operation { error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume() }

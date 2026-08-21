@@ -302,16 +302,18 @@ struct CapturePreviewView: View {
  */
 @MainActor
 class CameraManager: NSObject, ObservableObject {
-    let session = AVCaptureSession()
+    // AVFoundation exige que estas instancias se usen únicamente en sessionQueue.
+    // `nonisolated(unsafe)` evita cruzar el MainActor al configurar la cámara.
+    nonisolated(unsafe) let session = AVCaptureSession()
 
     @Published var showFocusIndicator = false
     @Published var focusPoint: CGPoint = .zero
     @Published var isFlashOn = false
 
     private let sessionQueue = DispatchQueue(label: "com.vivid.camera.session")
-    private var videoDeviceInput: AVCaptureDeviceInput?
-    private let photoOutput = AVCapturePhotoOutput()
-    private let movieOutput = AVCaptureMovieFileOutput()
+    nonisolated(unsafe) private var videoDeviceInput: AVCaptureDeviceInput?
+    nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
+    nonisolated(unsafe) private let movieOutput = AVCaptureMovieFileOutput()
     private var photoCaptureCompletion: ((URL) -> Void)?
     private var videoCaptureCompletion: ((URL) -> Void)?
     private var isUsingFrontCamera = false
@@ -376,6 +378,7 @@ class CameraManager: NSObject, ObservableObject {
 
     func flipCamera() {
         isUsingFrontCamera.toggle()
+        let position: AVCaptureDevice.Position = isUsingFrontCamera ? .front : .back
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             self.session.beginConfiguration()
@@ -384,7 +387,6 @@ class CameraManager: NSObject, ObservableObject {
                 self.session.removeInput(currentInput)
             }
 
-            let position: AVCaptureDevice.Position = self.isUsingFrontCamera ? .front : .back
             if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) {
                 if let input = try? AVCaptureDeviceInput(device: device) {
                     if self.session.canAddInput(input) {

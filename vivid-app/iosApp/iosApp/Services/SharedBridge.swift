@@ -10,7 +10,8 @@ import Foundation
  * En producción, las implementaciones de ChatRepository, FollowRepository, etc.
  * se crean en Kotlin y se pasan a Swift a través de este bridge.
  */
-class SharedBridge {
+@MainActor
+final class SharedBridge {
 
     static let shared = SharedBridge()
 
