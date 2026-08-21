@@ -20,6 +20,11 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 45
 
+    env:
+      # Mismo Worker Cloudflare/B2 que Android. No es secreto; las credenciales
+      # B2 permanecen exclusivamente en los secretos del Worker.
+      VIVID_WORKER_URL: ${{ vars.VIVID_WORKER_URL || vars.VIVID_PUSH_WORKER_URL }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,7 +34,7 @@ jobs:
           # Xcode 16 necesario: XcodeGen genera formato 77 (Xcode 16+)
           echo "Versiones de Xcode disponibles:"
           ls /Applications/ | grep -i xcode || true
-          # Usar la versión más reciente de Xcode disponible
+
           if [ -d "/Applications/Xcode_16.2.app" ]; then
             sudo xcode-select -s /Applications/Xcode_16.2.app
           elif [ -d "/Applications/Xcode_16.1.app" ]; then
@@ -42,6 +47,7 @@ jobs:
             echo "::error::No se encontro Xcode 16 en el runner"
             exit 1
           fi
+
           xcodebuild -version
 
       - name: Install XcodeGen
@@ -52,6 +58,7 @@ jobs:
       - name: Restore GoogleService-Info.plist
         run: |
           SECRET="${{ secrets.IOS_GOOGLE_SERVICE_PLIST }}"
+
           if [ -z "$SECRET" ]; then
             echo "::warning::IOS_GOOGLE_SERVICE_PLIST no configurado."
             cat > vivid-app/iosApp/iosApp/GoogleService-Info.plist <<'PLIST'
@@ -68,12 +75,18 @@ jobs:
           PLIST
             exit 0
           fi
+
           printf '%s' "$SECRET" | base64 --decode > vivid-app/iosApp/iosApp/GoogleService-Info.plist
           echo "GoogleService-Info.plist restaurado."
 
       - name: Generate Xcode project
         working-directory: vivid-app/iosApp
         run: |
+          if [ -z "$VIVID_WORKER_URL" ] || [[ "$VIVID_WORKER_URL" != https://* ]]; then
+            echo "::error::Falta una VIVID_WORKER_URL válida (https://...) para el broker Backblaze B2."
+            exit 1
+          fi
+
           xcodegen generate
           echo "Proyecto Xcode generado."
           ls -la *.xcodeproj/
@@ -89,6 +102,8 @@ jobs:
       - name: Build unsigned .app
         working-directory: vivid-app/iosApp
         run: |
+          set -o pipefail
+
           xcodebuild build \
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
@@ -98,10 +113,12 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            VIVID_WORKER_URL="$VIVID_WORKER_URL" \
             | xcpretty --color
 
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "::error::Build fallo."
+
             xcodebuild build \
               -workspace iosApp.xcworkspace \
               -scheme iosApp \
@@ -111,9 +128,12 @@ jobs:
               CODE_SIGN_IDENTITY="" \
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGNING_ALLOWED=NO \
+              VIVID_WORKER_URL="$VIVID_WORKER_URL" \
               2>&1 | tail -100
+
             exit 1
           fi
+
           echo "Build compilado sin firma."
 
       - name: Package as .ipa
@@ -131,13 +151,18 @@ jobs:
           fi
 
           echo "App encontrada: $APP_PATH"
+
           PAYLOAD_DIR="$RUNNER_TEMP/Payload"
           mkdir -p "$PAYLOAD_DIR"
           cp -R "$APP_PATH" "$PAYLOAD_DIR/"
 
           mkdir -p release-artifacts
           IPA_NAME="Vivid-build${GITHUB_RUN_NUMBER}.ipa"
-          (cd "$RUNNER_TEMP" && zip -r "$GITHUB_WORKSPACE/release-artifacts/$IPA_NAME" Payload/)
+
+          (
+            cd "$RUNNER_TEMP"
+            zip -r "$GITHUB_WORKSPACE/release-artifacts/$IPA_NAME" Payload/
+          )
 
           echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_ENV"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
@@ -148,6 +173,7 @@ jobs:
           echo "=== Bundle info ==="
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist" 2>/dev/null || echo "Bundle ID: com.vivid.app"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Info.plist" 2>/dev/null || echo "Version: 2.4.0"
+
           echo ""
           echo "Tamano del .ipa:"
           du -h "release-artifacts/$IPA_NAME"
