@@ -203,6 +203,11 @@ struct CameraPreview: UIViewRepresentable {
 struct CapturePreviewView: View {
     let media: CameraView.CapturedMedia
     let onDismiss: () -> Void
+    @EnvironmentObject private var appState: AppState
+    @State private var caption = ""
+    @State private var destination = "Post"
+    @State private var isPublishing = false
+    @State private var publishError: String?
 
     var body: some View {
         ZStack {
@@ -228,7 +233,14 @@ struct CapturePreviewView: View {
 
                 // Caption input
                 VStack(spacing: 16) {
-                    TextField("Escribe un pie de foto...", text: .constant(""))
+                    Picker("Destino", selection: $destination) {
+                        Text("Post").tag("Post")
+                        Text("Story").tag("Story")
+                        if media.isVideo { Text("Reel").tag("Reel") }
+                    }
+                    .pickerStyle(.segmented)
+
+                    TextField("Escribe un pie de foto...", text: $caption)
                         .textFieldStyle(.plain)
                         .foregroundStyle(.white)
                         .padding()
@@ -242,7 +254,8 @@ struct CapturePreviewView: View {
                             .padding(.vertical, 12)
                             .background(Capsule().fill(.white.opacity(0.1)))
 
-                        Button("Publicar") {}
+                        Button(isPublishing ? "Publicando..." : "Publicar") { publish() }
+                            .disabled(isPublishing)
                             .font(.subheadline.bold())
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -251,6 +264,33 @@ struct CapturePreviewView: View {
                     }
                 }
                 .padding()
+
+                if let publishError {
+                    Text(publishError).font(.caption).foregroundStyle(.red).padding(.horizontal)
+                }
+            }
+        }
+    }
+
+    private func publish() {
+        guard let user = appState.currentUser else { publishError = "Inicia sesión para publicar."; return }
+        isPublishing = true; publishError = nil
+        Task {
+            do {
+                let extensionName = media.url.pathExtension.isEmpty ? (media.isVideo ? "mp4" : "jpg") : media.url.pathExtension
+                let folder = destination.lowercased() + "s"
+                let path = "\(folder)/\(user.uid)/\(UUID().uuidString).\(extensionName)"
+                let uploaded = try await MediaStorageRepository().upload(localURL: media.url, path: path)
+                switch destination {
+                case "Story": _ = try await StoryRepository().createStory(media: uploaded, isVideo: media.isVideo, caption: caption, user: user.asFirestoreUser)
+                case "Reel":
+                    guard media.isVideo else { throw FirebaseRepositoryError.invalidInput("Un reel requiere un video.") }
+                    _ = try await ReelRepository().createReel(video: uploaded, user: user.asFirestoreUser, caption: caption)
+                default: _ = try await PostRepository().createPost(media: uploaded, isVideo: media.isVideo, caption: caption, user: user.asFirestoreUser)
+                }
+                await MainActor.run { isPublishing = false; onDismiss() }
+            } catch {
+                await MainActor.run { isPublishing = false; publishError = error.localizedDescription }
             }
         }
     }
@@ -262,16 +302,18 @@ struct CapturePreviewView: View {
  */
 @MainActor
 class CameraManager: NSObject, ObservableObject {
-    let session = AVCaptureSession()
+    // AVFoundation exige que estas instancias se usen únicamente en sessionQueue.
+    // `nonisolated(unsafe)` evita cruzar el MainActor al configurar la cámara.
+    nonisolated(unsafe) let session = AVCaptureSession()
 
     @Published var showFocusIndicator = false
     @Published var focusPoint: CGPoint = .zero
     @Published var isFlashOn = false
 
     private let sessionQueue = DispatchQueue(label: "com.vivid.camera.session")
-    private var videoDeviceInput: AVCaptureDeviceInput?
-    private let photoOutput = AVCapturePhotoOutput()
-    private let movieOutput = AVCaptureMovieFileOutput()
+    nonisolated(unsafe) private var videoDeviceInput: AVCaptureDeviceInput?
+    nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
+    nonisolated(unsafe) private let movieOutput = AVCaptureMovieFileOutput()
     private var photoCaptureCompletion: ((URL) -> Void)?
     private var videoCaptureCompletion: ((URL) -> Void)?
     private var isUsingFrontCamera = false
@@ -336,6 +378,7 @@ class CameraManager: NSObject, ObservableObject {
 
     func flipCamera() {
         isUsingFrontCamera.toggle()
+        let position: AVCaptureDevice.Position = isUsingFrontCamera ? .front : .back
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             self.session.beginConfiguration()
@@ -344,7 +387,6 @@ class CameraManager: NSObject, ObservableObject {
                 self.session.removeInput(currentInput)
             }
 
-            let position: AVCaptureDevice.Position = self.isUsingFrontCamera ? .front : .back
             if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) {
                 if let input = try? AVCaptureDeviceInput(device: device) {
                     if self.session.canAddInput(input) {

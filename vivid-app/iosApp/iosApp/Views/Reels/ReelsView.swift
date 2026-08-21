@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseFirestore
 
 /**
  * Pantalla de Reels: scroll vertical de videos cortos.
@@ -15,7 +16,7 @@ struct ReelsView: View {
 
             TabView(selection: $currentReelIndex) {
                 ForEach(Array(viewModel.reels.enumerated()), id: \.offset) { index, reel in
-                    ReelCard(reel: reel)
+                    ReelCard(reel: reel) { viewModel.toggleLike(reelId: reel.id) }
                         .tag(index)
                 }
             }
@@ -51,12 +52,14 @@ struct ReelsView: View {
 
 struct ReelCard: View {
     let reel: ReelUI
+    let onLike: () -> Void
     @State private var isLiked = false
     @State private var likesCount: Int
     @State private var isPaused = false
 
-    init(reel: ReelUI) {
+    init(reel: ReelUI, onLike: @escaping () -> Void) {
         self.reel = reel
+        self.onLike = onLike
         _likesCount = State(initialValue: reel.likes)
     }
 
@@ -175,6 +178,7 @@ struct ReelCard: View {
     private func toggleLike() {
         isLiked.toggle()
         likesCount += isLiked ? 1 : -1
+        onLike()
     }
 }
 
@@ -194,40 +198,17 @@ struct ReelUI: Identifiable {
 class ReelsViewModel: ObservableObject {
     @Published var reels: [ReelUI] = []
     @Published var isLoading = false
+    @Published var error: String?
+    private let repository = ReelRepository()
+    private var listener: ListenerRegistration?
 
     func loadReels() async {
+        guard listener == nil else { return }
         isLoading = true
-        defer { isLoading = false }
-
-        // En producción: usar ContentRepository
-        let usernames = ["maria", "carlos", "luna", "diego", "sofia", "pablo", "elena", "marco", "laura", "ivan"]
-        let captions = [
-            "Nuevo trend 🕺 #viral",
-            "Atardecer en la playa 🌅",
-            "Receta fácil 🍳 #food",
-            "Cover acústico 🎸",
-            "Outfit del día 👗",
-            "Skate session 🛹",
-            "Arte digital ✨",
-            "Dance challenge 💃",
-            "Travel vlog ✈️",
-            "Comedia 😂"
-        ]
-        var result: [ReelUI] = []
-        for i in 0..<10 {
-            let reel = ReelUI(
-                id: "reel_\(i)",
-                userId: "user_\(i)",
-                username: usernames[i],
-                userAvatar: "",
-                videoUrl: "",
-                thumbnailUrl: "",
-                caption: captions[i],
-                likes: Int.random(in: 100...10000),
-                commentsCount: Int.random(in: 10...500)
-            )
-            result.append(reel)
+        listener = repository.observePublicReels { [weak self] result in
+            DispatchQueue.main.async { guard let self else { return }; self.isLoading = false; switch result { case .success(let reels): self.reels = reels.map { $0.asUI() }; case .failure(let error): self.error = error.localizedDescription } }
         }
-        reels = result
     }
+
+    func toggleLike(reelId: String) { Task { do { try await repository.toggleLike(reelId: reelId) } catch { self.error = error.localizedDescription } } }
 }

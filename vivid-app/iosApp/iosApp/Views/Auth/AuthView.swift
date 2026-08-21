@@ -2,6 +2,7 @@ import SwiftUI
 import AuthenticationServices
 import FirebaseCore
 import FirebaseAuth
+import FirebaseFirestore
 import GoogleSignIn
 
 /**
@@ -261,6 +262,12 @@ struct AuthView: View {
             postsCount: 0,
             isPrivate: false
         )
+        Firestore.firestore().collection("users").document(firebaseUser.uid).setData([
+            "uid": firebaseUser.uid, "username": name, "usernameLower": name.lowercased(), "displayName": name,
+            "email": firebaseUser.email ?? "", "avatarUrl": firebaseUser.photoURL?.absoluteString ?? "",
+            "avatarBase64": "", "bio": "", "followersCount": 0, "followingCount": 0, "postsCount": 0,
+            "isPrivate": false, "createdAt": Int64(Date().timeIntervalSince1970 * 1_000), "updatedAt": Int64(Date().timeIntervalSince1970 * 1_000)
+        ], merge: true)
         appState.signIn(user: user)
     }
 }

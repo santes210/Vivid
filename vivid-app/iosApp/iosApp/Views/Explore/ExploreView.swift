@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseFirestore
 
 /**
  * Pantalla de explorar: búsqueda de usuarios y contenido trending.
@@ -150,42 +151,24 @@ struct UserSearchRow: View {
 class ExploreViewModel: ObservableObject {
     @Published var explorePosts: [PostUI] = []
     @Published var searchResults: [User] = []
+    private let postsRepository = PostRepository()
+    private let usersRepository = UserRepository()
+    private var contentListener: ListenerRegistration?
+    private var searchListener: ListenerRegistration?
 
-    init() {
-        loadExploreContent()
-    }
+    init() { loadExploreContent() }
 
     func search(query: String) {
-        // En producción: usar el UserRepository para buscar
-        if query.isEmpty {
-            searchResults = []
-            return
+        searchListener?.remove(); searchListener = nil
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { searchResults = []; return }
+        searchListener = usersRepository.observeUsernameSearch(prefix: query) { [weak self] result in
+            DispatchQueue.main.async { if case .success(let users) = result { self?.searchResults = users.map(User.init(profile:)) } }
         }
-        // Simulación de resultados
-        searchResults = []
     }
 
     private func loadExploreContent() {
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
-        var result: [PostUI] = []
-        for i in 0..<30 {
-            let post = PostUI(
-                id: "explore_\(i)",
-                userId: "user_\(i)",
-                username: "user_\(i)",
-                userProfilePicture: "",
-                imageUrl: "",
-                caption: "",
-                likesCount: Int.random(in: 50...5000),
-                commentsCount: Int.random(in: 0...200),
-                timestamp: now,
-                isLiked: false,
-                isVideo: i % 4 == 0,
-                videoUrl: "",
-                thumbnailUrl: ""
-            )
-            result.append(post)
+        contentListener = postsRepository.observePublicFeed(limit: 90) { [weak self] result in
+            DispatchQueue.main.async { if case .success(let posts) = result { self?.explorePosts = posts.map { $0.asUI() } } }
         }
-        explorePosts = result
     }
 }

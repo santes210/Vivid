@@ -79,6 +79,11 @@
         <false/>
     </dict>
 
+    <!-- URL base del Worker Cloudflare que entrega tickets temporales de B2.
+         Se inyecta por configuración de build; nunca contiene credenciales B2. -->
+    <key>VIVID_WORKER_URL</key>
+    <string>$(VIVID_WORKER_URL)</string>
+
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
 </dict>
