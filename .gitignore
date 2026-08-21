@@ -62,3 +62,21 @@ uploads/
 # (traducible) o en código (VividChangelog, Ajustes → Acerca de).
 *.md
 **/*.md
+# Excepciones: guías de migración y documentación de arquitectura.
+!KMP_MIGRATION_GUIDE.md
+!vivid-app/KMP_MIGRATION_GUIDE.md
+
+# iOS / Xcode
+*.xcworkspace
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+iosApp/Pods/
+iosApp/Podfile.lock
+
+# KMP framework output
+shared/build/xcode-frameworks/
+shared/build/bin/

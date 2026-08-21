@@ -1,0 +1,20 @@
+# iOS build artifacts
+iosApp/build/
+iosApp/Pods/
+iosApp/*.xcworkspace
+iosApp/*.xcodeproj/xcuserdata/
+iosApp/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# Xcode
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+iosApp/Podfile.lock
+
+# KMP framework output
+shared/build/xcode-frameworks/
+shared/build/bin/
