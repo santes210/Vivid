@@ -33,14 +33,22 @@ import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.UserAvatar
+import com.vivid.app.ui.components.VividAlertDialog
+import com.vivid.app.ui.components.VividCelebrationIcon
+import com.vivid.app.ui.components.VividDialogTone
 import com.vivid.app.ui.components.VividEmptyState
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividLikeButton
 import com.vivid.app.ui.components.VividLoadingState
 import com.vivid.app.ui.components.VividOfflineBanner
 import com.vivid.app.ui.components.VividSkeletonListItem
+import com.vivid.app.ui.components.VividSnackbar
 import com.vivid.app.ui.components.VividStoryRing
 import com.vivid.app.ui.components.VividVerifiedBadge
+import androidx.compose.material3.SnackbarData
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarVisuals
+import androidx.compose.material3.TextButton
 
 /**
  * Previews de los componentes compartidos.
@@ -165,6 +173,36 @@ private fun ProfileTabsButtonGroupPreview() {
 
 @VividPreview
 @Composable
+private fun SnackbarPreview() {
+    VividPreviewSurface(padding = 0) {
+        VividSnackbar(snackbarData = PreviewSnackbarData("Publicación guardada"))
+    }
+}
+
+@VividPreview
+@Composable
+private fun SuccessDialogPreview() {
+    VividPreviewSurface {
+        VividAlertDialog(
+            onDismissRequest = {},
+            title = { Text("Publicado") },
+            text = { Text("Tu publicación ya está en el feed.") },
+            confirmButton = { TextButton(onClick = {}) { Text("Listo") } },
+            tone = VividDialogTone.Success
+        )
+    }
+}
+
+@VividPreview
+@Composable
+private fun CelebrationIconPreview() {
+    VividPreviewSurface {
+        VividCelebrationIcon(size = 72.dp)
+    }
+}
+
+@VividPreview
+@Composable
 private fun OfflineBannerPreview() {
     VividPreviewSurface(padding = 0) {
         VividOfflineBanner()
@@ -211,6 +249,20 @@ private fun BrandPalettePreview() {
             }
         }
     }
+}
+
+private class PreviewSnackbarData(
+    private val message: String
+) : SnackbarData {
+    override val visuals: SnackbarVisuals = object : SnackbarVisuals {
+        override val message: String = this@PreviewSnackbarData.message
+        override val actionLabel: String? = null
+        override val withDismissAction: Boolean = false
+        override val duration: SnackbarDuration = SnackbarDuration.Short
+    }
+
+    override fun performAction() = Unit
+    override fun dismiss() = Unit
 }
 
 @Composable

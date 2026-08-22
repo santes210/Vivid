@@ -164,6 +164,11 @@
     <string name="search_min_chars">Type at least 2 letters to find people.</string>
     <string name="search_no_results">No users found with that name.</string>
     <string name="search_error">Couldn\'t search users.</string>
+    <string name="search_recent">Recent</string>
+    <string name="search_suggested_tags">Topics</string>
+    <string name="search_clear_history">Clear</string>
+    <string name="search_remove_recent">Remove from recent</string>
+    <string name="published_title">Published</string>
     <string name="cd_search">Search</string>
     <string name="cd_user_row">%1$s, username %2$s</string>
     <string name="cd_send_message_to">Send message to %1$s</string>

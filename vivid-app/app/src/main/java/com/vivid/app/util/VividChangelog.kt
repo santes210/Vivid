@@ -29,6 +29,8 @@ object VividChangelog {
                 "Doble toque sobre una foto para dar like, con corazón animado.",
                 "Respuesta háptica en likes, seguir, enviar y cambio de pestaña (se puede apagar en Ajustes → Apariencia).",
                 "Indicadores de carga y filtros de Explorar renovados con los componentes nuevos de Material 3 Expressive.",
+                "Explorar ahora abre una SearchBar de Material 3, con historial, sugerencias y panel anclado en tableta.",
+                "Avisos y diálogos unificados: misma forma de 28 dp, color de superficie y un icono de celebración al publicar.",
                 "En tabletas, el menú lateral se puede expandir para ver las etiquetas."
             )
         ),

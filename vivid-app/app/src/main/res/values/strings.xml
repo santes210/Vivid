@@ -179,6 +179,11 @@
     <string name="search_min_chars">Escribe al menos 2 letras para buscar personas.</string>
     <string name="search_no_results">No encontré usuarios con ese nombre.</string>
     <string name="search_error">No se pudieron buscar usuarios.</string>
+    <string name="search_recent">Recientes</string>
+    <string name="search_suggested_tags">Temas</string>
+    <string name="search_clear_history">Borrar</string>
+    <string name="search_remove_recent">Quitar de recientes</string>
+    <string name="published_title">Publicado</string>
     <string name="cd_search">Buscar</string>
     <string name="cd_user_row">%1$s, usuario %2$s</string>
     <string name="cd_send_message_to">Enviar mensaje a %1$s</string>

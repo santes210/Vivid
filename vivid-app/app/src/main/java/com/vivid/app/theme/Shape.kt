@@ -60,6 +60,7 @@ object VividExpressiveShapes {
     val BottomSheet: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     val Modal: Shape = RoundedCornerShape(28.dp)
     val Dialog: Shape = RoundedCornerShape(28.dp)
+    val Snackbar: Shape = Dialog
 
     // Contenido
     val Media: Shape = RoundedCornerShape(12.dp)

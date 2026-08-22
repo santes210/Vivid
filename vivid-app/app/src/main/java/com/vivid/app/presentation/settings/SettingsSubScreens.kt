@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.ui.components.VividAlertDialog
 
 // ─────────────────────────────────────────────────────────────
 // Cuenta
@@ -50,6 +51,9 @@ fun CuentaSettingsScreen(
     onBack: () -> Unit,
     onShowSnackbar: suspend (String) -> Unit
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val auth = FirebaseAuth.getInstance()
     val user = auth.currentUser
     val context = LocalContext.current
@@ -69,7 +73,7 @@ fun CuentaSettingsScreen(
             }
     }
 
-    VividSettingsScaffold(title = "Cuenta", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Cuenta", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -185,7 +189,7 @@ fun CuentaSettingsScreen(
         }
     }
     infoDialog?.let { (t,m) ->
-        AlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        VividAlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     }
 }
 
@@ -199,6 +203,9 @@ fun PrivacidadSettingsScreen(
     onOpenBlocked: () -> Unit,
     onShowSnackbar: suspend (String) -> Unit
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
     val user = FirebaseAuth.getInstance().currentUser
@@ -219,7 +226,7 @@ fun PrivacidadSettingsScreen(
             }
     }
 
-    VividSettingsScaffold(title = "Privacidad", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Privacidad", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -304,7 +311,7 @@ fun PrivacidadSettingsScreen(
         }
     }
     infoDialog?.let { (t,m) ->
-        AlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        VividAlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     }
 }
 
@@ -316,6 +323,9 @@ fun AparienciaSettingsScreen(
     onBack: () -> Unit,
     onShowSnackbar: suspend (String) -> Unit
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val context = LocalContext.current
     val selectedTheme = SettingsManager.selectedThemeOption
     val dynamic = SettingsManager.dynamicColorEnabled
@@ -347,7 +357,7 @@ fun AparienciaSettingsScreen(
         else -> stringResource(com.vivid.app.R.string.font_size_xlarge)
     }
 
-    VividSettingsScaffold(title = "Apariencia", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Apariencia", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -425,7 +435,7 @@ fun AparienciaSettingsScreen(
         }
     }
     if (showThemeDialog) {
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showThemeDialog = false },
             title = { Text(stringResource(com.vivid.app.R.string.theme_title), fontWeight = FontWeight.Bold) },
             text = {
@@ -459,7 +469,7 @@ fun AparienciaSettingsScreen(
             "es" to stringResource(com.vivid.app.R.string.lang_spanish),
             "en" to stringResource(com.vivid.app.R.string.lang_english)
         )
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showLangDialog = false },
             title = { Text(stringResource(com.vivid.app.R.string.lang_setting), fontWeight = FontWeight.Bold) },
             text = {
@@ -499,7 +509,7 @@ fun AparienciaSettingsScreen(
             com.vivid.app.util.LocaleManager.FONT_SCALES[2] to stringResource(com.vivid.app.R.string.font_size_large),
             com.vivid.app.util.LocaleManager.FONT_SCALES[3] to stringResource(com.vivid.app.R.string.font_size_xlarge)
         )
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showFontDialog = false },
             title = { Text(stringResource(com.vivid.app.R.string.font_size_setting), fontWeight = FontWeight.Bold) },
             text = {
@@ -578,6 +588,9 @@ fun ContenidoSettingsScreen(onBack: () -> Unit) {
 // ─────────────────────────────────────────────────────────────
 @Composable
 fun NotificacionesSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Unit) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
     val user = FirebaseAuth.getInstance().currentUser
@@ -588,7 +601,7 @@ fun NotificacionesSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
     val scope = rememberCoroutineScope()
     fun upd(field: String, v: Boolean) { user?.uid?.let { firestore.collection("users").document(it).update(field, v) } }
 
-    VividSettingsScaffold(title = "Notificaciones", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Notificaciones", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -624,6 +637,9 @@ fun NotificacionesSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
 // ─────────────────────────────────────────────────────────────
 @Composable
 fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Unit) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val context = LocalContext.current
     val appContext = context.applicationContext
     val scope = rememberCoroutineScope()
@@ -663,7 +679,7 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
         }
     }
 
-    VividSettingsScaffold(title = "Almacenamiento", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Almacenamiento", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -704,7 +720,7 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
         }
     }
     if (showQuality) {
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showQuality = false },
             title = { Text("Calidad de descarga", fontWeight = FontWeight.Bold) },
             text = {
@@ -735,11 +751,14 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
 // ─────────────────────────────────────────────────────────────
 @Composable
 fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Unit) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showHelp by remember { mutableStateOf(false) }
 
-    VividSettingsScaffold(title = "Ayuda", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Ayuda", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -758,7 +777,7 @@ fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Un
         }
     }
     if (showHelp) {
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showHelp = false },
             title = { Text("Centro de Ayuda", fontWeight = FontWeight.Bold) },
             text = {
@@ -786,12 +805,15 @@ fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Un
 // ─────────────────────────────────────────────────────────────
 @Composable
 fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Unit) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("NAME_SHADOWING")
+    val onShowSnackbar: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var infoDialog by remember { mutableStateOf<Pair<String,String>?>(null) }
     var changelogDialog by remember { mutableStateOf(false) }
 
-    VividSettingsScaffold(title = "Acerca de", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = "Acerca de", onBack = onBack, snackbarHostState = snackbarHostState) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
@@ -821,10 +843,10 @@ fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->U
         }
     }
     infoDialog?.let { (t,m) ->
-        AlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        VividAlertDialog(onDismissRequest = { infoDialog = null }, title = { Text(t, fontWeight = FontWeight.Bold) }, text = { Text(m) }, confirmButton = { TextButton(onClick = { infoDialog = null }) { Text("Entendido") } }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     }
     if (changelogDialog) {
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { changelogDialog = false },
             title = { Text("Novedades", fontWeight = FontWeight.Bold) },
             text = {

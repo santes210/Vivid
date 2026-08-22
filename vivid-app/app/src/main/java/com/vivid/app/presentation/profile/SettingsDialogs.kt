@@ -16,6 +16,8 @@ import com.vivid.app.R
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.composeEmail
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividAlertDialog
+import com.vivid.app.ui.components.VividDialogTone
 
 // ── Help / Support Dialog ──
 
@@ -25,7 +27,7 @@ internal fun HelpDialog(
     onDismiss: () -> Unit,
     onEmailFailed: () -> Unit
 ) {
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -83,7 +85,7 @@ internal fun ThemeDialog(
     onDismiss: () -> Unit,
     onThemeChanged: (String) -> Unit
 ) {
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -139,7 +141,7 @@ internal fun DownloadQualityDialog(
     onDismiss: () -> Unit,
     onQualityChanged: (String) -> Unit
 ) {
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -190,7 +192,7 @@ internal fun InfoDialog(
     dialog: SettingsInfoDialog,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -214,7 +216,7 @@ internal fun SignOutDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -237,6 +239,7 @@ internal fun SignOutDialog(
             }
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 6.dp
+        tonalElevation = 6.dp,
+        tone = VividDialogTone.Destructive
     )
 }

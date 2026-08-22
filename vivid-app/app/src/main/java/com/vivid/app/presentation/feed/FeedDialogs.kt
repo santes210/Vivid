@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividAlertDialog
 
 // ── PostViewerDialog ──
 
@@ -71,7 +72,7 @@ internal fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismis
 
 @Composable
 internal fun PostDetailsDialog(post: PostData, onDismiss: () -> Unit) {
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.details_title), fontWeight = FontWeight.Bold) },
         text = {
@@ -112,7 +113,7 @@ internal fun EditPostDialog(
     viewModel: FeedViewModel
 ) {
     var text by remember { mutableStateOf(post.caption) }
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.edit_post_title), fontWeight = FontWeight.Bold) },
         text = { OutlinedTextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
@@ -213,7 +214,7 @@ internal fun PostCommentsSheet(
         comments.filter { !it.parentId.isNullOrBlank() }.groupBy { it.parentId!! }
     }
 
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(
@@ -358,7 +359,7 @@ internal fun PostCommentsSheet(
     // Editing Dialog
     editingComment?.let { commentToEdit ->
         var editText by remember(commentToEdit) { mutableStateOf(commentToEdit.text) }
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { editingComment = null },
             title = { Text(stringResource(R.string.comments_edit_title), fontWeight = FontWeight.Bold) },
             text = {

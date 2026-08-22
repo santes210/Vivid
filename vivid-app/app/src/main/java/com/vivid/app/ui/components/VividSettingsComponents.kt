@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,7 +39,10 @@ import com.vivid.app.theme.VividSpace
 fun VividSettingsScaffold(
     title: String,
     onBack: () -> Unit,
-    snackbarHost: @Composable () -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
+    snackbarHost: @Composable () -> Unit = {
+        snackbarHostState?.let { VividSnackbarHost(it) }
+    },
     content: @Composable (PaddingValues) -> Unit
 ) {
     Scaffold(

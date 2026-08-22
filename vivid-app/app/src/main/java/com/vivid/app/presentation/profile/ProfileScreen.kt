@@ -51,6 +51,7 @@ import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.ui.components.VividSnackbarHost
 
 private const val TAG = "ProfileScreen"
 
@@ -294,7 +295,7 @@ fun ProfileScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             LargeTopAppBar(
                 title = {

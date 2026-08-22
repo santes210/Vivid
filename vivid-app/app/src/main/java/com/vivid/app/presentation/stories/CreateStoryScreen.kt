@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,12 +41,13 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import coil3.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
+import com.vivid.app.R
 import com.vivid.app.presentation.create.MusicSelectorBottomSheet
 import com.vivid.app.presentation.create.MusicTrack
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividSpace
-import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.ui.components.VividCelebrationIcon
 import kotlinx.coroutines.delay
 
 /**
@@ -425,7 +427,10 @@ fun CreateStoryScreen(
                         is CreateStoryUiState.Watermarking -> ProgressOverlay("Marca de agua… ${s.percent}%")
                         is CreateStoryUiState.Uploading -> ProgressOverlay("Subiendo… ${s.percent}%")
                         is CreateStoryUiState.SavingMetadata -> ProgressOverlay("Guardando…")
-                        is CreateStoryUiState.Success -> ProgressOverlay("¡Publicado! ✓", success = true)
+                        is CreateStoryUiState.Success -> ProgressOverlay(
+                            stringResource(R.string.published_title),
+                            success = true
+                        )
                         else -> {}
                     }
                 }
@@ -744,12 +749,7 @@ private fun ProgressOverlay(label: String, success: Boolean = false) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (success) Icon(
-                Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = LocalVividAccents.current.online,
-                modifier = Modifier.size(64.dp)
-            )
+            if (success) VividCelebrationIcon(size = 72.dp)
             else LoadingIndicator(modifier = Modifier.size(64.dp), color = Color.White, polygons = VividMaterialShapes.LoadingSequence)
             Spacer(Modifier.height(VividSpace.s))
             Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)
