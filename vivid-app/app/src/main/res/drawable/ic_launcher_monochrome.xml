@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+    Capa monochrome del icono adaptive (Android 13+ / Material You).
+
+    El lienzo de un icono adaptive es de 108dp. El V y el lente parten de
+    ic_notification_bell.xml, pero aquí se mantienen en un solo color para
+    que el launcher pueda teñirlos con la paleta dinámica del sistema.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- El arte queda dentro de la zona segura del mask del launcher. -->
+    <group
+        android:scaleX="3.4"
+        android:scaleY="3.4"
+        android:translateX="13.2"
+        android:translateY="13.0">
+
+        <!-- V de Vivid, reutilizada de ic_notification_bell.xml. -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M2.5,3 L6.8,3 L12,16.4 L17.2,3 L21.5,3 L14.1,21 L9.9,21 Z" />
+
+        <!-- Lente de la marca: anillo, centro y reflejo. -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.35"
+            android:pathData="M7.35,10.2 A4.65,4.65 0,1 0,16.65 10.2 A4.65,4.65 0,1 0,7.35 10.2" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="0.9"
+            android:pathData="M9.15,10.2 A2.85,2.85 0,1 0,14.85 10.2 A2.85,2.85 0,1 0,9.15 10.2" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M10.65,10.2 A1.35,1.35 0,1 0,13.35 10.2 A1.35,1.35 0,1 0,10.65 10.2 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M8.55,7.9 L9.25,7.35 L9.8,8.05 L9.1,8.6 Z" />
+    </group>
+
+</vector>
