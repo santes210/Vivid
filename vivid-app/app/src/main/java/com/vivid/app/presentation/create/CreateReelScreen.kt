@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,6 +27,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.theme.VividMaterialShapes
 
 /**
  * Pantalla "Crear Reel" — Material You 3 + Música
@@ -126,24 +129,24 @@ fun CreateReelScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = VividSpace.m),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
 
             // Preview
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(380.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(VividExpressiveShapes.MediumCard)
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
                 if (selectedUri == null) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.MovieCreation, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(72.dp))
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(VividSpace.s))
                         Text("Elige o graba un video", color = Color.White.copy(alpha = 0.7f))
                     }
                 } else {
@@ -158,11 +161,11 @@ fun CreateReelScreen(
                 if (state is CreateReelUiState.Success) ProgressOverlay("¡Publicado! ✓", success = true)
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
 
             // Botones de acción
             if (selectedUri == null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.s), modifier = Modifier.fillMaxWidth()) {
                     FilledTonalButton(
                         onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
                         modifier = Modifier.weight(1f)
@@ -178,7 +181,7 @@ fun CreateReelScreen(
                     }
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.xs), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = { selectedUri = null; trimStartMs = 0L; trimEndMs = -1L; viewModel.reset() },
                         modifier = Modifier.weight(1f)
@@ -202,7 +205,7 @@ fun CreateReelScreen(
             }
 
             if (selectedUri != null && trimEndMs > trimStartMs && trimEndMs > 0L) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(VividSpace.s))
                 AssistChip(
                     onClick = {
                         backStackEntry?.savedStateHandle?.set("trimInputUri", selectedUri.toString())
@@ -213,13 +216,13 @@ fun CreateReelScreen(
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
 
             // ── Selector de música — Material You 3 ──
             if (selectedUri != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VividExpressiveShapes.MediumCard,
                     colors = CardDefaults.cardColors(containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow),
                     border = if (selectedTrack != null) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null
                 ) {
@@ -227,12 +230,12 @@ fun CreateReelScreen(
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp)) {
+                        Surface(shape = VividExpressiveShapes.Media, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp)) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(22.dp))
                             }
                         }
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(VividSpace.s))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 if (selectedTrack != null) selectedTrack!!.title else "Agregar música",
@@ -251,20 +254,20 @@ fun CreateReelScreen(
                                 Icon(Icons.Default.Close, contentDescription = "Quitar música")
                             }
                         }
-                        FilledTonalButton(onClick = { showMusicSheet = true }, shape = RoundedCornerShape(12.dp)) {
+                        FilledTonalButton(onClick = { showMusicSheet = true }, shape = VividExpressiveShapes.SegmentedControl) {
                             Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(VividSpace.m))
             }
 
             // Watermark toggle
             if (selectedUri != null) {
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.m, vertical = VividSpace.xs), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Brush, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(VividSpace.s))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Marca de agua \"Vivid\"", style = MaterialTheme.typography.titleSmall)
                             Text("Tu logo en cada frame", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -272,7 +275,7 @@ fun CreateReelScreen(
                         Switch(checked = withWatermark, onCheckedChange = { withWatermark = it })
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(VividSpace.m))
             }
 
             // Caption
@@ -283,10 +286,10 @@ fun CreateReelScreen(
                 placeholder = { Text("Escribe algo…") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
-                shape = RoundedCornerShape(16.dp)
+                shape = VividExpressiveShapes.FieldResting
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
 
             val isBusy = state !is CreateReelUiState.Idle && state !is CreateReelUiState.Error && state !is CreateReelUiState.Success
 
@@ -309,31 +312,31 @@ fun CreateReelScreen(
                 },
                 enabled = selectedUri != null && !isBusy,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = VividExpressiveShapes.PrimaryButton
             ) {
                 if (isBusy) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    LoadingIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.onPrimary, polygons = VividMaterialShapes.LoadingSequence)
                     Spacer(Modifier.width(10.dp))
                     Text("Subiendo…")
                 } else {
                     Icon(Icons.Default.CloudUpload, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(VividSpace.xs))
                     Text("Publicar Reel")
                 }
             }
 
             (state as? CreateReelUiState.Error)?.let { err ->
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(VividSpace.s))
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.padding(VividSpace.s), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(VividSpace.xs))
                         Text(err.message, color = MaterialTheme.colorScheme.onErrorContainer)
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(VividSpace.l))
         }
     }
 
@@ -382,9 +385,9 @@ private fun formatTrimLabel(ms: Long): String {
 private fun ProgressOverlay(label: String, success: Boolean = false) {
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (success) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
-            else CircularProgressIndicator(modifier = Modifier.size(64.dp), strokeWidth = 4.dp, color = Color.White)
-            Spacer(Modifier.height(12.dp))
+            if (success) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = LocalVividAccents.current.online, modifier = Modifier.size(64.dp))
+            else LoadingIndicator(modifier = Modifier.size(64.dp), color = Color.White, polygons = VividMaterialShapes.LoadingSequence)
+            Spacer(Modifier.height(VividSpace.s))
             Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)
         }
     }

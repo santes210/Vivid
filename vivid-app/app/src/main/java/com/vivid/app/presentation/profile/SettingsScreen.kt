@@ -6,7 +6,6 @@ import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -35,6 +34,8 @@ import com.vivid.app.util.launchExternalIntent
 import com.vivid.app.util.openUrl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
 
 data class SettingsInfoDialog(
     val title: String,
@@ -178,7 +179,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // 1. TU CUENTA
@@ -830,14 +831,14 @@ fun SettingsScreen(
 
             // 10. BOTÓN CERRAR SESIÓN
             item {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(VividSpace.s))
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.elevatedCardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer
                     ),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = VividExpressiveShapes.MediumCard
                 ) {
                     ListItem(
                         headlineContent = {
@@ -929,7 +930,7 @@ fun SettingsCardGroup(
             text = title,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = VividSpace.m, bottom = VividSpace.xs),
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp
         )
@@ -939,7 +940,7 @@ fun SettingsCardGroup(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
-            shape = RoundedCornerShape(24.dp)
+            shape = VividExpressiveShapes.HeroCard
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 content()

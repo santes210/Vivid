@@ -111,6 +111,12 @@ package com.vivid.app.theme
  * armonizado; y `DoubleTapLikeBox` para el doble toque sobre la foto (nunca
  * quita el like).
  *
+ * **Espaciado** (`theme/VividSpace.kt` → [VividSpace]): ritmo 4 / 8 / 12 /
+ * 16 / 24 / 32 / 48. Las pantallas no inventan `Spacer(Modifier.height(16.dp))`
+ * cuando cabe en la escala: usan el token. Los 2 dp de un hairline y los
+ * paddings intermedios (6 / 10 / 14…) se quedan literales. Los radios van
+ * en [VividExpressiveShapes], nunca un `RoundedCornerShape` literal a mano.
+ *
  * **Previews** (`ui/preview/`): `@VividPreview` (claro + oscuro) y
  * `@VividPreviewA11y` (además fuente 150 % y ancho 320 dp), con
  * `VividPreviewSurface`. Hay previews de like, avatares, estados, paleta,

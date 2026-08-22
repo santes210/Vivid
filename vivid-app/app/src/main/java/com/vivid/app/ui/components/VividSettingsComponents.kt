@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividShapes
+import com.vivid.app.theme.VividSpace
 
 /**
  * Material You 3 Expressive — Ajustes con formas chidas.
@@ -75,7 +76,7 @@ fun VividSettingsGroup(
                 text = title,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 4.dp)
+                modifier = Modifier.padding(start = VividSpace.m, bottom = VividSpace.xs, top = VividSpace.xxs)
             )
         }
         // Forma expresiva HeroCard (28dp) con tonal surfaceContainerLow — jerarquía clara
@@ -89,10 +90,10 @@ fun VividSettingsGroup(
             Column(content = content)
         }
         if (showDivider) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = VividSpace.m)
             )
         }
     }
@@ -148,7 +149,7 @@ fun VividSettingsItem(
                         Surface(
                             shape = VividShapes.small, // 12dp pill tonal
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            modifier = Modifier.padding(start = 8.dp)
+                            modifier = Modifier.padding(start = VividSpace.xs)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -160,7 +161,7 @@ fun VividSettingsItem(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
                                 )
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(VividSpace.xxs))
                                 Icon(
                                     Icons.Default.KeyboardArrowRight,
                                     contentDescription = null,
@@ -206,7 +207,7 @@ fun VividSettingsItem(
         if (showDivider) {
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = VividSpace.m)
             )
         }
     }
@@ -267,7 +268,7 @@ fun VividSettingsSwitchItem(
         if (showDivider) {
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = VividSpace.m)
             )
         }
     }

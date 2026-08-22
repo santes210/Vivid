@@ -27,6 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.toVividShape
+import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.rememberVividMorph
 
 /**
@@ -53,7 +54,7 @@ private fun MaterialShapesCatalogPreview() {
             VividMaterialShapes.Catalog.chunked(columns).forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
                 ) {
                     row.forEach { (name, polygon) ->
                         Column(
@@ -68,7 +69,7 @@ private fun MaterialShapesCatalogPreview() {
                                         shape = polygon.toVividShape()
                                     )
                             )
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(VividSpace.xxs))
                             Text(
                                 name,
                                 style = MaterialTheme.typography.labelSmall,
@@ -163,7 +164,7 @@ private fun ShapeRolesPreview() {
             "Logro" to VividMaterialShapes.Achievement,
             "Destacado" to VividMaterialShapes.Featured
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)) {
             roles.forEach { (name, shape) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
@@ -171,7 +172,7 @@ private fun ShapeRolesPreview() {
                             .size(48.dp)
                             .background(MaterialTheme.colorScheme.tertiaryContainer, shape)
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(VividSpace.xxs))
                     Text(
                         name,
                         style = MaterialTheme.typography.labelSmall,

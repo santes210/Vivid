@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividShapes
 import com.vivid.app.util.formatVoiceDuration
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,11 +52,11 @@ internal fun RecordingBar(durationMs: Long, onCancel: () -> Unit, onSend: () -> 
             .navigationBarsPadding()
             .imePadding()
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.s, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color.Red))
             Spacer(Modifier.width(10.dp))
             Text(formatVoiceDuration(durationMs), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onErrorContainer)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(VividSpace.s))
             RecordingWaveform(modifier = Modifier.weight(1f))
             IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = MaterialTheme.colorScheme.onErrorContainer) }
             FilledIconButton(onClick = onSend, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
@@ -101,12 +104,12 @@ internal fun TypingIndicatorBubble() {
     val animationsEnabled = LocalVividAnimationsEnabled.current
     if (!animationsEnabled) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
-            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
-                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Surface(shape = VividExpressiveShapes.MediumCard, color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+                Row(modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     repeat(3) {
                         Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)))
                     }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(VividSpace.xxs))
                     Text(stringResource(R.string.msg_typing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -116,15 +119,15 @@ internal fun TypingIndicatorBubble() {
 
     val infinite = rememberInfiniteTransition(label = "typing")
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Start) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Surface(shape = VividExpressiveShapes.MediumCard, color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 0.dp, shadowElevation = 0.dp, modifier = Modifier.widthIn(max = 120.dp)) {
+            Row(modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 repeat(3) { idx ->
                     val delayMs = idx * 200
                     val scale by infinite.animateFloat(initialValue = 0.6f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(500, delayMillis = delayMs, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "dot$idx")
                     val alpha by infinite.animateFloat(initialValue = 0.45f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(500, delayMillis = delayMs), repeatMode = RepeatMode.Reverse), label = "a$idx")
                     Box(modifier = Modifier.size((8 * scale).dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)))
                 }
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(VividSpace.xxs))
                 Text(stringResource(R.string.msg_typing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -207,7 +210,7 @@ fun MessageBubble(
 internal fun ImageMessageContent(message: Message, isMine: Boolean, onImageClick: (String) -> Unit, onResignImage: (Message) -> Unit, onLongPress: () -> Unit = {}, onDoubleTap: () -> Unit = {}) {
     var resignAttempted by remember(message.id) { mutableStateOf(false) }
     Column {
-        Box(modifier = Modifier.defaultMinSize(minWidth = 160.dp, minHeight = 160.dp).sizeIn(maxWidth = 240.dp, maxHeight = 320.dp).clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = { onImageClick(message.imageUrl) }, onLongClick = { onLongPress() }, onDoubleClick = { onDoubleTap() })) {
+        Box(modifier = Modifier.defaultMinSize(minWidth = 160.dp, minHeight = 160.dp).sizeIn(maxWidth = 240.dp, maxHeight = 320.dp).clip(VividExpressiveShapes.Media).combinedClickable(onClick = { onImageClick(message.imageUrl) }, onLongClick = { onLongPress() }, onDoubleClick = { onDoubleTap() })) {
             AsyncImage(model = message.imageUrl, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, onError = { if (message.imageKey.isNotBlank() && !resignAttempted) { resignAttempted = true; onResignImage(message) } })
         }
         Spacer(Modifier.height(3.dp))
@@ -273,7 +276,7 @@ internal fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoic
             Column(modifier = Modifier.weight(1f)) {
                 // Waveform que avanza con la reproducción
                 VoiceWaveform(progress = progress, isMine = isMine)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(VividSpace.xxs))
                 Text(
                     text = if (isPlaying) {
                         "${formatVoiceDuration((progress * totalMs).toLong())} / ${formatVoiceDuration(totalMs)}"
@@ -286,7 +289,7 @@ internal fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoic
                 )
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(VividSpace.xxs))
         MessageMetaRow(message = message, isMine = isMine, showResignVoice = showError, onResignVoice = onResignVoice)
     }
 }
@@ -319,12 +322,12 @@ internal fun StoryReplyContent(message: Message, isMine: Boolean) {
     val contentColor = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     Column {
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = VividExpressiveShapes.Media,
             color = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f) else MaterialTheme.colorScheme.primaryContainer
         ) {
-            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = VividSpace.xs), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(VividSpace.xs))
                 Text("Respuesta a story", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else contentColor)
             }
         }
@@ -346,7 +349,7 @@ internal fun MessageMetaRow(message: Message, isMine: Boolean, showResignVoice: 
                 color = metaColor,
                 fontSize = 9.sp
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(VividSpace.xxs))
         }
         Text(
             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
@@ -384,8 +387,8 @@ internal fun MessageMetaRow(message: Message, isMine: Boolean, showResignVoice: 
 @Composable
 internal fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(modifier = Modifier.widthIn(max = 260.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Surface(shape = VividExpressiveShapes.MediumCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Column(modifier = Modifier.widthIn(max = 260.dp).padding(horizontal = 14.dp, vertical = VividSpace.s)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
@@ -393,8 +396,8 @@ internal fun UploadBubble(upload: ImageUpload, onRetry: () -> Unit, onDismiss: (
                 }
                 when (upload.phase) {
                     ImageUpload.Phase.COMPRESSING -> { Spacer(Modifier.height(10.dp)); CircularProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp), strokeWidth = 4.dp, color = MaterialTheme.colorScheme.primary) }
-                    ImageUpload.Phase.UPLOADING -> { Spacer(Modifier.height(10.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainer) }
-                    ImageUpload.Phase.FAILED -> { Spacer(Modifier.height(4.dp)); Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onDismiss) { Text("Descartar") }; TextButton(onClick = onRetry) { Text("Reintentar", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) } } }
+                    ImageUpload.Phase.UPLOADING -> { Spacer(Modifier.height(10.dp)); LinearProgressIndicator(progress = { upload.progress / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(VividShapes.extraSmall), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainer) }
+                    ImageUpload.Phase.FAILED -> { Spacer(Modifier.height(VividSpace.xxs)); Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onDismiss) { Text("Descartar") }; TextButton(onClick = onRetry) { Text("Reintentar", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) } } }
                     ImageUpload.Phase.DONE -> Unit
                 }
             }
@@ -409,9 +412,9 @@ internal fun VoiceUploadBubble(
     onDismiss: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+        Surface(shape = VividExpressiveShapes.MediumCard, color = MaterialTheme.colorScheme.primaryContainer) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = VividSpace.s),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -435,7 +438,7 @@ internal fun VoiceUploadBubble(
                         Spacer(Modifier.height(6.dp))
                         LinearProgressIndicator(
                             progress = { upload.progress / 100f },
-                            modifier = Modifier.width(160.dp).height(6.dp).clip(RoundedCornerShape(3.dp))
+                            modifier = Modifier.width(160.dp).height(6.dp).clip(VividShapes.extraSmall)
                         )
                     }
                     if (upload.phase == ImageUpload.Phase.FAILED) {

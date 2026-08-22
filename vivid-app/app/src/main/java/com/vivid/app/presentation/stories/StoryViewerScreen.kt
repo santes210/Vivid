@@ -49,6 +49,9 @@ import com.vivid.app.domain.repository.ChatRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 
 // Viewer model for screen
 private data class ViewerStory(
@@ -269,7 +272,7 @@ fun StoryViewerRoute(
     ) {
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White)
+                LoadingIndicator(color = Color.White, polygons = VividMaterialShapes.LoadingSequence)
             }
 
             currentStory == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -299,7 +302,7 @@ fun StoryViewerRoute(
                 )
 
                 // Bottom interaction bar — Material You 3
-                Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(12.dp)) {
+                Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(VividSpace.s)) {
                     if (isOwner) {
                         // Owner: viewers pill + caption
                         if (viewersCount > 0 || true) {
@@ -307,10 +310,10 @@ fun StoryViewerRoute(
                                 onClick = { showViewersSheet = true },
                                 modifier = Modifier.align(Alignment.Center),
                                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = Color.White),
-                                shape = RoundedCornerShape(24.dp)
+                                shape = VividExpressiveShapes.SearchBar
                             ) {
                                 Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(VividSpace.xs))
                                 Text(
                                     if (viewersCount == 0) "Sin vistas aún" else if (viewersCount == 1) "1 vista" else "$viewersCount vistas",
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
@@ -321,7 +324,7 @@ fun StoryViewerRoute(
                         // Viewer: reply bar
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(28.dp),
+                            shape = VividExpressiveShapes.HeroCard,
                             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.14f)),
                             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                         ) {
@@ -333,7 +336,7 @@ fun StoryViewerRoute(
                                     placeholder = { Text("Responder a ${currentStory.username}…", color = Color.White.copy(alpha = 0.7f)) },
                                     maxLines = 1,
                                     singleLine = true,
-                                    shape = RoundedCornerShape(24.dp),
+                                    shape = VividExpressiveShapes.SearchBar,
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedContainerColor = Color.Black.copy(alpha = 0.35f),
                                         unfocusedContainerColor = Color.Black.copy(alpha = 0.25f),
@@ -345,7 +348,7 @@ fun StoryViewerRoute(
                                     ),
                                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(VividSpace.xs))
                                 FilledIconButton(
                                     onClick = {
                                         val txt = replyText.trim()
@@ -400,9 +403,9 @@ fun StoryViewerRoute(
                                     },
                                     enabled = replyText.isNotBlank() && !isSendingReply,
                                     modifier = Modifier.size(46.dp),
-                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.White)
+                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
                                 ) {
-                                    if (isSendingReply) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                                    if (isSendingReply) LoadingIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, polygons = VividMaterialShapes.LoadingSequence)
                                     else Icon(Icons.Default.Send, contentDescription = "Enviar", modifier = Modifier.size(20.dp))
                                 }
                             }
@@ -430,20 +433,20 @@ private fun ViewersBottomSheet(viewers: List<StoryViewer>, viewersCount: Int, on
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = VividExpressiveShapes.BottomSheet
     ) {
-        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = VividSpace.m)) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.outlineVariant))
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(Icons.Filled.Visibility, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(VividSpace.s))
                 Column {
                     Text("Vistas", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     Text(
@@ -453,40 +456,40 @@ private fun ViewersBottomSheet(viewers: List<StoryViewer>, viewersCount: Int, on
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), modifier = Modifier.padding(horizontal = 16.dp))
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.m))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), modifier = Modifier.padding(horizontal = VividSpace.m))
+            Spacer(Modifier.height(VividSpace.xs))
             if (viewers.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.Visibility, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(42.dp))
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(VividSpace.xs))
                         Text("Sin vistas aún", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Text("Cuando alguien vea tu story aparecerá aquí", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 380.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(modifier = Modifier.heightIn(max = 380.dp), contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.xs), verticalArrangement = Arrangement.spacedBy(VividSpace.xs)) {
                     items(viewers, key = { it.uid }) { v ->
                         ViewersRow(v)
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(VividSpace.s))
         }
     }
 }
 
 @Composable
 private fun ViewersRow(v: StoryViewer) {
-    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {}.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.fillMaxWidth().clip(VividExpressiveShapes.SmallCard).clickable {}.padding(VividSpace.xs), verticalAlignment = Alignment.CenterVertically) {
         // Avatar
         com.vivid.app.ui.components.UserAvatar(
             imageUrl = v.avatarUrl,
             name = v.username,
             size = 44.dp
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(VividSpace.s))
         Column(modifier = Modifier.weight(1f)) {
             Text(v.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
             Text(timeAgo(v.viewedAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -523,8 +526,8 @@ private fun StoryViewerOverlay(
     onClose: () -> Unit,
     onViewersClick: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(VividSpace.m)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs)) {
             stories.forEachIndexed { idx, _ ->
                 LinearProgressIndicator(
                     progress = { if (idx < currentIndex) 1f else if (idx == currentIndex) 0.55f else 0f },
@@ -534,10 +537,10 @@ private fun StoryViewerOverlay(
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(VividSpace.s))
         Row(verticalAlignment = Alignment.CenterVertically) {
             StoryHeaderAvatar(story)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(VividSpace.xs))
             Column {
                 Text(story.username, color = Color.White, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                 if (isOwner && viewersCount > 0) {
@@ -554,9 +557,9 @@ private fun StoryViewerOverlay(
             IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White) }
         }
         if (story.caption.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            Surface(shape = RoundedCornerShape(12.dp), color = Color.Black.copy(alpha = 0.35f)) {
-                Text(story.caption, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+            Spacer(Modifier.height(VividSpace.xs))
+            Surface(shape = VividExpressiveShapes.Media, color = Color.Black.copy(alpha = 0.35f)) {
+                Text(story.caption, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = VividSpace.s, vertical = 6.dp))
             }
         }
     }

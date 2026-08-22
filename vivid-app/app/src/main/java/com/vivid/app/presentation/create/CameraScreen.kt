@@ -35,6 +35,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.vivid.app.theme.VividSpace
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -106,7 +107,7 @@ fun CameraScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text("Se necesita permiso de cámara")
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(VividSpace.m))
             Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
                 Text("Dar permiso")
             }
@@ -138,7 +139,7 @@ fun CameraScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(VividSpace.m),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onBack) {
@@ -158,7 +159,7 @@ fun CameraScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 48.dp)
+                .padding(bottom = VividSpace.xxl)
         ) {
             FloatingActionButton(
                 onClick = {
@@ -199,7 +200,7 @@ fun CameraScreen(
             onClick = { galleryLauncher.launch("image/*") },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 32.dp, bottom = 48.dp),
+                .padding(end = VividSpace.xl, bottom = VividSpace.xxl),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_open_gallery))
@@ -208,9 +209,9 @@ fun CameraScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 32.dp, bottom = 56.dp)
+                .padding(start = VividSpace.xl, bottom = 56.dp)
                 .background(Color.Black.copy(alpha = 0.35f), shape = MaterialTheme.shapes.small)
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(horizontal = VividSpace.s, vertical = 6.dp)
         ) {
             Text("Galería", color = Color.White, style = MaterialTheme.typography.labelMedium)
         }

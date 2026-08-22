@@ -57,6 +57,7 @@ import com.vivid.app.presentation.search.SearchViewModel
 import com.vivid.app.presentation.search.UserSearchItem
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.ui.haptics.rememberVividHaptics
@@ -117,7 +118,7 @@ fun ExploreScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = VividSpace.s, vertical = VividSpace.xs),
                 singleLine = true
             )
 
@@ -140,7 +141,7 @@ fun ExploreScreen(
                     }
                     users.itemCount == 0 -> {
                         Box(
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
+                            modifier = Modifier.fillMaxSize().padding(VividSpace.l),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -165,7 +166,7 @@ fun ExploreScreen(
                             if (users.loadState.append is LoadState.Loading) {
                                 item {
                                     Box(
-                                        Modifier.fillMaxWidth().padding(16.dp),
+                                        Modifier.fillMaxWidth().padding(VividSpace.m),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         LoadingIndicator(Modifier.size(32.dp))
@@ -191,8 +192,8 @@ fun ExploreScreen(
                 // Se conservan las mejoras que sí aportaban: háptico al
                 // cambiar de filtro y formas expresivas según la selección.
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.s, vertical = VividSpace.xs),
+                    horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
                 ) {
                     items(ExplorePaging.TAGS, key = { it }) { tag ->
                         val isSelected = selectedTag == tag
@@ -247,9 +248,9 @@ fun ExploreScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            contentPadding = PaddingValues(VividSpace.xxs),
+                            horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs),
+                            verticalArrangement = Arrangement.spacedBy(VividSpace.xxs)
                         ) {
                             items(
                                 count = posts.itemCount,

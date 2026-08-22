@@ -6,15 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,6 +27,9 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.R
 import com.vivid.app.util.SettingsManager
 import kotlinx.coroutines.launch
+import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividSpace
 
 // ── PostViewerDialog ──
 
@@ -38,10 +38,10 @@ internal fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismis
     if (initialIndex !in posts.indices) { onDismiss(); return }
     val post = posts[initialIndex]
     Dialog(onDismissRequest = onDismiss) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = VividExpressiveShapes.MediumCard) {
             Column(Modifier.fillMaxSize()) {
                 Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
+                    Modifier.fillMaxWidth().padding(VividSpace.s),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -82,7 +82,7 @@ internal fun PostDetailsDialog(post: PostData, onDismiss: () -> Unit) {
                     Text(post.username, style = MaterialTheme.typography.bodyLarge)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Red)
+                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(20.dp), tint = LocalVividAccents.current.like)
                     Spacer(Modifier.width(10.dp))
                     Text(stringResource(R.string.details_likes, post.likesCount), style = MaterialTheme.typography.bodyLarge)
                 }
@@ -247,7 +247,7 @@ internal fun PostCommentsSheet(
                                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                                     Box(
                                         modifier = Modifier
-                                            .padding(start = 18.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                                            .padding(start = 18.dp, end = VividSpace.xs, top = VividSpace.xxs, bottom = VividSpace.xxs)
                                             .width(2.dp).height(32.dp)
                                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                     )
@@ -270,17 +270,17 @@ internal fun PostCommentsSheet(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(VividSpace.s))
 
                 // Replying To Banner
                 replyingTo?.let { replyTarget ->
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = VividExpressiveShapes.Media,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = VividSpace.s, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Default.Reply, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -311,9 +311,9 @@ internal fun PostCommentsSheet(
                         },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        shape = RoundedCornerShape(20.dp)
+                        shape = VividExpressiveShapes.FieldFocused
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(VividSpace.xs))
                     FilledTonalButton(
                         onClick = {
                             if (commentText.isBlank() || isSending) return@FilledTonalButton
@@ -341,7 +341,7 @@ internal fun PostCommentsSheet(
                             )
                         },
                         enabled = !isSending,
-                        shape = RoundedCornerShape(20.dp)
+                        shape = VividExpressiveShapes.PrimaryButton
                     ) {
                         Text(
                             if (isSending) stringResource(R.string.comments_sending) else stringResource(R.string.comments_send),
@@ -368,7 +368,7 @@ internal fun PostCommentsSheet(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = false,
                     maxLines = 3,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = VividExpressiveShapes.FieldResting
                 )
             },
             confirmButton = {
@@ -436,7 +436,7 @@ internal fun CommentRow(
                 Text(SettingsManager.filterOffensiveWords(comment.text), style = MaterialTheme.typography.bodyMedium)
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(VividSpace.xxs))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -446,7 +446,7 @@ internal fun CommentRow(
                     modifier = Modifier.clickable { onReply() }
                 )
                 if (comment.userId == currentUserId) {
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(VividSpace.s))
                     Text(
                         stringResource(R.string.comments_edit),
                         style = MaterialTheme.typography.labelSmall,
@@ -455,7 +455,7 @@ internal fun CommentRow(
                     )
                 }
                 if (comment.userId == currentUserId || currentUserId == postAuthorId) {
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(VividSpace.s))
                     Text(
                         stringResource(R.string.comments_delete),
                         style = MaterialTheme.typography.labelSmall,
@@ -471,7 +471,7 @@ internal fun CommentRow(
                 Icon(
                     if (comment.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = stringResource(R.string.comments_like),
-                    tint = if (comment.isLiked) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (comment.isLiked) LocalVividAccents.current.like else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
             }

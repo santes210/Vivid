@@ -30,7 +30,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,7 +48,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -73,6 +72,8 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividMaterialShapes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -374,7 +375,7 @@ fun AuthScreen(
                 .fillMaxSize()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp, vertical = 32.dp),
+                .padding(horizontal = 28.dp, vertical = VividSpace.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -399,7 +400,7 @@ fun AuthScreen(
                 style = MaterialTheme.typography.displaySmall.copy(brush = brandBrush),
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(VividSpace.xxs))
             Text(
                 text = "Crea, comparte y conéctate",
                 style = MaterialTheme.typography.bodyLarge,
@@ -407,7 +408,7 @@ fun AuthScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(VividSpace.xl))
 
             // ── Formulario (login / registro) ──────────────────────────────
             AnimatedContent(
@@ -432,14 +433,14 @@ fun AuthScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(VividSpace.xxs))
                     Text(
                         text = if (loginMode) "Bienvenido de nuevo a Vivid" else "Únete a la comunidad",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(VividSpace.l))
 
                     if (!loginMode) {
                         TextField(
@@ -458,7 +459,7 @@ fun AuthScreen(
                             keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(VividSpace.xs))
                     }
 
                     TextField(
@@ -482,7 +483,7 @@ fun AuthScreen(
                             .fillMaxWidth()
                             .focusRequester(emailFocus)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(VividSpace.xs))
 
                     TextField(
                         value = password,
@@ -518,7 +519,7 @@ fun AuthScreen(
                     )
 
                     if (loginMode) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(VividSpace.xxs))
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.CenterEnd
@@ -528,7 +529,7 @@ fun AuthScreen(
                                     showForgotPasswordDialog = true
                                     viewModel.clearMessages()
                                 },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                contentPadding = PaddingValues(horizontal = VividSpace.xs, vertical = VividSpace.xxs)
                             ) {
                                 Text(
                                     text = "¿Olvidaste tu contraseña?",
@@ -541,7 +542,7 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(VividSpace.m))
 
             // ── Info (correo de verificación o recuperación) ────────────────
             AnimatedVisibility(
@@ -557,7 +558,7 @@ fun AuthScreen(
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -566,7 +567,7 @@ fun AuthScreen(
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(VividSpace.s))
                         Text(
                             text = uiState.info.orEmpty(),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -588,7 +589,7 @@ fun AuthScreen(
                 }
             }
             if (uiState.info != null) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(VividSpace.s))
             }
 
             // ── Error ──────────────────────────────────────────────────────
@@ -605,7 +606,7 @@ fun AuthScreen(
                     color = MaterialTheme.colorScheme.errorContainer
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -614,7 +615,7 @@ fun AuthScreen(
                             tint = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(VividSpace.s))
                         Text(
                             text = uiState.error.orEmpty(),
                             color = MaterialTheme.colorScheme.onErrorContainer,
@@ -636,7 +637,7 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(VividSpace.s))
 
             // ── Botón principal ────────────────────────────────────────────
             Button(
@@ -647,10 +648,10 @@ fun AuthScreen(
                 enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank()
             ) {
                 if (uiState.isLoading) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.5.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        polygons = VividMaterialShapes.LoadingSequence
                     )
                 } else {
                     Text(
@@ -673,7 +674,7 @@ fun AuthScreen(
                 )
                 Text(
                     text = "o",
-                    modifier = Modifier.padding(horizontal = 12.dp),
+                    modifier = Modifier.padding(horizontal = VividSpace.s),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -701,7 +702,7 @@ fun AuthScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(VividSpace.xs))
 
             TextButton(onClick = { isLoginMode = !isLoginMode }) {
                 Text(
@@ -731,7 +732,7 @@ fun AuthScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(VividSpace.m))
                     TextField(
                         value = resetEmail,
                         onValueChange = {
@@ -761,7 +762,7 @@ fun AuthScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (resetError != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(VividSpace.xs))
                         Text(
                             text = resetError.orEmpty(),
                             color = MaterialTheme.colorScheme.error,

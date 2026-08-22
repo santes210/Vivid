@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
@@ -45,6 +44,10 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.theme.VividMaterialShapes
 
 private const val TAG = "ChatListScreen"
 
@@ -284,8 +287,8 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(24.dp),
+                    .padding(horizontal = VividSpace.m, vertical = 6.dp),
+                shape = VividExpressiveShapes.SearchBar,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
@@ -302,7 +305,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 divider = {},
                 indicator = {},
                 containerColor = Color.Transparent,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(vertical = VividSpace.xs)
             ) {
                 tabs.forEachIndexed { index, title ->
                     val isSelected = selectedTab == index
@@ -311,11 +314,11 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
 
                     Box(
                         modifier = Modifier
-                            .padding(end = 8.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .padding(end = VividSpace.xs)
+                            .clip(VividExpressiveShapes.SmallCard)
                             .background(chipBgColor)
                             .clickable { selectedTab = index }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -326,7 +329,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                                     tint = chipTextColor,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(VividSpace.xxs))
                             }
                             Text(
                                 text = title,
@@ -338,7 +341,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(VividSpace.xxs))
 
             when {
                 isLoading -> {
@@ -346,7 +349,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        LoadingIndicator(color = MaterialTheme.colorScheme.primary, polygons = VividMaterialShapes.LoadingSequence)
                     }
                 }
 
@@ -387,8 +390,8 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                 else -> {
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.xs),
+                        verticalArrangement = Arrangement.spacedBy(VividSpace.s)
                     ) {
                         items(filteredChats, key = { it.chatId }) { chat ->
                             ChatPreviewCard(chat = chat, currentUserId = currentUserId) {
@@ -407,7 +410,7 @@ private fun EmptyMessagesState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp),
+            .padding(VividSpace.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -427,7 +430,7 @@ private fun EmptyMessagesState() {
         }
         Spacer(modifier = Modifier.height(20.dp))
         Text("¡Chatea con tus amigos!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(VividSpace.xs))
         Text(
             "Visita perfiles de creadores o amigos, toca 'Mensaje' e inicia una conversación.",
             style = MaterialTheme.typography.bodyMedium,
@@ -458,14 +461,14 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
+        shape = VividExpressiveShapes.MediumCard,
         colors = CardDefaults.cardColors(containerColor = cardBg),
         border = cardBorder
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = VividSpace.m, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.BottomEnd) {
@@ -476,13 +479,13 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
                         modifier = Modifier
                             .size(16.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF2ECC71))
+                            .background(LocalVividAccents.current.online)
                             .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(VividSpace.m))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     chat.otherUserName,
@@ -490,7 +493,7 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
                         fontWeight = if (unread) FontWeight.ExtraBold else FontWeight.Bold
                     )
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(VividSpace.xxs))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isLastMsgMine) {
                         Icon(
@@ -499,7 +502,7 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(VividSpace.xxs))
                     }
                     Text(
                         text = com.vivid.app.util.SettingsManager.filterOffensiveWords(chat.lastMessage.ifBlank { "Conversación iniciada" }),
@@ -512,7 +515,7 @@ fun ChatPreviewCard(chat: ChatPreview, currentUserId: String, onClick: () -> Uni
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(VividSpace.xs))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = formatChatTime(chat.timestamp),

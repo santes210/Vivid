@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,6 +42,10 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividShapes
+import com.vivid.app.theme.VividPaints
+import com.vivid.app.theme.VividSpace
 
 /**
  * Editor de Story estilo Instagram.
@@ -144,7 +147,7 @@ fun StoryEditorScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = VividSpace.m, vertical = VividSpace.s),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     EditorToolButton(
@@ -190,7 +193,7 @@ fun StoryEditorScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(9f / 16f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(VividExpressiveShapes.Media)
             ) {
                 if (isVideo && videoPlayer != null) {
                     AndroidView(
@@ -311,10 +314,10 @@ private fun OverlayItem(
                     onUpdate(updated)
                 }
             }
-            .padding(8.dp)
+            .padding(VividSpace.xs)
             .background(
                 color = if (isSelected) Color.White.copy(alpha = 0.2f) else Color.Transparent,
-                shape = RoundedCornerShape(4.dp)
+                shape = VividShapes.extraSmall
             )
     ) {
         when (overlay) {
@@ -351,14 +354,14 @@ private fun EditorToolButton(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(VividExpressiveShapes.Media)
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onClick() })
             }
-            .padding(8.dp)
+            .padding(VividSpace.xs)
     ) {
         Icon(icon, contentDescription = label, tint = tint)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(VividSpace.xxs))
         Text(label, style = MaterialTheme.typography.labelSmall, color = tint)
     }
 }
@@ -388,22 +391,22 @@ private fun TextInputDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) 
 
 @Composable
 private fun StickerPickerContent(onPick: (String) -> Unit) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.padding(VividSpace.m)) {
         Text(
             "Elige un sticker",
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = VividSpace.s)
         )
         StickerLibrary.categories.forEach { (category, stickers) ->
             Text(
                 category,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 4.dp)
+                modifier = Modifier.padding(vertical = VividSpace.xxs)
             )
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 8.dp)
+                horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
+                modifier = Modifier.padding(bottom = VividSpace.xs)
             ) {
                 items(stickers) { emoji ->
                     Text(
@@ -412,7 +415,7 @@ private fun StickerPickerContent(onPick: (String) -> Unit) {
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            .padding(12.dp)
+                            .padding(VividSpace.s)
                             .pointerInput(emoji) {
                                 detectTapGestures(onTap = { onPick(emoji) })
                             }
@@ -420,23 +423,19 @@ private fun StickerPickerContent(onPick: (String) -> Unit) {
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
     }
 }
 
 @Composable
 private fun ColorPickerDialog(onPick: (Int) -> Unit, onDismiss: () -> Unit) {
-    val colors = listOf(
-        Color.White, Color.Black, Color.Red, Color(0xFFFF6B6B),
-        Color(0xFFFFD93D), Color(0xFF6BCB77), Color(0xFF4D96FF),
-        Color(0xFFB983FF), Color(0xFFFF9F45)
-    )
+    val colors = VividPaints.StoryText
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Color") },
         text = {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 colors.forEach { c ->

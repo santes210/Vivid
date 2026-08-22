@@ -38,6 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import com.vivid.app.theme.VividSpace
 
 private const val TAG = "FeedScreen"
 
@@ -431,7 +432,7 @@ fun FeedScreen(
                 actions = {
                     BadgedBox(
                         badge = { if (followRequestsCount > 0) Badge(containerColor = MaterialTheme.colorScheme.error) { Text(followRequestsCount.coerceAtMost(9).toString(), color = MaterialTheme.colorScheme.onError) } },
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = VividSpace.xs)
                     ) {
                         IconButton(onClick = onOpenRequests) { Icon(Icons.Default.Notifications, stringResource(R.string.feed_requests), tint = MaterialTheme.colorScheme.onSurface) }
                     }
@@ -460,7 +461,7 @@ fun FeedScreen(
             ) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(vertical = VividSpace.xs),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     item(key = "stories") {
@@ -496,7 +497,7 @@ fun FeedScreen(
                             }
                             if (isLoadingMore) {
                                 item {
-                                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.fillMaxWidth().padding(VividSpace.m), contentAlignment = Alignment.Center) {
                                         LoadingIndicator(modifier = Modifier.size(38.dp))
                                     }
                                 }
@@ -556,7 +557,7 @@ fun FeedScreen(
             text = {
                 Column {
                     Text(stringResource(R.string.report_reason_label), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(VividSpace.xxs))
                     val reasons = listOf(
                         stringResource(R.string.report_reason_spam),
                         stringResource(R.string.report_reason_inappropriate),
@@ -566,10 +567,10 @@ fun FeedScreen(
                     reasons.forEach { reason ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                             RadioButton(selected = reportReason == reason, onClick = { reportReason = reason })
-                            Text(reason, modifier = Modifier.padding(start = 4.dp))
+                            Text(reason, modifier = Modifier.padding(start = VividSpace.xxs))
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(VividSpace.xs))
                     Text(stringResource(R.string.report_post_preview, reportPostUser, reportPostCaption.take(60)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },

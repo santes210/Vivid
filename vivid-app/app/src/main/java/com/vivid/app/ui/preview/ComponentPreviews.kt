@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.ui.components.VividEmptyState
 import com.vivid.app.ui.components.VividErrorState
@@ -48,7 +49,7 @@ private fun LikeButtonPreview() {
         var liked by remember { mutableStateOf(false) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             VividLikeButton(isLiked = liked, onToggle = { liked = !liked })
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(VividSpace.xs))
             Text(
                 if (liked) "Te gusta" else "Toca el corazón",
                 style = MaterialTheme.typography.bodyMedium
@@ -61,7 +62,7 @@ private fun LikeButtonPreview() {
 @Composable
 private fun AvatarsPreview() {
     VividPreviewSurface {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.s)) {
             UserAvatar(imageUrl = "", name = "Ana", size = 40.dp)
             UserAvatar(imageUrl = "", name = "Bruno", size = 56.dp)
             UserAvatar(imageUrl = "", name = "", size = 56.dp)
@@ -127,7 +128,7 @@ private fun BrandPalettePreview() {
     VividPreviewSurface {
         val scheme = MaterialTheme.colorScheme
         val accents = LocalVividAccents.current
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(VividSpace.xs)) {
             SwatchRow("primary", scheme.primary, scheme.onPrimary)
             SwatchRow("primaryContainer", scheme.primaryContainer, scheme.onPrimaryContainer)
             SwatchRow("secondaryContainer", scheme.secondaryContainer, scheme.onSecondaryContainer)
@@ -136,7 +137,7 @@ private fun BrandPalettePreview() {
             SwatchRow("surfaceContainer", scheme.surfaceContainer, scheme.onSurface)
             SwatchRow("accent · like", accents.like, Color.White)
             SwatchRow("accent · verificado", accents.verified, Color.White)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)) {
                 accents.storyRing.forEach { ringColor ->
                     Surface(
                         color = ringColor,
@@ -161,7 +162,7 @@ private fun SwatchRow(name: String, container: Color, onContainer: Color) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(VividSpace.s))
             Text(
                 name,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)

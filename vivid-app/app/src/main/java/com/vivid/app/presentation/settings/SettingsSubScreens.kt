@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -39,6 +38,8 @@ import com.vivid.app.util.launchExternalIntent
 import com.vivid.app.util.openUrl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
 
 // ─────────────────────────────────────────────────────────────
 // Cuenta
@@ -71,8 +72,8 @@ fun CuentaSettingsScreen(
     VividSettingsScaffold(title = "Cuenta", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup(title = "Información personal") {
@@ -163,7 +164,7 @@ fun CuentaSettingsScreen(
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = VividExpressiveShapes.MediumCard
                 ) {
                     ListItem(
                         headlineContent = { Text(stringResource(com.vivid.app.R.string.action_logout), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
@@ -221,8 +222,8 @@ fun PrivacidadSettingsScreen(
     VividSettingsScaffold(title = "Privacidad", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup(title = "Visibilidad") {
@@ -349,8 +350,8 @@ fun AparienciaSettingsScreen(
     VividSettingsScaffold(title = "Apariencia", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup {
@@ -437,14 +438,14 @@ fun AparienciaSettingsScreen(
                                 SettingsManager.setThemeOption(context, opt)
                                 showThemeDialog = false
                                 scope.launch { onShowSnackbar(context.getString(com.vivid.app.R.string.theme_changed, label)) }
-                            }.padding(vertical = 12.dp, horizontal = 8.dp),
+                            }.padding(vertical = VividSpace.s, horizontal = VividSpace.xs),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = selectedTheme == opt, onClick = {
                                 SettingsManager.setThemeOption(context, opt)
                                 showThemeDialog = false
                             })
-                            Spacer(Modifier.width(12.dp)); Text(label)
+                            Spacer(Modifier.width(VividSpace.s)); Text(label)
                         }
                     }
                 }
@@ -474,7 +475,7 @@ fun AparienciaSettingsScreen(
                                     // se sirvan en el nuevo idioma.
                                     (context as? android.app.Activity)?.recreate()
                                 }
-                            }.padding(vertical = 12.dp, horizontal = 8.dp),
+                            }.padding(vertical = VividSpace.s, horizontal = VividSpace.xs),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = selectedLang == code, onClick = {
@@ -482,7 +483,7 @@ fun AparienciaSettingsScreen(
                                 showLangDialog = false
                                 (context as? android.app.Activity)?.recreate()
                             })
-                            Spacer(Modifier.width(12.dp)); Text(label)
+                            Spacer(Modifier.width(VividSpace.s)); Text(label)
                         }
                     }
                 }
@@ -509,7 +510,7 @@ fun AparienciaSettingsScreen(
                                 com.vivid.app.util.LocaleManager.setFontScale(context, scale)
                                 showFontDialog = false
                                 (context as? android.app.Activity)?.recreate()
-                            }.padding(vertical = 12.dp, horizontal = 8.dp),
+                            }.padding(vertical = VividSpace.s, horizontal = VividSpace.xs),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
@@ -520,7 +521,7 @@ fun AparienciaSettingsScreen(
                                     (context as? android.app.Activity)?.recreate()
                                 }
                             )
-                            Spacer(Modifier.width(12.dp)); Text(label)
+                            Spacer(Modifier.width(VividSpace.s)); Text(label)
                         }
                     }
                 }
@@ -551,8 +552,8 @@ fun ContenidoSettingsScreen(onBack: () -> Unit) {
     VividSettingsScaffold(title = "Contenido y multimedia", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup(title = "Reproducción") {
@@ -590,8 +591,8 @@ fun NotificacionesSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
     VividSettingsScaffold(title = "Notificaciones", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup {
@@ -665,8 +666,8 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
     VividSettingsScaffold(title = "Almacenamiento", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup {
@@ -714,11 +715,11 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
                                 SettingsManager.setDownloadQuality(context, opt)
                                 showQuality = false
                                 scope.launch { onShowSnackbar("Calidad: $opt") }
-                            }.padding(vertical = 12.dp, horizontal = 8.dp),
+                            }.padding(vertical = VividSpace.s, horizontal = VividSpace.xs),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = quality == opt, onClick = { SettingsManager.setDownloadQuality(context, opt); showQuality = false })
-                            Spacer(Modifier.width(12.dp)); Text(opt)
+                            Spacer(Modifier.width(VividSpace.s)); Text(opt)
                         }
                     }
                 }
@@ -741,8 +742,8 @@ fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Un
     VividSettingsScaffold(title = "Ayuda", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup {
@@ -763,7 +764,7 @@ fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Un
             text = {
                 Column {
                     Text("¿Problemas con Vivid? Escríbenos.")
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(VividSpace.s))
                     Text("poncho2010santes@gmail.com", style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold))
                 }
             },
@@ -772,7 +773,7 @@ fun AyudaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->Un
                     val ok = composeEmail(context, "poncho2010santes@gmail.com", "Soporte Vivid App M3")
                     if (!ok) scope.launch { onShowSnackbar("Sin app de correo") }
                     showHelp = false
-                }) { Icon(Icons.Default.Email, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Enviar correo") }
+                }) { Icon(Icons.Default.Email, null, Modifier.size(18.dp)); Spacer(Modifier.width(VividSpace.xs)); Text("Enviar correo") }
             },
             dismissButton = { TextButton(onClick = { showHelp = false }) { Text("Cerrar") } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -793,8 +794,8 @@ fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->U
     VividSettingsScaffold(title = "Acerca de", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup {
@@ -836,7 +837,7 @@ fun AcercaSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (String)->U
                                 color = MaterialTheme.colorScheme.primary
                             )
                             release.notes.forEach { note ->
-                                Row(Modifier.padding(top = 4.dp)) {
+                                Row(Modifier.padding(top = VividSpace.xxs)) {
                                     Text("•  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(note, color = MaterialTheme.colorScheme.onSurface)
                                 }

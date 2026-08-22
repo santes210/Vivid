@@ -13,7 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -42,6 +41,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividShapes
 
 @Composable
 internal fun ProfileHeader(
@@ -56,7 +58,7 @@ internal fun ProfileHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 20.dp, vertical = VividSpace.m),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // ── Avatar como elemento hero con anillo de marca ──
@@ -112,29 +114,29 @@ internal fun ProfileHeader(
 
         // ── Badge privado ──
         if (profile.isPrivate) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(12.dp)
+                shape = VividExpressiveShapes.Media
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = VividSpace.xxs),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Lock, null, modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(VividSpace.xxs))
                     Text("Privada", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
 
         // ── Estadísticas en un grupo coherente (contenedor tonal) ──
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = VividExpressiveShapes.MediumCard,
             color = MaterialTheme.colorScheme.surfaceContainer,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -161,17 +163,17 @@ internal fun ProfileHeader(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
 
         // ── Acción principal ──
         if (isOwnProfile) {
             FilledTonalButton(
                 onClick = onEditProfile,
                 modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = VividExpressiveShapes.SecondaryButton
             ) {
                 Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(VividSpace.xs))
                 Text("Editar perfil")
             }
         } else {
@@ -182,7 +184,7 @@ internal fun ProfileHeader(
                 },
                 modifier = Modifier.fillMaxWidth().height(44.dp),
                 enabled = !isFollowActionLoading,
-                shape = RoundedCornerShape(16.dp),
+                shape = VividExpressiveShapes.SecondaryButton,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (relationshipState.isFollowing || relationshipState.hasPendingRequest)
                         MaterialTheme.colorScheme.secondaryContainer
@@ -240,16 +242,16 @@ internal fun ProfileHeaderSkeleton() {
     ) {
         // Avatar
         Box(Modifier.size(116.dp).clip(CircleShape).background(blockColor))
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
         // Nombre
-        Box(Modifier.width(190.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(blockColor))
-        Spacer(Modifier.height(8.dp))
+        Box(Modifier.width(190.dp).height(22.dp).clip(VividShapes.extraSmall).background(blockColor))
+        Spacer(Modifier.height(VividSpace.xs))
         // @usuario
-        Box(Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).background(blockColor))
+        Box(Modifier.width(130.dp).height(14.dp).clip(VividShapes.extraSmall).background(blockColor))
         Spacer(Modifier.height(20.dp))
         // Grupo de estadísticas
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = VividExpressiveShapes.MediumCard,
             color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Row(
@@ -264,16 +266,16 @@ internal fun ProfileHeaderSkeleton() {
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Box(Modifier.width(48.dp).height(18.dp).clip(RoundedCornerShape(9.dp)).background(blockColor))
+                        Box(Modifier.width(48.dp).height(18.dp).clip(VividShapes.extraSmall).background(blockColor))
                         Spacer(Modifier.height(6.dp))
-                        Box(Modifier.width(70.dp).height(11.dp).clip(RoundedCornerShape(5.dp)).background(blockColor))
+                        Box(Modifier.width(70.dp).height(11.dp).clip(VividShapes.extraSmall).background(blockColor))
                     }
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
         // Botón de acción
-        Box(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(16.dp)).background(blockColor))
+        Box(Modifier.fillMaxWidth().height(44.dp).clip(VividExpressiveShapes.SmallCard).background(blockColor))
     }
 }
 
@@ -282,7 +284,7 @@ internal fun ProfileGridSkeletonCell() {
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(VividShapes.extraSmall)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f))
     )
 }
@@ -290,9 +292,9 @@ internal fun ProfileGridSkeletonCell() {
 @Composable
 internal fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        modifier = Modifier.fillMaxWidth().padding(VividSpace.l),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(24.dp)
+        shape = VividExpressiveShapes.HeroCard
     ) {
         Column(
             modifier = Modifier.padding(40.dp),
@@ -309,7 +311,7 @@ internal fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             Text(
                 "Sigue a @$username para ver sus publicaciones y reels.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -317,14 +319,14 @@ internal fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
                 textAlign = TextAlign.Center
             )
             if (hasPendingRequest) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(VividSpace.s))
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = VividExpressiveShapes.Media
                 ) {
                     Text(
                         "Solicitud enviada",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
@@ -337,16 +339,16 @@ internal fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
 @Composable
 internal fun EmptyPostsPlaceholder() {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        modifier = Modifier.fillMaxWidth().padding(VividSpace.l),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(24.dp)
+        shape = VividExpressiveShapes.HeroCard
     ) {
         Column(
-            modifier = Modifier.padding(32.dp),
+            modifier = Modifier.padding(VividSpace.xl),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(Icons.Default.GridView, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(48.dp))
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(VividSpace.s))
             Text("Aún no hay publicaciones.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -355,12 +357,12 @@ internal fun EmptyPostsPlaceholder() {
 @Composable
 internal fun EmptySavedPostsPlaceholder() {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        modifier = Modifier.fillMaxWidth().padding(VividSpace.l),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(24.dp)
+        shape = VividExpressiveShapes.HeroCard
     ) {
         Column(
-            modifier = Modifier.padding(32.dp),
+            modifier = Modifier.padding(VividSpace.xl),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
@@ -369,13 +371,13 @@ internal fun EmptySavedPostsPlaceholder() {
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier.size(56.dp)
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
             Text(
                 "Aún no has guardado publicaciones",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             Text(
                 "Toca el ícono de marcador en cualquier publicación del feed para guardarla aquí. Solo tú puedes ver tus elementos guardados.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -426,7 +428,7 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
             // La miniatura ES la imagen del detalle: crece hasta la pantalla
             // completa en vez de que el detalle aparezca de la nada.
             .vividSharedElement(VividSharedKeys.postImage(post.id))
-            .clip(RoundedCornerShape(6.dp))
+            .clip(VividShapes.extraSmall)
             .clickable {
                 haptics.tick()
                 onClick()
@@ -441,7 +443,7 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
         }
         if (post.isVideo) {
             Surface(color = Color.Black.copy(alpha = 0.5f), shape = CircleShape, modifier = Modifier.align(Alignment.Center)) {
-                Icon(Icons.Default.PlayArrow, "Reel", tint = Color.White, modifier = Modifier.padding(8.dp).size(24.dp))
+                Icon(Icons.Default.PlayArrow, "Reel", tint = Color.White, modifier = Modifier.padding(VividSpace.xs).size(24.dp))
             }
         }
     }
@@ -455,10 +457,10 @@ internal fun ProfilePostViewerDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(20.dp)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = VividExpressiveShapes.MediumCard) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
+                    Modifier.fillMaxWidth().padding(VividSpace.s),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {

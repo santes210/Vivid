@@ -6,7 +6,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,8 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +21,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil3.compose.AsyncImage
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 
 private enum class CreateContentType {
     POST,
@@ -139,13 +139,13 @@ fun CreatePostScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(VividSpace.m),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Selector de tipo (Material You 3 FilterChips con colores temáticos)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
             ) {
                 FilterChip(
                     selected = selectedContentType == CreateContentType.POST,
@@ -183,23 +183,23 @@ fun CreatePostScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(VividSpace.m))
 
             // Si eligió Reel, redirigir
             if (selectedContentType == CreateContentType.REEL) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = VividExpressiveShapes.HeroCard,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
+                            .padding(VividSpace.l),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
+                            shape = VividExpressiveShapes.MediumCard,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(80.dp)
                         ) {
@@ -207,30 +207,30 @@ fun CreatePostScreen(
                                 Icon(
                                     Icons.Default.MovieCreation,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(44.dp)
                                 )
                             }
                         }
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(VividSpace.m))
                         Text("Crear Reel con video", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(VividSpace.xs))
                         Text(
                             "Elige o graba → ajusta el trim → agrega música del dispositivo o de la app → publica",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(VividSpace.l))
                         Button(
                             onClick = { navController.navigate("create_reel") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = VividExpressiveShapes.SecondaryButton
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text("Ir a crear Reel")
                         }
                     }
@@ -241,26 +241,26 @@ fun CreatePostScreen(
             if (selectedContentType == CreateContentType.STORY) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VividExpressiveShapes.MediumCard,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(VividSpace.m)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text("Stories", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                         }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(VividSpace.xs))
                         Text(
                             "Las stories duran 1 dia y puedes agregarle musica.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(VividSpace.s))
                         FilledTonalButton(
                             onClick = { navController.navigate("create_story") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = VividExpressiveShapes.SecondaryButton
                         ) {
                             Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
@@ -268,13 +268,13 @@ fun CreatePostScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(VividSpace.m))
             }
 
             // Preview grande con Material You 3 Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = VividExpressiveShapes.HeroCard,
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
@@ -294,10 +294,10 @@ fun CreatePostScreen(
                     } else {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
+                            modifier = Modifier.padding(VividSpace.l)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(24.dp),
+                                shape = VividExpressiveShapes.HeroCard,
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 modifier = Modifier.size(100.dp)
                             ) {
@@ -310,7 +310,7 @@ fun CreatePostScreen(
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(VividSpace.m))
                             Text(
                                 "Selecciona o toma una foto",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -326,33 +326,33 @@ fun CreatePostScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
 
             // Botones Galería / Cámara — Material You 3
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(VividSpace.s)
             ) {
                 FilledTonalButton(
                     onClick = { imagePickerLauncher.launch("image/*") },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = VividExpressiveShapes.SecondaryButton,
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(VividSpace.xs))
                     Text("Galería")
                 }
                 Button(
                     onClick = { navController.navigate("camera") },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = VividExpressiveShapes.SecondaryButton
                 ) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(VividSpace.xs))
                     Text("Cámara")
                 }
             }
@@ -362,7 +362,7 @@ fun CreatePostScreen(
             // ── Selector de música (Material You 3) ──
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                shape = VividExpressiveShapes.MediumCard,
                 colors = CardDefaults.cardColors(
                     containerColor = if (selectedTrack != null) MaterialTheme.colorScheme.primaryContainer
                     else MaterialTheme.colorScheme.surfaceContainerLow
@@ -379,15 +379,15 @@ fun CreatePostScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = VividExpressiveShapes.Media,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(22.dp))
                         }
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(VividSpace.s))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             if (selectedTrack != null) selectedTrack!!.title else "Agregar música",
@@ -408,7 +408,7 @@ fun CreatePostScreen(
                     }
                     FilledTonalButton(
                         onClick = { showMusicSheet = true },
-                        shape = RoundedCornerShape(12.dp)
+                        shape = VividExpressiveShapes.SegmentedControl
                     ) {
                         Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                     }
@@ -425,7 +425,7 @@ fun CreatePostScreen(
                 placeholder = { Text("Simplemente....  Escribe....") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
-                shape = RoundedCornerShape(20.dp),
+                shape = VividExpressiveShapes.FieldFocused,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
@@ -454,40 +454,40 @@ fun CreatePostScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = VividExpressiveShapes.PrimaryButton,
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
             ) {
                 if (isUploading) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        polygons = VividMaterialShapes.LoadingSequence
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(uploadProgress, fontWeight = FontWeight.SemiBold)
                 } else {
                     Icon(Icons.Default.Send, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(VividSpace.xs))
                     Text("Publicar", fontWeight = FontWeight.Bold)
                 }
             }
 
             errorMessage?.let { msg ->
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(VividSpace.s))
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = VividExpressiveShapes.SmallCard,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.padding(VividSpace.s), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(VividSpace.xs))
                         Text(msg, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(VividSpace.l))
         }
     }
 

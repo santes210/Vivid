@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.vivid.app.R
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.composeEmail
+import com.vivid.app.theme.VividSpace
 
 // ── Help / Support Dialog ──
 
@@ -35,7 +36,7 @@ internal fun HelpDialog(
         text = {
             Column {
                 Text("¿Tienes algún problema con Vivid? Estamos aquí para ayudarte con soporte directo.")
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(VividSpace.m))
                 Text(
                     "Puedes contactar directamente al desarrollador enviando un correo a:",
                     style = MaterialTheme.typography.bodySmall
@@ -46,7 +47,7 @@ internal fun HelpDialog(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     ),
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(vertical = VividSpace.xs)
                 )
             }
         },
@@ -61,7 +62,7 @@ internal fun HelpDialog(
                 onDismiss()
             }) {
                 Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(VividSpace.xs))
                 Text("Enviar Correo")
             }
         },
@@ -104,7 +105,7 @@ internal fun ThemeDialog(
                                 onThemeChanged(label)
                                 onDismiss()
                             }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                            .padding(vertical = VividSpace.s, horizontal = VividSpace.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
@@ -115,7 +116,7 @@ internal fun ThemeDialog(
                                 onDismiss()
                             }
                         )
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(VividSpace.s))
                         Text(label, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
@@ -157,7 +158,7 @@ internal fun DownloadQualityDialog(
                                 onQualityChanged(qualityOption)
                                 onDismiss()
                             }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                            .padding(vertical = VividSpace.s, horizontal = VividSpace.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
@@ -168,7 +169,7 @@ internal fun DownloadQualityDialog(
                                 onDismiss()
                             }
                         )
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(VividSpace.s))
                         Text(qualityOption, style = MaterialTheme.typography.bodyLarge)
                     }
                 }

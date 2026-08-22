@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -44,6 +44,8 @@ import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividMaterialShapes
 
 @Immutable
 data class SearchUser(
@@ -86,14 +88,14 @@ fun SearchScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(VividSpace.m),
             singleLine = true
         )
 
         when {
             !searching -> {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    modifier = Modifier.fillMaxSize().padding(VividSpace.l),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -104,7 +106,7 @@ fun SearchScreen(
             }
             users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    LoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
                 }
             }
             users.loadState.refresh is LoadState.Error && users.itemCount == 0 -> {
@@ -116,7 +118,7 @@ fun SearchScreen(
             }
             users.itemCount == 0 -> {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    modifier = Modifier.fillMaxSize().padding(VividSpace.l),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -141,10 +143,10 @@ fun SearchScreen(
                     if (users.loadState.append is LoadState.Loading) {
                         item {
                             Box(
-                                Modifier.fillMaxWidth().padding(16.dp),
+                                Modifier.fillMaxWidth().padding(VividSpace.m),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                                LoadingIndicator(Modifier.size(24.dp), polygons = VividMaterialShapes.LoadingSequence)
                             }
                         }
                     }
@@ -170,7 +172,7 @@ fun UserSearchItem(
                 role = Role.Button
             }
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = VividSpace.m, vertical = VividSpace.s),
         verticalAlignment = Alignment.CenterVertically
     ) {
         UserAvatar(
@@ -181,7 +183,7 @@ fun UserSearchItem(
             size = 52.dp
         )
 
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(VividSpace.m))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(user.displayName, style = MaterialTheme.typography.titleMedium)
@@ -203,7 +205,7 @@ fun UserSearchItem(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(VividSpace.xxs))
             Text(stringResource(R.string.action_message))
         }
     }

@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Check
@@ -55,6 +54,8 @@ import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.util.formatVoiceDuration
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -180,7 +181,7 @@ fun ChatScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(VividSpace.s))
                         Column {
                             Text(
                                 otherUserName,
@@ -243,17 +244,17 @@ fun ChatScreen(
                 when {
                     !canMessage -> {
                         Box(
-                            modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(VividSpace.l),
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(24.dp),
+                                shape = VividExpressiveShapes.SearchBar,
                                 color = MaterialTheme.colorScheme.errorContainer,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
                             ) {
-                                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Column(modifier = Modifier.padding(VividSpace.l), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("No puedes enviar mensajes", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.error)
-                                    Spacer(Modifier.height(8.dp))
+                                    Spacer(Modifier.height(VividSpace.xs))
                                     Text("Esta cuenta es privada y todavía no la sigues.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                                 }
                             }
@@ -261,11 +262,11 @@ fun ChatScreen(
                     }
 
                     messages.isEmpty() && imageUploads.none { it.phase != ImageUpload.Phase.DONE } && voiceUploads.isEmpty() && !isOtherTyping -> {
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-                                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(VividSpace.l), contentAlignment = Alignment.Center) {
+                            Surface(shape = VividExpressiveShapes.HeroCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                                Column(modifier = Modifier.padding(VividSpace.l), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Aún no hay mensajes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.height(8.dp))
+                                    Spacer(Modifier.height(VividSpace.xs))
                                     Text("Envía el primer mensaje para empezar la conversación.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                                 }
                             }
@@ -284,8 +285,8 @@ fun ChatScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f).fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+                            verticalArrangement = Arrangement.spacedBy(VividSpace.xxs),
                             reverseLayout = true
                         ) {
                             // Typing indicator as first item (bottom)
@@ -375,7 +376,7 @@ fun ChatScreen(
                                 .imePadding()
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = VividSpace.xs),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 FilledTonalIconButton(
@@ -388,7 +389,7 @@ fun ChatScreen(
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = "Adjuntar", modifier = Modifier.size(22.dp))
                                 }
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(VividSpace.xs))
                                 OutlinedTextField(
                                     value = messageText,
                                     onValueChange = {
@@ -398,7 +399,7 @@ fun ChatScreen(
                                     modifier = Modifier.weight(1f),
                                     placeholder = { Text("Escribe un mensaje…") },
                                     maxLines = 4,
-                                    shape = RoundedCornerShape(24.dp),
+                                    shape = VividExpressiveShapes.SearchBar,
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color.Transparent,
                                         unfocusedBorderColor = Color.Transparent,
@@ -406,7 +407,7 @@ fun ChatScreen(
                                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                     )
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(VividSpace.xs))
                                 if (messageText.isNotBlank()) {
                                     FilledIconButton(
                                         enabled = receiverId.isNotBlank(),
@@ -462,7 +463,7 @@ fun ChatScreen(
                     )
                     // Menú de reacciones expresivo: superficie tonal plana, sin sombras ni bordes
                     Surface(
-                        shape = RoundedCornerShape(28.dp),
+                        shape = VividExpressiveShapes.HeroCard,
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         shadowElevation = 0.dp,
                         tonalElevation = 0.dp,
@@ -471,7 +472,7 @@ fun ChatScreen(
                             .padding(bottom = 92.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = VividSpace.xs),
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -492,7 +493,7 @@ fun ChatScreen(
                             VerticalDivider(
                                 modifier = Modifier
                                     .height(28.dp)
-                                    .padding(horizontal = 8.dp),
+                                    .padding(horizontal = VividSpace.xs),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                             )
                             IconButton(
@@ -522,17 +523,17 @@ fun ChatScreen(
             onDismissRequest = { selectedMessageForOptions = null; activeReactionMessageId = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Opciones del Mensaje", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), modifier = Modifier.padding(bottom = 8.dp))
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(VividSpace.xs)) {
+                Text("Opciones del Mensaje", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), modifier = Modifier.padding(bottom = VividSpace.xs))
                 when (message.type) {
                     "image" -> {
-                        ListItem(headlineContent = { Text("Ver imagen") }, supportingContent = { Text("Imagen adjunta", maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { viewerImageUrl = message.imageUrl; selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                        ListItem(headlineContent = { Text("Ver imagen") }, supportingContent = { Text("Imagen adjunta", maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable { viewerImageUrl = message.imageUrl; selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                     "voice" -> {
-                        ListItem(headlineContent = { Text("Nota de voz") }, supportingContent = { Text(formatVoiceDuration(message.voiceDurationMs), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)), colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                        ListItem(headlineContent = { Text("Nota de voz") }, supportingContent = { Text(formatVoiceDuration(message.voiceDurationMs), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(VividExpressiveShapes.SmallCard), colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                     else -> {
-                        ListItem(headlineContent = { Text("Copiar texto") }, supportingContent = { Text(message.text.take(80), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { clipboardManager.setText(AnnotatedString(message.text)); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                        ListItem(headlineContent = { Text("Copiar texto") }, supportingContent = { Text(message.text.take(80), maxLines = 1) }, leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable { clipboardManager.setText(AnnotatedString(message.text)); selectedMessageForOptions = null; activeReactionMessageId = null }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
                     }
                 }
                 if (message.canBeEditedBy(currentUserId)) {
@@ -540,7 +541,7 @@ fun ChatScreen(
                         headlineContent = { Text(stringResource(R.string.msg_edit)) },
                         supportingContent = { Text(stringResource(R.string.msg_edited).take(40), maxLines = 1) },
                         leadingContent = { Icon(Icons.Filled.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                        modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable {
                             editingMessage = message
                             selectedMessageForOptions = null
                             activeReactionMessageId = null
@@ -560,7 +561,7 @@ fun ChatScreen(
                         },
                         supportingContent = { Text(stringResource(R.string.msg_delete_confirm_body)) },
                         leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                        modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable {
                             pendingDelete = message
                             selectedMessageForOptions = null
                             activeReactionMessageId = null
@@ -568,7 +569,7 @@ fun ChatScreen(
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(VividSpace.m))
             }
         }
     }
@@ -584,7 +585,7 @@ fun ChatScreen(
                     onValueChange = { draft = it },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 5,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = VividExpressiveShapes.FieldResting
                 )
             },
             confirmButton = {
@@ -618,20 +619,20 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp)
+                    .padding(bottom = VividSpace.l)
                     .navigationBarsPadding(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(VividSpace.xxs)
             ) {
                 Text(
                     "Adjuntar",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(bottom = 4.dp)
+                    modifier = Modifier.padding(bottom = VividSpace.xxs)
                 )
                 ListItem(
                     headlineContent = { Text("Enviar foto") },
                     supportingContent = { Text("Desde tu galería") },
                     leadingContent = { Icon(Icons.Filled.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable {
                         showAttachMenu = false
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     },
@@ -641,7 +642,7 @@ fun ChatScreen(
                     headlineContent = { Text("Ver perfil") },
                     supportingContent = { Text("@$otherUserName") },
                     leadingContent = { Icon(Icons.Filled.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable {
                         showAttachMenu = false
                         if (receiverId.isNotBlank()) onOpenProfile(receiverId)
                     },
@@ -651,7 +652,7 @@ fun ChatScreen(
                     headlineContent = { Text("Copiar chat ID") },
                     supportingContent = { Text("Para soporte o depuración") },
                     leadingContent = { Icon(Icons.Filled.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    modifier = Modifier.clip(VividExpressiveShapes.SmallCard).clickable {
                         clipboardManager.setText(AnnotatedString(chatId))
                         showAttachMenu = false
                     },
@@ -667,10 +668,10 @@ fun ChatScreen(
                 var scale by remember { mutableStateOf(1f) }
                 var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
                 Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 4f); offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan } }, contentAlignment = Alignment.Center) {
-                    AsyncImage(model = url, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxWidth().padding(16.dp).graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y), contentScale = ContentScale.Fit)
+                    AsyncImage(model = url, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxWidth().padding(VividSpace.m).graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y), contentScale = ContentScale.Fit)
                 }
-                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 24.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
-                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = VividSpace.l, vertical = VividSpace.s), shape = VividExpressiveShapes.SearchBar, color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
+                    Row(modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(VividSpace.m)) {
                         Text(text = "Visor de Imagen", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))
                         IconButton(onClick = { viewerImageUrl = null }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }

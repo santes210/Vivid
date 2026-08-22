@@ -4,7 +4,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -21,6 +20,7 @@ import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividShapes
+import com.vivid.app.theme.VividSpace
 
 /**
  * Estados unificados de Vivid (cargando / vacío / error / esqueleto).
@@ -41,7 +41,7 @@ fun VividLoadingState(
     showMessage: Boolean = true
 ) {
     Box(
-        modifier = modifier.fillMaxWidth().padding(vertical = 48.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = VividSpace.xxl),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -51,7 +51,7 @@ fun VividLoadingState(
                 polygons = VividMaterialShapes.LoadingSequence
             )
             if (showMessage) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(VividSpace.m))
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -72,7 +72,7 @@ fun VividEmptyState(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null
 ) {
-    Box(modifier = modifier.fillMaxWidth().padding(vertical = 56.dp, horizontal = 24.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxWidth().padding(vertical = 56.dp, horizontal = VividSpace.l), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // Squircle expresivo 32dp hero + tonal primaryContainer
             Surface(
@@ -89,7 +89,7 @@ fun VividEmptyState(
             Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
             if (subtitle != null) {
                 Spacer(Modifier.height(6.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = VividSpace.m))
             }
             if (actionLabel != null && onAction != null) {
                 Spacer(Modifier.height(20.dp))
@@ -108,16 +108,16 @@ fun VividErrorState(
     onRetry: (() -> Unit)? = null,
     retryLabel: String = "Reintentar"
 ) {
-    Box(modifier = modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 24.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxWidth().padding(vertical = VividSpace.xxl, horizontal = VividSpace.l), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.size(72.dp)) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(36.dp))
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
             Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(VividSpace.xxs))
             Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             if (onRetry != null) {
                 Spacer(Modifier.height(18.dp))
@@ -130,7 +130,7 @@ fun VividErrorState(
 @Composable
 fun VividRetryButton(onRetry: () -> Unit, label: String = "Reintentar", modifier: Modifier = Modifier) {
     Button(onClick = onRetry, shape = VividExpressiveShapes.PrimaryButton, modifier = modifier) {
-        Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(label)
+        Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(VividSpace.xs)); Text(label)
     }
 }
 
@@ -140,7 +140,7 @@ fun VividOfflineBanner(modifier: Modifier = Modifier, message: String = "Sin con
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         shape = VividShapes.small, // 12dp squircle
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+        modifier = modifier.fillMaxWidth().padding(horizontal = VividSpace.m, vertical = VividSpace.xs)
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.WifiOff, null, Modifier.size(18.dp))
@@ -172,10 +172,10 @@ fun VividSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 fun VividSkeletonListItem(modifier: Modifier = Modifier) {
-    Row(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier.fillMaxWidth().padding(horizontal = VividSpace.m, vertical = VividSpace.s), verticalAlignment = Alignment.CenterVertically) {
         VividSkeleton(modifier = Modifier.size(48.dp).clip(CircleShape))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.width(VividSpace.s))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(VividSpace.xs)) {
             VividSkeleton(modifier = Modifier.fillMaxWidth(0.6f).height(14.dp).clip(VividShapes.small))
             VividSkeleton(modifier = Modifier.fillMaxWidth(0.85f).height(12.dp).clip(VividShapes.small))
         }

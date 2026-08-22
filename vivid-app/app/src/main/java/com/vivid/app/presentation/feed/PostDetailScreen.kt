@@ -47,6 +47,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.VividLikeButton
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
@@ -176,7 +177,7 @@ fun PostDetailScreen(
                                 Text(
                                     loaded.caption,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.padding(top = 8.dp)
+                                    modifier = Modifier.padding(top = VividSpace.xs)
                                 )
                             }
                             if (likesCount > 0) {
@@ -184,7 +185,7 @@ fun PostDetailScreen(
                                     stringResource(R.string.feed_likes_count, likesCount),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 12.dp)
+                                    modifier = Modifier.padding(top = VividSpace.s)
                                 )
                             }
                             // Aire para que la barra flotante no tape el texto.
@@ -196,7 +197,7 @@ fun PostDetailScreen(
                         expanded = true,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 24.dp)
+                            .padding(bottom = VividSpace.l)
                     ) {
                         VividLikeButton(
                             isLiked = isLiked,
