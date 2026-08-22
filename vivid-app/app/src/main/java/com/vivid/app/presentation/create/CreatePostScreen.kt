@@ -21,6 +21,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil3.compose.AsyncImage
+import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
@@ -464,11 +465,19 @@ fun CreatePostScreen(
                         polygons = VividMaterialShapes.LoadingSequence
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text(uploadProgress, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        uploadProgress,
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 } else {
                     Icon(Icons.Default.Send, contentDescription = null)
                     Spacer(Modifier.width(VividSpace.xs))
-                    Text("Publicar", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Publicar",
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 

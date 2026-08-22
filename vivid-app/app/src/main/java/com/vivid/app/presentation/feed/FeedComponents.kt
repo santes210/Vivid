@@ -497,9 +497,11 @@ internal fun PostCard(
             }
         }
 
-        Spacer(Modifier.height(VividSpace.s))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Spacer(Modifier.height(VividSpace.s))
+        // Respiro interno del card: M3 recomienda 8-12dp entre tarjetas,
+        // el espacio externo lo da el LazyColumn (12dp). Aquí solo dejamos
+        // un pequeño padding inferior para que el contenido no pegue al borde
+        // redondeado del surfaceContainerLow.
+        Spacer(Modifier.height(VividSpace.xs))
     }
 }
 

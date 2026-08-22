@@ -45,6 +45,7 @@ import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
@@ -207,7 +208,13 @@ fun ReelsScreen(
         ) {
             Icon(Icons.Default.Add, contentDescription = stringResource(com.vivid.app.R.string.cd_create_reel), modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(VividSpace.xs))
-            Text(stringResource(com.vivid.app.R.string.nav_create), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+            Text(
+                stringResource(com.vivid.app.R.string.nav_create),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontFamily = SoraFamily,
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
         }
     }
 }
