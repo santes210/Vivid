@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
 
 private const val TAG = "FeedScreen"
 
@@ -461,39 +462,60 @@ fun FeedScreen(
             ) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(vertical = VividSpace.xs),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    contentPadding = PaddingValues(
+                        horizontal = VividSpace.xs,
+                        vertical = VividSpace.s
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(VividSpace.s)
                 ) {
                     item(key = "stories") {
                         StoriesTray(onStoryClick = { onOpenStoryViewer(it.id) }, onCreateStory = onCreateStory)
                     }
 
                     when {
-                        isLoading -> { items(3, key = { "skeleton_$it" }) { FeedSkeleton() } }
+                        isLoading -> {
+                            items(3, key = { "skeleton_$it" }) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = VividExpressiveShapes.MediumCard,
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                                ) {
+                                    FeedSkeleton()
+                                }
+                            }
+                        }
                         isError -> { item(key = "error") { FeedErrorState(onRetry = { retryKey++ }) } }
                         displayPosts.isEmpty() -> { item(key = "empty") { FeedEmptyState() } }
                         else -> {
                             items(displayPosts, key = { it.id }) { post ->
-                                PostCard(
-                                    post = post,
-                                    currentUserId = currentUserId,
-                                    isFollowingAuthor = post.userId in followingUserIds,
-                                    hasPendingRequestToAuthor = post.userId in pendingFollowUserIds,
-                                    onOpenPost = onOpenPost,
-                                    onOpenAuthorProfile = onOpenUserProfile,
-                                    onOpenComments = onOpenComments,
-                                    onOpenDetails = onOpenDetails,
-                                    onEditPost = onEditPost,
-                                    onDeletePost = onDeletePost,
-                                    onToggleFollow = onToggleFollow,
-                                    onToggleSave = onToggleSave,
-                                    onToggleLike = onToggleLike,
-                                    onShare = onSharePost,
-                                    onReportPost = onReportPost,
-                                    onImageUrlExpired = onImageUrlExpired,
-                                    onMusicUrlExpired = onMusicUrlExpired,
-                                    onVideoUrlExpired = onVideoUrlExpired
-                                )
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = VividExpressiveShapes.MediumCard,
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    tonalElevation = 0.dp,
+                                    shadowElevation = 0.dp
+                                ) {
+                                    PostCard(
+                                        post = post,
+                                        currentUserId = currentUserId,
+                                        isFollowingAuthor = post.userId in followingUserIds,
+                                        hasPendingRequestToAuthor = post.userId in pendingFollowUserIds,
+                                        onOpenPost = onOpenPost,
+                                        onOpenAuthorProfile = onOpenUserProfile,
+                                        onOpenComments = onOpenComments,
+                                        onOpenDetails = onOpenDetails,
+                                        onEditPost = onEditPost,
+                                        onDeletePost = onDeletePost,
+                                        onToggleFollow = onToggleFollow,
+                                        onToggleSave = onToggleSave,
+                                        onToggleLike = onToggleLike,
+                                        onShare = onSharePost,
+                                        onReportPost = onReportPost,
+                                        onImageUrlExpired = onImageUrlExpired,
+                                        onMusicUrlExpired = onMusicUrlExpired,
+                                        onVideoUrlExpired = onVideoUrlExpired
+                                    )
+                                }
                             }
                             if (isLoadingMore) {
                                 item {

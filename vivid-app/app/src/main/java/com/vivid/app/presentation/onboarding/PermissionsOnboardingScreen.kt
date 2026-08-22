@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.vivid.app.R
 import com.vivid.app.ui.components.VividSettingsScaffold
+import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 
 /**
@@ -186,13 +187,25 @@ fun PermissionsOnboardingScreen(
                 onClick = onComplete,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(R.string.perm_onb_continue))
+                Text(
+                    stringResource(R.string.perm_onb_continue),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
             }
             TextButton(
                 onClick = onSkip,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(R.string.perm_onb_skip))
+                Text(
+                    stringResource(R.string.perm_onb_skip),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
             }
         }
     }

@@ -68,6 +68,7 @@ import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.ui.icons.VividIcons
@@ -694,7 +695,8 @@ private fun VividBottomBar(
                                 Text(
                                     text = dest.screen.label(),
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        fontFamily = if (isSelected) SoraFamily else null,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                     ),
                                     color = if (isSelected) {
                                         MaterialTheme.colorScheme.primary
@@ -798,7 +800,8 @@ private fun VividNavigationRail(
                     Text(
                         dest.screen.label(),
                         style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            fontFamily = if (isSelected) SoraFamily else null,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         )
                     )
                 }

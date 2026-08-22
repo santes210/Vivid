@@ -72,6 +72,7 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividMaterialShapes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -656,7 +657,10 @@ fun AuthScreen(
                 } else {
                     Text(
                         text = if (isLoginMode) "Iniciar sesión" else "Registrarse",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = SoraFamily,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     )
                 }
             }
@@ -698,7 +702,10 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "Continuar con Google",
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 )
             }
 
