@@ -140,8 +140,18 @@ object VividMaterialShapes {
     /**
      * Secuencia de polígonos del indicador de carga de Vivid.
      *
-     * `LoadingIndicator` transforma una forma en la siguiente; con esta lista
+     * **No es código muerto.** `LoadingIndicator` / `ContainedLoadingIndicator`
+     * de material3 1.5.0-alpha aceptan `polygons: List<RoundedPolygon>` y
+     * transforman una forma en la siguiente mientras se animan; con esta lista
      * la espera "sabe" a Vivid en vez de al indicador por defecto.
+     *
+     * Se consume desde `VividLoadingState`, el cargando del detalle de imagen,
+     * la bandeja de historias y los `ContainedLoadingIndicator` de Explorar.
+     * Si añades un `LoadingIndicator` nuevo, pásalo (`polygons = LoadingSequence`)
+     * para que toda la app cargue con la misma secuencia.
+     *
+     * Requisito del propio componente: al menos dos polígonos (si no, crashea
+     * en runtime); esta lista lleva cinco.
      */
     val LoadingSequence: List<RoundedPolygon> = listOf(
         MaterialShapes.SoftBurst,

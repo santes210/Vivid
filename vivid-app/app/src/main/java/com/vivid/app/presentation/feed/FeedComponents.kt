@@ -82,12 +82,23 @@ internal fun FeedErrorState(onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            Icons.Default.WifiOff,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Contenedor con la forma expresiva (Cookie9Sided) en vez de un ícono
+        // suelto de 64dp: mantiene la semántica de error (errorContainer) pero
+        // grita "Material Expressive". Igual patrón que VividEmptyState.
+        Surface(
+            shape = VividMaterialShapes.EmptyStateContainer,
+            color = MaterialTheme.colorScheme.errorContainer,
+            modifier = Modifier.size(104.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.WifiOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp),
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
         Spacer(Modifier.height(VividSpace.m))
         Text(
             stringResource(R.string.feed_error_title),
@@ -118,12 +129,23 @@ internal fun FeedEmptyState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            Icons.Default.PhotoLibrary,
-            contentDescription = null,
-            modifier = Modifier.size(72.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        )
+        // Contenedor con la forma expresiva (Cookie9Sided) en surfaceContainerHigh
+        // con el ícono en onSurfaceVariant: el detalle que grita "Material
+        // Expressive", en vez de un PhotoLibrary de 72dp flotando en un Column.
+        Surface(
+            shape = VividMaterialShapes.EmptyStateContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.size(104.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Spacer(Modifier.height(VividSpace.m))
         Text(
             stringResource(R.string.feed_empty_title),
@@ -237,7 +259,11 @@ fun PostImage(
                 }
 
                 when {
-                    isLoading -> LoadingIndicator()
+                    isLoading -> LoadingIndicator(
+                        // Misma secuencia de polígonos de Vivid que el resto de
+                        // la app, para que la espera "sepa" a marca aquí también.
+                        polygons = VividMaterialShapes.LoadingSequence
+                    )
                     hasError || bitmap == null -> Icon(
                         Icons.Default.BrokenImage,
                         contentDescription = stringResource(R.string.feed_loading_image_error),

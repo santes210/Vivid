@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -144,7 +143,8 @@ fun ProfileScreen(
                         followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0,
                         isPrivate = data["isPrivate"] as? Boolean ?: false,
                         isFollowedByCurrentUser = profile.isFollowedByCurrentUser,
-                        isCurrentUser = isOwnProfile
+                        isCurrentUser = isOwnProfile,
+                        isVerified = data["isVerified"] as? Boolean ?: false
                     )
                     isProfileLoaded = true
                 }
@@ -421,6 +421,7 @@ fun ProfileScreen(
                         profile = profile, isOwnProfile = isOwnProfile,
                         relationshipState = relationshipState,
                         isFollowActionLoading = isFollowActionLoading,
+                        isVerified = profile.isVerified,
                         onToggleFollow = { viewModel.toggleFollow(userId) },
                         onEditProfile = onEditProfile
                     )
@@ -432,30 +433,38 @@ fun ProfileScreen(
             // ── Pestañas primarias M3 (Posts / Reels / Guardados) ──
             if (canViewContent) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
-                    PrimaryTabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        containerColor = Color.Transparent,
-                        divider = {},
-                        modifier = Modifier.padding(top = 6.dp, bottom = 10.dp)
+                    // Pestañas como grupo de selección única con ButtonGroup
+                    // (M3 Expressive): son 3-4 FIJAS, justo su caso de uso, y se
+                    // anima con el MotionScheme (el activo se ensancha y comprime
+                    // a sus vecinos). Para una lista que crece no sirve y por eso
+                    // los filtros de Explorar siguen siendo FilterChip en LazyRow.
+                    ButtonGroup(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
+                        overflowIndicator = {}
                     ) {
-                        Tab(
-                            selected = selectedTabIndex == 0,
-                            onClick = { selectedTabIndex = 0 },
-                            icon = { Icon(Icons.Default.GridView, contentDescription = "Posts") },
-                            text = { Text("Posts") }
+                        toggleableItem(
+                            weight = 1f,
+                            checked = selectedTabIndex == 0,
+                            onCheckedChange = { selectedTabIndex = 0 },
+                            label = "Posts",
+                            icon = { Icon(Icons.Default.GridView, contentDescription = "Posts") }
                         )
-                        Tab(
-                            selected = selectedTabIndex == 1,
-                            onClick = { selectedTabIndex = 1 },
-                            icon = { Icon(Icons.Default.Movie, contentDescription = "Reels") },
-                            text = { Text("Reels") }
+                        toggleableItem(
+                            weight = 1f,
+                            checked = selectedTabIndex == 1,
+                            onCheckedChange = { selectedTabIndex = 1 },
+                            label = "Reels",
+                            icon = { Icon(Icons.Default.Movie, contentDescription = "Reels") }
                         )
                         if (isOwnProfile) {
-                            Tab(
-                                selected = selectedTabIndex == 2,
-                                onClick = { selectedTabIndex = 2 },
-                                icon = { Icon(Icons.Default.Bookmark, contentDescription = "Guardados") },
-                                text = { Text("Guardados") }
+                            toggleableItem(
+                                weight = 1f,
+                                checked = selectedTabIndex == 2,
+                                onCheckedChange = { selectedTabIndex = 2 },
+                                label = "Guardados",
+                                icon = { Icon(Icons.Default.Bookmark, contentDescription = "Guardados") }
                             )
                         }
                     }

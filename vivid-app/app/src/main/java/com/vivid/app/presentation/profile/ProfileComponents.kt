@@ -33,6 +33,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.ui.components.VividVerifiedBadge
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
 import com.vivid.app.ui.motion.vividSharedElement
@@ -52,6 +53,7 @@ internal fun ProfileHeader(
     isOwnProfile: Boolean,
     relationshipState: com.vivid.app.domain.repository.FollowRelationshipState,
     isFollowActionLoading: Boolean,
+    isVerified: Boolean = false,
     onToggleFollow: () -> Unit,
     onEditProfile: () -> Unit
 ) {
@@ -92,11 +94,18 @@ internal fun ProfileHeader(
         Spacer(Modifier.height(14.dp))
 
         // ── Nombre y bio ──
-        Text(
-            profile.displayName,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            textAlign = TextAlign.Center
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                profile.displayName,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center
+            )
+            // Badge de verificado con forma de gema: solo si la cuenta lo es.
+            if (isVerified) {
+                Spacer(Modifier.width(VividSpace.xs))
+                VividVerifiedBadge(size = 20.dp)
+            }
+        }
         Text(
             "@${profile.username}",
             style = MaterialTheme.typography.bodyMedium,
@@ -196,7 +205,10 @@ internal fun ProfileHeader(
                 )
             ) {
                 if (isFollowActionLoading) {
-                    LoadingIndicator(modifier = Modifier.size(24.dp))
+                    LoadingIndicator(
+                        modifier = Modifier.size(24.dp),
+                        polygons = com.vivid.app.theme.VividMaterialShapes.LoadingSequence
+                    )
                 } else {
                     val text = when {
                         relationshipState.isBlocked -> "Bloqueado"
@@ -301,11 +313,22 @@ internal fun PrivateProfileLock(username: String, hasPendingRequest: Boolean) {
             modifier = Modifier.padding(40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                Icons.Default.Lock, contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(64.dp)
-            )
+            // Cookie9Sided + secondaryContainer: el candado "privada" también
+            // usa el contenedor expresivo, en tono secondary para distinguirlo
+            // de un estado vacío normal (no falta contenido, está bloqueado).
+            Surface(
+                shape = com.vivid.app.theme.VividMaterialShapes.EmptyStateContainer,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(112.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Lock, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(20.dp))
             Text(
                 "Esta cuenta es privada",
@@ -348,7 +371,22 @@ internal fun EmptyPostsPlaceholder() {
             modifier = Modifier.padding(VividSpace.xl),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.Default.GridView, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(48.dp))
+            // Cookie9Sided + surfaceContainerHigh + onSurfaceVariant: mismo
+            // lenguaje expresivo que el resto de estados vacíos de la app.
+            Surface(
+                shape = com.vivid.app.theme.VividMaterialShapes.EmptyStateContainer,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(104.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.GridView,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(VividSpace.s))
             Text("Aún no hay publicaciones.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -366,12 +404,22 @@ internal fun EmptySavedPostsPlaceholder() {
             modifier = Modifier.padding(VividSpace.xl),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                Icons.Default.BookmarkBorder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(56.dp)
-            )
+            // Cookie9Sided + surfaceContainerHigh + onSurfaceVariant: estado
+            // vacío expresivo en vez de un BookmarkBorder suelto.
+            Surface(
+                shape = com.vivid.app.theme.VividMaterialShapes.EmptyStateContainer,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(112.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.BookmarkBorder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(VividSpace.m))
             Text(
                 "Aún no has guardado publicaciones",
