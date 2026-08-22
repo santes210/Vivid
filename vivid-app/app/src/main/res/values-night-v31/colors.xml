@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En oscuro se usa primary/onPrimary dinámicos para conservar contraste. -->
+    <color name="splash_screen_background">@android:color/system_accent1_200</color>
+    <color name="splash_screen_foreground">@android:color/system_accent1_800</color>
+</resources>

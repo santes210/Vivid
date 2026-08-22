@@ -2,6 +2,7 @@
 <resources>
     <!-- Primary de Vivid Sunset: fondo del icono adaptive. -->
     <color name="ic_launcher_background">#B71454</color>
-    <!-- OnPrimaryContainer oscuro: fondo opaco y coherente del splash. -->
+    <!-- Fallback para Android 8–11 sin paleta dinámica de Material You. -->
     <color name="splash_screen_background">#3E0218</color>
+    <color name="splash_screen_foreground">#FFFFFFFF</color>
 </resources>
