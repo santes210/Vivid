@@ -14,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.firestore.DocumentChange
@@ -28,6 +27,7 @@ import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.report.ReportHelper
 import com.vivid.app.presentation.stories.StoriesTray
 import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.ui.components.VividWordmark
 import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -426,13 +426,8 @@ fun FeedScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        stringResource(R.string.feed_title),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-                    )
-                },
+            CenterAlignedTopAppBar(
+                title = { VividWordmark() },
                 actions = {
                     BadgedBox(
                         badge = { if (followRequestsCount > 0) Badge(containerColor = MaterialTheme.colorScheme.error) { Text(followRequestsCount.coerceAtMost(9).toString(), color = MaterialTheme.colorScheme.onError) } },
@@ -442,7 +437,7 @@ fun FeedScreen(
                     }
                     IconButton(onClick = onOpenMessages) { Icon(Icons.Default.Email, stringResource(R.string.feed_messages), tint = MaterialTheme.colorScheme.onSurface) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 scrollBehavior = scrollBehavior
             )
         },

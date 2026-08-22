@@ -9,8 +9,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vivid.app.R
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.composeEmail
 
@@ -84,19 +86,22 @@ internal fun ThemeDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Tema de la aplicación",
+                stringResource(R.string.theme_dialog_title),
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
             )
         },
         text = {
             Column {
-                listOf("Sistema", "Oscuro", "Claro").forEach { themeOption ->
+                SettingsManager.themeOptions.forEach { themeOption ->
+                    // La clave canónica ("system"/"dark"/"light") se persiste;
+                    // al usuario solo se le muestra la etiqueta localizada.
+                    val label = stringResource(SettingsManager.themeOptionLabelRes(themeOption))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 SettingsManager.setThemeOption(context, themeOption)
-                                onThemeChanged(themeOption)
+                                onThemeChanged(label)
                                 onDismiss()
                             }
                             .padding(vertical = 12.dp, horizontal = 8.dp),
@@ -106,18 +111,18 @@ internal fun ThemeDialog(
                             selected = selectedThemeOption == themeOption,
                             onClick = {
                                 SettingsManager.setThemeOption(context, themeOption)
-                                onThemeChanged(themeOption)
+                                onThemeChanged(label)
                                 onDismiss()
                             }
                         )
                         Spacer(Modifier.width(12.dp))
-                        Text(themeOption, style = MaterialTheme.typography.bodyLarge)
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cerrar") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 6.dp

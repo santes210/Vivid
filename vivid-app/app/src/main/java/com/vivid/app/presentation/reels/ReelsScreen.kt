@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -201,9 +202,9 @@ fun ReelsScreen(
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             shape = RoundedCornerShape(28.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Crear Reel", modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.Add, contentDescription = stringResource(com.vivid.app.R.string.cd_create_reel), modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Crear", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+            Text(stringResource(com.vivid.app.R.string.nav_create), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
         }
     }
 }

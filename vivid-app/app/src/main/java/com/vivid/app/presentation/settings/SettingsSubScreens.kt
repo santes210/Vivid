@@ -166,7 +166,7 @@ fun CuentaSettingsScreen(
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     ListItem(
-                        headlineContent = { Text("Cerrar sesión", color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                        headlineContent = { Text(stringResource(com.vivid.app.R.string.action_logout), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
                         supportingContent = { Text("@$username", color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall) },
                         leadingContent = { Icon(Icons.Default.ExitToApp, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(28.dp)) },
                         modifier = Modifier.clickable {
@@ -227,8 +227,8 @@ fun PrivacidadSettingsScreen(
             item {
                 VividSettingsGroup(title = "Visibilidad") {
                     VividSettingsSwitchItem(
-                        title = "Cuenta privada",
-                        subtitle = if (isPrivate) "Solo seguidores ven tu contenido" else "Cuenta pública",
+                        title = stringResource(com.vivid.app.R.string.account_private),
+                        subtitle = if (isPrivate) "Solo seguidores ven tu contenido" else stringResource(com.vivid.app.R.string.account_public),
                         icon = if (isPrivate) Icons.Default.Lock else Icons.Default.Public,
                         checked = isPrivate,
                         onCheckedChange = { checked ->
@@ -236,7 +236,14 @@ fun PrivacidadSettingsScreen(
                             user?.uid?.let { uid ->
                                 scope.launch {
                                     runCatching { setAccountContentPrivacy(firestore, uid, checked) }
-                                        .onSuccess { onShowSnackbar(if (checked) "Cuenta privada" else "Cuenta pública") }
+                                        .onSuccess {
+                                            onShowSnackbar(
+                                                context.getString(
+                                                    if (checked) com.vivid.app.R.string.account_private
+                                                    else com.vivid.app.R.string.account_public
+                                                )
+                                            )
+                                        }
                                         .onFailure {
                                             isPrivate = !checked
                                             onShowSnackbar("No se pudo cambiar la privacidad")
@@ -348,10 +355,10 @@ fun AparienciaSettingsScreen(
             item {
                 VividSettingsGroup {
                     VividSettingsItem(
-                        title = "Tema",
-                        subtitle = "Claro, oscuro o sistema",
+                        title = stringResource(com.vivid.app.R.string.theme_title),
+                        subtitle = stringResource(com.vivid.app.R.string.theme_subtitle),
                         icon = Icons.Outlined.Palette,
-                        value = selectedTheme,
+                        value = stringResource(SettingsManager.themeOptionLabelRes(selectedTheme)),
                         onClick = { showThemeDialog = true },
                         showDivider = true
                     )
@@ -419,15 +426,17 @@ fun AparienciaSettingsScreen(
     if (showThemeDialog) {
         AlertDialog(
             onDismissRequest = { showThemeDialog = false },
-            title = { Text("Tema", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(com.vivid.app.R.string.theme_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    listOf("Sistema","Oscuro","Claro").forEach { opt ->
+                    SettingsManager.themeOptions.forEach { opt ->
+                        // Se persiste la clave canónica; la etiqueta visible es localizada.
+                        val label = stringResource(SettingsManager.themeOptionLabelRes(opt))
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 SettingsManager.setThemeOption(context, opt)
                                 showThemeDialog = false
-                                scope.launch { onShowSnackbar("Tema: $opt") }
+                                scope.launch { onShowSnackbar(context.getString(com.vivid.app.R.string.theme_changed, label)) }
                             }.padding(vertical = 12.dp, horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -435,12 +444,12 @@ fun AparienciaSettingsScreen(
                                 SettingsManager.setThemeOption(context, opt)
                                 showThemeDialog = false
                             })
-                            Spacer(Modifier.width(12.dp)); Text(opt)
+                            Spacer(Modifier.width(12.dp)); Text(label)
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showThemeDialog = false }) { Text("Cerrar") } },
+            confirmButton = { TextButton(onClick = { showThemeDialog = false }) { Text(stringResource(com.vivid.app.R.string.action_close)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }

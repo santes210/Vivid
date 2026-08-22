@@ -196,4 +196,32 @@
 
     <string name="data_saver_wifi_hint">En datos móviles no se precargan reels ni stories</string>
     <string name="appearance_subtitle">Tema, idioma y tamaño de texto</string>
+
+    <!-- ========== Navegación principal ========== -->
+    <string name="nav_home">Inicio</string>
+    <string name="nav_explore">Explorar</string>
+    <string name="nav_create">Crear</string>
+    <string name="nav_reels">Reels</string>
+    <string name="nav_profile">Perfil</string>
+    <string name="nav_expand_menu">Expandir menú</string>
+    <string name="nav_collapse_menu">Colapsar menú</string>
+    <string name="a11y_selected">Seleccionado</string>
+    <string name="a11y_not_selected">No seleccionado</string>
+
+    <!-- ========== Ajustes / sesión / cuenta ========== -->
+    <string name="settings_title">Ajustes</string>
+    <string name="action_logout">Cerrar sesión</string>
+    <string name="account_private">Cuenta privada</string>
+    <string name="account_public">Cuenta pública</string>
+    <string name="chat_online">• En línea</string>
+    <string name="cd_create_reel">Crear reel</string>
+
+    <!-- ========== Tema (clave canónica en prefs; etiqueta localizada aquí) ========== -->
+    <string name="theme_title">Tema</string>
+    <string name="theme_dialog_title">Tema de la aplicación</string>
+    <string name="theme_subtitle">Claro, oscuro o sistema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_dark">Oscuro</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_changed">Tema: %1$s</string>
 </resources>

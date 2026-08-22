@@ -12,6 +12,32 @@ object SettingsManager {
     private const val TAG = "SettingsManager"
     private const val PREFS_NAME = "vivid_settings"
 
+    // ── Tema: claves canónicas ──
+    // El tema se persiste con una clave estable e independiente del idioma
+    // ("system"/"dark"/"light"), NUNCA con la etiqueta visible ("Oscuro",
+    // "Dark"…). Antes se guardaba el literal en español y al cambiar el
+    // idioma del sistema el modo oscuro dejaba de aplicarse. La etiqueta
+    // localizada se resuelve en UI con [themeOptionLabelRes].
+    const val THEME_SYSTEM = "system"
+    const val THEME_DARK = "dark"
+    const val THEME_LIGHT = "light"
+    val themeOptions = listOf(THEME_SYSTEM, THEME_DARK, THEME_LIGHT)
+
+    /** Normaliza cualquier valor legado (español/inglés) a su clave canónica. */
+    fun normalizeThemeOption(raw: String?): String = when (raw) {
+        THEME_DARK, "Oscuro", "Dark" -> THEME_DARK
+        THEME_LIGHT, "Claro", "Light" -> THEME_LIGHT
+        else -> THEME_SYSTEM
+    }
+
+    /** Recurso de la etiqueta localizada de una clave de tema. */
+    @androidx.annotation.StringRes
+    fun themeOptionLabelRes(option: String): Int = when (normalizeThemeOption(option)) {
+        THEME_DARK -> com.vivid.app.R.string.theme_dark
+        THEME_LIGHT -> com.vivid.app.R.string.theme_light
+        else -> com.vivid.app.R.string.theme_system
+    }
+
     // Keys
     private const val KEY_THEME = "selected_theme"
     private const val KEY_DYNAMIC_COLOR = "dynamic_color"
@@ -36,7 +62,7 @@ object SettingsManager {
     private const val KEY_PERM_ONBOARDING_DONE = "perm_onboarding_done"
 
     // Observable/reactive compose states
-    var selectedThemeOption by mutableStateOf("Sistema")
+    var selectedThemeOption by mutableStateOf(THEME_SYSTEM)
         private set
     var dynamicColorEnabled by mutableStateOf(true)
         private set
@@ -92,7 +118,14 @@ object SettingsManager {
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        selectedThemeOption = prefs.getString(KEY_THEME, "Sistema") ?: "Sistema"
+        // Migración: builds anteriores guardaban la etiqueta en español
+        // ("Sistema"/"Oscuro"/"Claro"). Se normaliza a la clave canónica y,
+        // si cambió, se re-persiste para no volver a migrar.
+        val rawTheme = prefs.getString(KEY_THEME, THEME_SYSTEM)
+        selectedThemeOption = normalizeThemeOption(rawTheme)
+        if (rawTheme != selectedThemeOption) {
+            prefs.edit().putString(KEY_THEME, selectedThemeOption).apply()
+        }
         dynamicColorEnabled = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
         smoothAnimationsEnabled = prefs.getBoolean(KEY_SMOOTH_ANIMATIONS, true)
         hapticFeedbackEnabled = prefs.getBoolean(KEY_HAPTICS, true)
@@ -134,9 +167,10 @@ object SettingsManager {
 
     // Setters
     fun setThemeOption(context: Context, value: String) {
-        selectedThemeOption = value
+        val canonical = normalizeThemeOption(value)
+        selectedThemeOption = canonical
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putString(KEY_THEME, value).apply()
+            .edit().putString(KEY_THEME, canonical).apply()
     }
 
     fun setDynamicColor(context: Context, value: Boolean) {

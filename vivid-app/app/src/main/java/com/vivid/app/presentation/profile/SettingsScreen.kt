@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.BuildConfig
+import com.vivid.app.R
+import androidx.compose.ui.res.stringResource
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
 import com.vivid.app.domain.repository.setAccountContentPrivacy
 import com.vivid.app.util.SettingsManager
@@ -155,7 +157,7 @@ fun SettingsScreen(
             LargeTopAppBar(
                 title = {
                     Text(
-                        "Ajustes",
+                        stringResource(R.string.settings_title),
                         style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold)
                     )
                 },
@@ -303,8 +305,8 @@ fun SettingsScreen(
             item {
                 SettingsCardGroup(title = "Apariencia y Tema M3") {
                     SettingsListItem(
-                        title = "Tema de la aplicación",
-                        subtitle = selectedThemeOption,
+                        title = stringResource(R.string.theme_dialog_title),
+                        subtitle = stringResource(SettingsManager.themeOptionLabelRes(selectedThemeOption)),
                         icon = Icons.Outlined.Palette,
                         onClick = { showThemeDialog = true }
                     )
@@ -840,7 +842,7 @@ fun SettingsScreen(
                     ListItem(
                         headlineContent = {
                             Text(
-                                "Cerrar sesión",
+                                stringResource(R.string.action_logout),
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
@@ -883,7 +885,7 @@ fun SettingsScreen(
             context = context,
             selectedThemeOption = selectedThemeOption,
             onDismiss = { showThemeDialog = false },
-            onThemeChanged = { scope.launch { snackbarHostState.showSnackbar("Tema cambiado a $it") } }
+            onThemeChanged = { scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.theme_changed, it)) } }
         )
     }
 

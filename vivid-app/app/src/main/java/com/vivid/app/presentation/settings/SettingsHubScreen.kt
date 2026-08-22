@@ -9,7 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivid.app.R
 import com.vivid.app.ui.components.VividSettingsGroup
 import com.vivid.app.ui.components.VividSettingsItem
 import com.vivid.app.ui.components.VividSettingsScaffold
@@ -48,7 +50,7 @@ fun SettingsHubScreen(
             .getOrDefault(0f)
     }
     val effectiveStorageValue = if (realCacheMB > 0f) String.format("%.1f MB", realCacheMB) else null
-    VividSettingsScaffold(title = "Ajustes", onBack = onBack) { padding ->
+    VividSettingsScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
