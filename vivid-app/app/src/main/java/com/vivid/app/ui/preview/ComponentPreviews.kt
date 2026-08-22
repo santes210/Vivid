@@ -9,12 +9,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +39,8 @@ import com.vivid.app.ui.components.VividLikeButton
 import com.vivid.app.ui.components.VividLoadingState
 import com.vivid.app.ui.components.VividOfflineBanner
 import com.vivid.app.ui.components.VividSkeletonListItem
+import com.vivid.app.ui.components.VividStoryRing
+import com.vivid.app.ui.components.VividVerifiedBadge
 
 /**
  * Previews de los componentes compartidos.
@@ -97,6 +105,61 @@ private fun EmptyStatePreview() {
 private fun ErrorStatePreview() {
     VividPreviewSurface {
         VividErrorState(onRetry = {})
+    }
+}
+
+@VividPreviewA11y
+@Composable
+private fun VerifiedBadgePreview() {
+    VividPreviewSurface {
+        // Badge de cuenta verificada con forma de gema (MaterialShapes.Gem).
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Ana García", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+            Spacer(Modifier.width(VividSpace.xs))
+            VividVerifiedBadge(size = 20.dp)
+        }
+    }
+}
+
+@VividPreviewA11y
+@Composable
+private fun StoryRingPreview() {
+    VividPreviewSurface {
+        // Izquierda: con historia nueva → anillo en trébol. Derecha: vista → círculo.
+        Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.l)) {
+            VividStoryRing(hasUnseenStory = true) {
+                UserAvatar(imageUrl = "", name = "Nueva", size = 56.dp)
+            }
+            VividStoryRing(hasUnseenStory = false) {
+                UserAvatar(imageUrl = "", name = "Vista", size = 56.dp)
+            }
+        }
+    }
+}
+
+@VividPreview
+@Composable
+private fun ProfileTabsButtonGroupPreview() {
+    VividPreviewSurface {
+        // Mismo patrón que las pestañas del perfil (Posts/Reels/Guardados):
+        // ButtonGroup single-select con toggleableItem, animado con el
+        // MotionScheme. Interactivo en el panel de previews.
+        var selected by remember { mutableIntStateOf(0) }
+        val tabs = listOf("Posts" to Icons.Filled.GridView, "Reels" to Icons.Filled.Movie, "Guardados" to Icons.Filled.Bookmark)
+        ButtonGroup(
+            modifier = Modifier.fillMaxWidth(),
+            overflowIndicator = {}
+        ) {
+            tabs.forEachIndexed { index, (label, icon) ->
+                toggleableItem(
+                    weight = 1f,
+                    checked = selected == index,
+                    onCheckedChange = { selected = index },
+                    label = label,
+                    icon = { Icon(icon, contentDescription = label) }
+                )
+            }
+        }
     }
 }
 

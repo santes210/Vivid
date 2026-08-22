@@ -62,7 +62,8 @@ package com.vivid.app.theme
  * | `MotionScheme` (spatial / effects)               | `theme/Motion.kt` → [VividMotion]         |
  * | `MaterialShapes` (las 35) + `Morph`              | `theme/Shape.kt` → [VividMaterialShapes], `ui/components/VividMorphShape.kt` |
  * | `LoadingIndicator` / `ContainedLoadingIndicator` | estados, Explorar, detalle, perfil, feed  |
- * | `ButtonGroup` (+ overflow)                       | filtros por tema de Explorar              |
+ * | `ButtonGroup` (+ overflow)                       | pestañas del perfil (Posts/Reels/Guardados)|
+ * | `FilterChip` en `LazyRow`                        | filtros por tema de Explorar (ver nota)    |
  * | `HorizontalFloatingToolbar`                      | acciones del detalle de publicación       |
  * | `WideNavigationRail`                             | navegación en tabletas                    |
  *
@@ -73,6 +74,14 @@ package com.vivid.app.theme
  * `ButtonGroup` → `LazyRow` de `FilterChip`, `WideNavigationRail` →
  * `NavigationRail`, `HorizontalFloatingToolbar` → `BottomAppBar`.
  * [VividMotion] ya aísla al resto de la app del `MotionScheme`.
+ *
+ * **Nota — `ButtonGroup` vs `FilterChip`:** ButtonGroup es para un grupo
+ * PEQUEÑO y FIJO de acciones/toggles relacionados (las pestañas del perfil).
+ * NO sirve para los filtros por tema de Explorar (8 temas que además pueden
+ * crecer): con tantos elementos todo se va al overflow y el cálculo de anchos
+ * revienta en runtime ("ButtonGroup width cannot be unbounded"). Ahí se usa
+ * `FilterChip` en `LazyRow` a propósito (ver el comentario en
+ * `ExploreScreen.kt`). No lo cambies sin leer ese comentario primero.
  *
  * ### Las 35 formas
  *

@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +21,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
@@ -30,6 +34,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -44,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.LoadState
@@ -140,13 +146,30 @@ fun ExploreScreen(
                         )
                     }
                     users.itemCount == 0 -> {
-                        Box(
+                        Column(
                             modifier = Modifier.fillMaxSize().padding(VividSpace.l),
-                            contentAlignment = Alignment.Center
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
+                            Surface(
+                                shape = VividMaterialShapes.EmptyStateContainer,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.size(104.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.PersonSearch,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(44.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(VividSpace.m))
                             Text(
                                 stringResource(R.string.search_no_results),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -169,7 +192,10 @@ fun ExploreScreen(
                                         Modifier.fillMaxWidth().padding(VividSpace.m),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        LoadingIndicator(Modifier.size(32.dp))
+                                        LoadingIndicator(
+                                            Modifier.size(32.dp),
+                                            polygons = VividMaterialShapes.LoadingSequence
+                                        )
                                     }
                                 }
                             }
@@ -237,10 +263,30 @@ fun ExploreScreen(
                         )
                     }
                     posts.itemCount == 0 -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(VividSpace.l),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Surface(
+                                shape = VividMaterialShapes.EmptyStateContainer,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.size(112.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.GridView,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(VividSpace.m))
                             Text(
                                 stringResource(R.string.explore_empty, selectedTag),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -296,7 +342,10 @@ fun ExploreScreen(
                                         modifier = Modifier.aspectRatio(1f),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        LoadingIndicator(Modifier.size(28.dp))
+                                        LoadingIndicator(
+                                            Modifier.size(28.dp),
+                                            polygons = VividMaterialShapes.LoadingSequence
+                                        )
                                     }
                                 }
                             }

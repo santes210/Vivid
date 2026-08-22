@@ -74,15 +74,16 @@ fun VividEmptyState(
 ) {
     Box(modifier = modifier.fillMaxWidth().padding(vertical = 56.dp, horizontal = VividSpace.l), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Squircle expresivo 32dp hero + tonal primaryContainer
+            // Contenedor con la forma expresiva (Cookie9Sided) en
+            // surfaceContainerHigh + ícono en onSurfaceVariant: el estado vacío
+            // "sabe" a Material Expressive sin un Icon suelto encima del Column.
             Surface(
-                // Polígono real de MaterialShapes, no un cuadrado redondeado.
                 shape = VividMaterialShapes.EmptyStateContainer,
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.size(104.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(44.dp))
+                    Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(44.dp))
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -110,9 +111,12 @@ fun VividErrorState(
 ) {
     Box(modifier = modifier.fillMaxWidth().padding(vertical = VividSpace.xxl, horizontal = VividSpace.l), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.size(72.dp)) {
+            // Contenedor con la forma expresiva (Cookie9Sided) en errorContainer,
+            // alineado con el lenguaje de VividEmptyState pero conservando la
+            // semántica de error (rojo) en vez de un círculo plano de 72dp.
+            Surface(shape = VividMaterialShapes.EmptyStateContainer, color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.size(104.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(36.dp))
+                    Icon(icon, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(44.dp))
                 }
             }
             Spacer(Modifier.height(VividSpace.m))

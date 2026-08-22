@@ -19,7 +19,11 @@ data class ProfileUiState(
     val isPrivate: Boolean = false,
     val isFollowedByCurrentUser: Boolean = false,
     val isCurrentUser: Boolean = false,
-    val isFollowRequestPending: Boolean = false
+    val isFollowRequestPending: Boolean = false,
+    // Cuenta verificada: la lee ProfileScreen de Firestore (`isVerified`). Por
+    // defecto `false`, así que el badge (VividVerifiedBadge) solo aparece para
+    // quien tenga la marca — hoy nadie, pero el componente ya está listo.
+    val isVerified: Boolean = false
 )
 
 @androidx.compose.runtime.Immutable

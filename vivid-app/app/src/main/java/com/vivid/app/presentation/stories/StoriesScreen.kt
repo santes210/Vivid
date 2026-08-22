@@ -18,9 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -33,6 +30,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividStoryRing
 import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.launch
 
@@ -234,15 +232,15 @@ private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun StoryGroupItem(group: StoryGroup, onClick: () -> Unit) {
+    // Hay historia nueva si el grupo tiene al menos una sin ver: con esa
+    // señal el anillo morpha a trébol (VividStoryRing) en vez del anillo de
+    // Canvas "solo gradiente" que había antes.
+    val hasUnseen = group.stories.any { it.hasUnseenStory }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            StorySegmentsRing(
-                segments = group.stories.size.coerceAtLeast(1),
-                modifier = Modifier.size(68.dp)
-            )
+        VividStoryRing(hasUnseenStory = hasUnseen) {
             StoryAvatar(
                 username = group.username,
                 avatarUrl = group.avatarUrl,
@@ -258,57 +256,6 @@ private fun StoryGroupItem(group: StoryGroup, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1
         )
-    }
-}
-
-@Composable
-private fun StorySegmentsRing(
-    segments: Int,
-    modifier: Modifier = Modifier,
-    activeColor: Color = MaterialTheme.colorScheme.primary,
-    trackColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-) {
-    // tertiary se lee fuera del Canvas (no se puede leer el tema dentro de DrawScope)
-    val storyRing = LocalVividAccents.current.storyRing
-
-    Canvas(modifier = modifier) {
-        val strokeWidth = 4.dp.toPx()
-        val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-        val topLeftX = strokeWidth / 2
-        val topLeftY = strokeWidth / 2
-        val gap = 6f
-        val segmentSweep = ((360f - gap * segments) / segments).coerceAtLeast(12f)
-
-        // Dos pasadas: PRIMERO el track (fondo gris) en todos los segmentos,
-        // DESPUÉS el color activo. Antes se pintaban ambos en el mismo bucle,
-        // lo que provocaba que el activo tapara al track y todos lucieran llenos.
-        for (index in 0 until segments) {
-            val start = -90f + index * (segmentSweep + gap)
-            drawArc(
-                color = trackColor,
-                startAngle = start,
-                sweepAngle = segmentSweep,
-                useCenter = false,
-                topLeft = Offset(topLeftX, topLeftY),
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-        }
-        // Para la bandeja de entrada (feed) todas las stories de otro usuario
-        // se muestran como "con contenido": anillo completo con gradiente
-        // (estilo IG). La vista detallada (viewer) tiene su propio progreso.
-        for (index in 0 until segments) {
-            val start = -90f + index * (segmentSweep + gap)
-            drawArc(
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(storyRing),
-                startAngle = start,
-                sweepAngle = segmentSweep,
-                useCenter = false,
-                topLeft = Offset(topLeftX, topLeftY),
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-        }
     }
 }
 
