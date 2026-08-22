@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -32,6 +31,9 @@ import com.vivid.app.util.rememberPooledExoPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 
 // ── PostVideoPlayer ──
 
@@ -181,14 +183,14 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
     if (!hasMusic) return
 
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.s, vertical = 6.dp),
+        shape = VividExpressiveShapes.SmallCard,
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         tonalElevation = 1.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.s, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) {
@@ -196,7 +198,7 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
                     Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(VividSpace.s))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = post.musicTitle.ifBlank { "Music" },
@@ -220,7 +222,7 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
             }
 
             if (isPreparingAsset) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                LoadingIndicator(modifier = Modifier.size(20.dp), polygons = VividMaterialShapes.LoadingSequence)
             } else if (musicUriString != null) {
                 FilledTonalIconButton(
                     onClick = { isPlaying = !isPlaying },

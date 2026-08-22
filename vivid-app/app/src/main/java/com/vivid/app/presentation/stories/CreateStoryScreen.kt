@@ -10,7 +10,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -44,6 +43,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.presentation.create.MusicSelectorBottomSheet
 import com.vivid.app.presentation.create.MusicTrack
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.theme.VividMaterialShapes
 import kotlinx.coroutines.delay
 
 /**
@@ -187,7 +189,7 @@ fun CreateStoryScreen(
                     Surface(
                         shape = VividExpressiveShapes.ChipSelected,
                         color = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.padding(end = 12.dp)
+                        modifier = Modifier.padding(end = VividSpace.s)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -199,7 +201,7 @@ fun CreateStoryScreen(
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(14.dp)
                             )
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(VividSpace.xxs))
                             Text(
                                 "24 h",
                                 style = MaterialTheme.typography.labelMedium,
@@ -224,7 +226,7 @@ fun CreateStoryScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = VividSpace.m, vertical = VividSpace.s)
                         .navigationBarsPadding()
                 ) {
                     (state as? CreateStoryUiState.Error)?.let { err ->
@@ -234,7 +236,7 @@ fun CreateStoryScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
+                                modifier = Modifier.padding(VividSpace.s),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -242,7 +244,7 @@ fun CreateStoryScreen(
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onErrorContainer
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(VividSpace.xs))
                                 Text(
                                     err.message,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -295,10 +297,10 @@ fun CreateStoryScreen(
                         shape = VividExpressiveShapes.PrimaryButton
                     ) {
                         if (isBusy) {
-                            CircularProgressIndicator(
+                            LoadingIndicator(
                                 modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                polygons = VividMaterialShapes.LoadingSequence
                             )
                             Spacer(Modifier.width(10.dp))
                             val label = when (state) {
@@ -312,11 +314,11 @@ fun CreateStoryScreen(
                             Text(label)
                         } else if (state is CreateStoryUiState.Success) {
                             Icon(Icons.Default.CheckCircle, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text("¡Publicada!", fontWeight = FontWeight.Bold)
                         } else {
                             Icon(Icons.Default.Send, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text("Publicar story", fontWeight = FontWeight.Bold)
                         }
                     }
@@ -331,10 +333,10 @@ fun CreateStoryScreen(
                 .padding(padding)
                 // FIX CLAVE: scroll — antes el contenido se cortaba sin remedio
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = VividSpace.m),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
 
             // ── Preview 9:16 con altura CONTENIDA (antes devoraba la pantalla) ──
             Card(
@@ -353,7 +355,7 @@ fun CreateStoryScreen(
                         mediaUri == null -> {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(24.dp)
+                                modifier = Modifier.padding(VividSpace.l)
                             ) {
                                 Surface(
                                     shape = VividExpressiveShapes.SelectedContainerActive,
@@ -369,7 +371,7 @@ fun CreateStoryScreen(
                                         )
                                     }
                                 }
-                                Spacer(Modifier.height(16.dp))
+                                Spacer(Modifier.height(VividSpace.m))
                                 Text(
                                     "Elige foto o video",
                                     color = Color.White,
@@ -398,7 +400,7 @@ fun CreateStoryScreen(
                             shape = VividExpressiveShapes.ChipSelected,
                             modifier = Modifier
                                 .align(Alignment.TopStart)
-                                .padding(12.dp)
+                                .padding(VividSpace.s)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -429,12 +431,12 @@ fun CreateStoryScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
 
             if (mediaUri == null) {
                 // ── Selección de medio: tiles expresivos ──
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(VividSpace.s),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     FilledTonalButton(
@@ -519,7 +521,7 @@ fun CreateStoryScreen(
                                     )
                                 }
                             }
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(VividSpace.s))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     if (selectedTrack != null) selectedTrack!!.title else "Agregar música",
@@ -553,7 +555,7 @@ fun CreateStoryScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(VividSpace.s))
                 } else {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -561,7 +563,7 @@ fun CreateStoryScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(VividSpace.s),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -569,7 +571,7 @@ fun CreateStoryScreen(
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text(
                                 "Para stories con música usa video. Con foto, la música viene pronto.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -577,10 +579,10 @@ fun CreateStoryScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(VividSpace.s))
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.s), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = {
                             mediaUri = null
@@ -615,7 +617,7 @@ fun CreateStoryScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
 
             OutlinedTextField(
                 value = caption,
@@ -631,7 +633,7 @@ fun CreateStoryScreen(
                 )
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(VividSpace.l))
         }
     }
 
@@ -745,11 +747,11 @@ private fun ProgressOverlay(label: String, success: Boolean = false) {
             if (success) Icon(
                 Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = Color(0xFF4CAF50),
+                tint = LocalVividAccents.current.online,
                 modifier = Modifier.size(64.dp)
             )
-            else CircularProgressIndicator(modifier = Modifier.size(64.dp), strokeWidth = 4.dp, color = Color.White)
-            Spacer(Modifier.height(12.dp))
+            else LoadingIndicator(modifier = Modifier.size(64.dp), color = Color.White, polygons = VividMaterialShapes.LoadingSequence)
+            Spacer(Modifier.height(VividSpace.s))
             Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)
         }
     }

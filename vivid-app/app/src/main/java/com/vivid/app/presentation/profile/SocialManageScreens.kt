@@ -25,6 +25,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.domain.repository.SocialUserPreview
 import kotlinx.coroutines.launch
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividMaterialShapes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,15 +60,15 @@ fun FollowRequestsScreen(onBack: () -> Unit) {
     ) { padding ->
         when {
             isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
             }
             requests.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text("No tienes solicitudes pendientes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(VividSpace.s),
+                verticalArrangement = Arrangement.spacedBy(VividSpace.s)
             ) {
                 items(requests, key = { it.uid }) { user ->
                     SocialUserCard(
@@ -128,15 +130,15 @@ fun CloseFriendsScreen(onBack: () -> Unit) {
     ) { padding ->
         when {
             isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
             }
             followingUsers.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text("Sigue a alguien para agregarlo a Mejores amigos.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(VividSpace.s),
+                verticalArrangement = Arrangement.spacedBy(VividSpace.s)
             ) {
                 items(followingUsers, key = { it.uid }) { user ->
                     SocialUserCard(
@@ -191,15 +193,15 @@ fun BlockedUsersScreen(onBack: () -> Unit) {
     ) { padding ->
         when {
             isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
             }
             blockedUsers.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text("No tienes cuentas bloqueadas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(VividSpace.s),
+                verticalArrangement = Arrangement.spacedBy(VividSpace.s)
             ) {
                 items(blockedUsers, key = { it.uid }) { user ->
                     SocialUserCard(
@@ -231,16 +233,16 @@ private fun SocialUserCard(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(VividSpace.m)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SocialAvatar(user = user)
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(VividSpace.s))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(user.displayName, style = MaterialTheme.typography.titleMedium)
                     Text("@${user.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(VividSpace.s))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = onPrimaryAction, modifier = Modifier.weight(1f)) {
                     Text(primaryActionLabel)

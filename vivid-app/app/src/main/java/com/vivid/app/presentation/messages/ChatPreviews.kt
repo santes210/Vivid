@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.dp
 import com.vivid.app.ui.preview.VividPreview
 import com.vivid.app.ui.preview.VividPreviewA11y
 import com.vivid.app.ui.preview.VividPreviewSurface
+import com.vivid.app.theme.VividSpace
 
 /**
  * Previews de la conversación.
@@ -40,7 +41,7 @@ private fun ConversationPreview() {
     VividPreviewSurface(padding = 12) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(VividSpace.xxs)
         ) {
             MessageBubble(
                 message = message("¿Vas mañana a la playa?", mine = false),

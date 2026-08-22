@@ -1,10 +1,10 @@
 package com.vivid.app.presentation.create
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +20,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.vivid.app.util.AudioTrimmer
 import kotlinx.coroutines.launch
 import java.io.File
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,13 +90,13 @@ fun AudioTrimBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 6.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = VividExpressiveShapes.BottomSheet
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = VividSpace.s),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -108,7 +111,7 @@ fun AudioTrimBottomSheet(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = VividExpressiveShapes.Media,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(44.dp)
                 ) {
@@ -116,7 +119,7 @@ fun AudioTrimBottomSheet(
                         Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(VividSpace.s))
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Recortar audio", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                     Text(
@@ -130,18 +133,18 @@ fun AudioTrimBottomSheet(
 
             if (isLoadingDuration) {
                 Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    LoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
                 }
             } else {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VividExpressiveShapes.MediumCard,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(modifier = Modifier.padding(VividSpace.m), verticalArrangement = Arrangement.spacedBy(VividSpace.s)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text(
                                 "Segmento: ${formatMs(startMs)} → ${formatMs(endMs)} (15s máx)",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
@@ -172,11 +175,11 @@ fun AudioTrimBottomSheet(
                             )
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.s), modifier = Modifier.fillMaxWidth()) {
                             FilledTonalButton(
                                 onClick = { isPlaying = !isPlaying },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = VividExpressiveShapes.SegmentedControl
                             ) {
                                 Icon(
                                     if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -191,7 +194,7 @@ fun AudioTrimBottomSheet(
                                     startMs = 0L
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = VividExpressiveShapes.Media
                             ) {
                                 Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -237,16 +240,16 @@ fun AudioTrimBottomSheet(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = VividExpressiveShapes.SmallCard,
                     enabled = !isTrimming
                 ) {
                     if (isTrimming) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(Modifier.width(8.dp))
+                        LoadingIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, polygons = VividMaterialShapes.LoadingSequence)
+                        Spacer(Modifier.width(VividSpace.xs))
                         Text("Recortando a 15s…")
                     } else {
                         Icon(Icons.Default.ContentCut, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(VividSpace.xs))
                         Text(if (durationMs > 15_000) "Usar recorte 15s (solo se sube esto)" else "Usar audio completo")
                     }
                 }
@@ -254,12 +257,12 @@ fun AudioTrimBottomSheet(
                 trimError?.let { err ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = VividExpressiveShapes.Media,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text(err, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onErrorContainer)
                         }
                     }
@@ -268,13 +271,13 @@ fun AudioTrimBottomSheet(
                 if (durationMs > 15_000) {
                     // Aviso de ahorro de almacenamiento
                     Card(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = VividExpressiveShapes.Media,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(VividSpace.xs))
                             Text(
                                 "Solamente se subirán los 15 segundos de la canción que hayas seleccionado.",
                                 style = MaterialTheme.typography.labelSmall,
@@ -292,7 +295,7 @@ fun AudioTrimBottomSheet(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
         }
     }
 }

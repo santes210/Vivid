@@ -31,6 +31,8 @@ import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.theme.LocalVividAccents
+import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.VividSpace
 import com.vivid.app.util.CrashReporter
 import kotlinx.coroutines.launch
 
@@ -99,10 +101,10 @@ fun StoriesTray(
                 .padding(vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(
+            LoadingIndicator(
                 modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                polygons = VividMaterialShapes.LoadingSequence
             )
         }
     } else if (loadFailed && stories.isEmpty()) {
@@ -111,7 +113,7 @@ fun StoriesTray(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = VividSpace.m, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -136,8 +138,8 @@ fun StoriesRow(
     val groups = remember(stories) { groupStoriesByUser(stories) }
 
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.xs),
+        horizontalArrangement = Arrangement.spacedBy(VividSpace.m)
     ) {
         // Acción principal "Tu historia". Si el usuario ya tiene una story
         // activa, el click abre esa story (siempre se ve como no vista para él);
@@ -220,7 +222,7 @@ private fun CreateStoryItem(hasActiveStory: Boolean, onClick: () -> Unit) {
                 }
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(VividSpace.xxs))
         Text(
             "Tu historia",
             style = MaterialTheme.typography.labelSmall,
@@ -250,7 +252,7 @@ private fun StoryGroupItem(group: StoryGroup, onClick: () -> Unit) {
                     .clip(CircleShape)
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(VividSpace.xxs))
         Text(
             group.username,
             style = MaterialTheme.typography.labelSmall,

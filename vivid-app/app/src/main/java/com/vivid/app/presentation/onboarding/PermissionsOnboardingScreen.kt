@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.vivid.app.R
 import com.vivid.app.ui.components.VividSettingsScaffold
+import com.vivid.app.theme.VividSpace
 
 /**
  * Onboarding de permisos.
@@ -112,8 +113,8 @@ fun PermissionsOnboardingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = VividSpace.l, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             Text(
                 text = stringResource(R.string.perm_onb_subtitle),
@@ -121,7 +122,7 @@ fun PermissionsOnboardingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
 
             PermissionCard(
                 icon = Icons.Filled.CameraAlt,
@@ -213,7 +214,7 @@ private fun PermissionCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(VividSpace.m),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -229,7 +230,7 @@ private fun PermissionCard(
                     )
                 }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(VividSpace.m))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -246,7 +247,7 @@ private fun PermissionCard(
                         )
                     }
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(VividSpace.xxs))
                 Text(
                     body,
                     style = MaterialTheme.typography.bodyMedium,

@@ -45,6 +45,9 @@ import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.util.SettingsManager
@@ -95,7 +98,7 @@ fun ReelsScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White)
+                LoadingIndicator(color = Color.White, polygons = VividMaterialShapes.LoadingSequence)
             }
 
             reels.isEmpty() && errorMessage != null -> Surface(Modifier.fillMaxSize()) {
@@ -134,7 +137,7 @@ fun ReelsScreen(
         // Header "Reels" flotante — píldora compacta con contenedor translúcido consistente
         Surface(
             color = Color.Black.copy(alpha = 0.35f),
-            shape = RoundedCornerShape(16.dp),
+            shape = VividExpressiveShapes.SmallCard,
             shadowElevation = 0.dp,
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -142,7 +145,7 @@ fun ReelsScreen(
                 .padding(top = 10.dp)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -184,10 +187,10 @@ fun ReelsScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 90.dp)
             ) {
-                CircularProgressIndicator(
-                    color = Color.White.copy(alpha = 0.7f),
+                LoadingIndicator(
                     modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp
+                    color = Color.White.copy(alpha = 0.7f),
+                    polygons = VividMaterialShapes.LoadingSequence
                 )
             }
         }
@@ -200,10 +203,10 @@ fun ReelsScreen(
                 .padding(20.dp),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = RoundedCornerShape(28.dp)
+            shape = VividExpressiveShapes.HeroCard
         ) {
             Icon(Icons.Default.Add, contentDescription = stringResource(com.vivid.app.R.string.cd_create_reel), modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(VividSpace.xs))
             Text(stringResource(com.vivid.app.R.string.nav_create), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
         }
     }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,6 +42,9 @@ import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.util.SettingsManager
@@ -67,19 +69,19 @@ internal fun EmptyReelsState(onCreateReel: () -> Unit) {
             )
             Spacer(Modifier.height(20.dp))
             Text("No hay reels todavía", color = Color.White, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             Text("Sé el primero en crear uno", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(28.dp))
             FilledTonalButton(
                 onClick = onCreateReel,
-                shape = RoundedCornerShape(28.dp),
+                shape = VividExpressiveShapes.HeroCard,
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(VividSpace.xs))
                 Text("Crear Reel")
             }
         }
@@ -241,10 +243,10 @@ internal fun ReelPage(
         )
 
         if (!isPlayerReady) {
-            CircularProgressIndicator(
-                color = Color.White.copy(alpha = 0.7f),
+            LoadingIndicator(
                 modifier = Modifier.align(Alignment.Center),
-                strokeWidth = 2.dp
+                color = Color.White.copy(alpha = 0.7f),
+                polygons = VividMaterialShapes.LoadingSequence
             )
         }
 
@@ -279,7 +281,7 @@ internal fun ReelPage(
                     Icons.Default.PlayArrow,
                     contentDescription = "Reproducir",
                     tint = Color.White,
-                    modifier = Modifier.padding(12.dp).size(24.dp)
+                    modifier = Modifier.padding(VividSpace.s).size(24.dp)
                 )
             }
         }
@@ -335,7 +337,7 @@ internal fun ReelPage(
                 modifier = Modifier
                     .padding(end = 10.dp, bottom = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(VividSpace.s)
             ) {
                 ReelActionButton(
                     icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -398,12 +400,12 @@ internal fun ReelCreatorCard(
 ) {
     Surface(
         color = Color.Black.copy(alpha = 0.32f),
-        shape = RoundedCornerShape(18.dp),
+        shape = VividExpressiveShapes.MediumCard,
         shadowElevation = 0.dp,
         modifier = modifier.widthIn(max = 330.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = VividSpace.s, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar con anillo blanco — información del creador agrupada
@@ -436,7 +438,7 @@ internal fun ReelCreatorCard(
                     }
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(VividSpace.s))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -448,7 +450,7 @@ internal fun ReelCreatorCard(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     if (reel.userId.isNotBlank() && reel.userId != currentUserId) {
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(VividSpace.xs))
                         ReelFollowPill(
                             label = when {
                                 isFollowLoading -> "…"
@@ -463,7 +465,7 @@ internal fun ReelCreatorCard(
                     }
                 }
                 if (reel.caption.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(VividSpace.xxs))
                     Text(
                         reel.caption,
                         color = Color.White.copy(alpha = 0.92f),
@@ -486,13 +488,13 @@ internal fun ReelFollowPill(
 ) {
     Surface(
         color = if (isActive) Color.White.copy(alpha = 0.22f) else Color.White,
-        shape = RoundedCornerShape(10.dp),
+        shape = VividExpressiveShapes.ChipSelected,
         shadowElevation = 0.dp,
         modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = VividSpace.s, vertical = 5.dp),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = if (isActive) Color.White else Color.Black
         )
@@ -577,16 +579,16 @@ internal fun ReelCommentsSheet(
                 .heightIn(max = 580.dp)
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = VividSpace.m)
         ) {
             Text("Comentarios", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(VividSpace.xxs))
             Text(
                 "En el reel de @${reel.username}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(VividSpace.s))
 
             if (comments.isEmpty()) {
                 Box(
@@ -601,12 +603,12 @@ internal fun ReelCommentsSheet(
                 ) {
                     items(comments, key = { it.id }) { comment ->
                         ReelCommentRow(comment)
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(VividSpace.s))
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = commentText,
@@ -614,7 +616,7 @@ internal fun ReelCommentsSheet(
                     placeholder = { Text("Escribe un comentario…") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
+                    shape = VividExpressiveShapes.SearchBar,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
@@ -660,10 +662,10 @@ internal fun ReelCommentsSheet(
                     )
                 ) {
                     if (isSending) {
-                        CircularProgressIndicator(
+                        LoadingIndicator(
                             modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            polygons = VividMaterialShapes.LoadingSequence
                         )
                     } else {
                         Icon(Icons.Default.Send, contentDescription = "Enviar")
@@ -678,7 +680,7 @@ internal fun ReelCommentsSheet(
                     modifier = Modifier.padding(top = 6.dp)
                 )
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(VividSpace.l))
         }
     }
 }
@@ -719,7 +721,7 @@ internal fun ReelCommentRow(comment: ReelComment) {
                 )
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(VividSpace.s))
         Column(Modifier.weight(1f)) {
             Text(comment.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
             Text(SettingsManager.filterOffensiveWords(comment.text), style = MaterialTheme.typography.bodyMedium)

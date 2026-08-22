@@ -56,6 +56,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.vivid.app.theme.VividSpace
 
 /**
  * Pantalla de cámara con VideoCapture (CameraX).
@@ -99,18 +100,18 @@ fun CameraVideoScreen(
 
     if (!hasPermissions) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(VividSpace.l),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text("Vivid necesita cámara y micrófono para grabar Reels.")
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
             Button(onClick = {
                 permissionLauncher.launch(
                     arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
                 )
             }) { Text("Conceder permisos") }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
             TextButton(onClick = { navController.popBackStack() }) { Text("Cancelar") }
         }
         return
@@ -164,7 +165,7 @@ fun CameraVideoScreen(
             onClick = { navController.popBackStack() },
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(16.dp)
+                .padding(VividSpace.m)
         ) {
             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close), tint = Color.White)
         }
@@ -178,7 +179,7 @@ fun CameraVideoScreen(
             },
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(16.dp)
+                .padding(VividSpace.m)
         ) {
             Icon(Icons.Default.Cameraswitch, contentDescription = stringResource(R.string.cd_switch_camera), tint = Color.White)
         }
@@ -235,9 +236,9 @@ fun CameraVideoScreen(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 24.dp)
+                    .padding(top = VividSpace.l)
                     .background(Color.Black.copy(alpha = 0.4f), shape = MaterialTheme.shapes.small)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = VividSpace.s, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -245,7 +246,7 @@ fun CameraVideoScreen(
                         .size(10.dp)
                         .background(Color.Red, shape = androidx.compose.foundation.shape.CircleShape)
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(VividSpace.xs))
                 Text("REC", color = Color.White)
             }
         }

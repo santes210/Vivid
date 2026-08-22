@@ -27,6 +27,10 @@ import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividShapes
+import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.DoubleTapLikeBox
 import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.ui.components.VividLikeButton
@@ -52,20 +56,20 @@ internal fun FeedSkeleton() {
         ).value
     } else 0.5f
 
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(VividSpace.m)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(VividSpace.s))
             Column {
-                Box(Modifier.width(120.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
-                Spacer(Modifier.height(4.dp))
-                Box(Modifier.width(80.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
+                Box(Modifier.width(120.dp).height(14.dp).clip(VividShapes.extraSmall).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
+                Spacer(Modifier.height(VividSpace.xxs))
+                Box(Modifier.width(80.dp).height(10.dp).clip(VividShapes.extraSmall).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.fillMaxWidth().height(300.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.width(200.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
+        Spacer(Modifier.height(VividSpace.s))
+        Box(Modifier.fillMaxWidth().height(300.dp).clip(VividExpressiveShapes.MediumCard).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
+        Spacer(Modifier.height(VividSpace.s))
+        Box(Modifier.width(200.dp).height(14.dp).clip(VividShapes.extraSmall).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)))
     }
 }
 
@@ -74,7 +78,7 @@ internal fun FeedSkeleton() {
 @Composable
 internal fun FeedErrorState(onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        modifier = Modifier.fillMaxWidth().padding(VividSpace.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -84,22 +88,22 @@ internal fun FeedErrorState(onRetry: () -> Unit) {
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
         Text(
             stringResource(R.string.feed_error_title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(VividSpace.xs))
         Text(
             stringResource(R.string.feed_error_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
         FilledTonalButton(onClick = onRetry) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(VividSpace.xs))
             Text(stringResource(R.string.feed_error_retry))
         }
     }
@@ -110,7 +114,7 @@ internal fun FeedErrorState(onRetry: () -> Unit) {
 @Composable
 internal fun FeedEmptyState() {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        modifier = Modifier.fillMaxWidth().padding(VividSpace.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -120,13 +124,13 @@ internal fun FeedEmptyState() {
             modifier = Modifier.size(72.dp),
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(VividSpace.m))
         Text(
             stringResource(R.string.feed_empty_title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(VividSpace.xs))
         Text(
             stringResource(R.string.feed_empty_subtitle),
             style = MaterialTheme.typography.bodyMedium,
@@ -161,7 +165,7 @@ internal fun InlineFollowButton(
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+        contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = 2.dp),
         modifier = Modifier.height(32.dp),
         shape = RoundedCornerShape(8.dp)
     ) { Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) }
@@ -260,9 +264,10 @@ fun PostImage(
                     contentScale = ContentScale.Fit,
                     loading = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
+                            LoadingIndicator(
+                                modifier = Modifier.size(36.dp),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(36.dp)
+                                polygons = VividMaterialShapes.LoadingSequence
                             )
                         }
                     },
@@ -279,7 +284,7 @@ fun PostImage(
                                     modifier = Modifier.size(32.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.height(VividSpace.xxs))
                                 Text(
                                     stringResource(R.string.feed_loading_image_error),
                                     style = MaterialTheme.typography.labelSmall,
@@ -312,7 +317,7 @@ fun PostImage(
                         modifier = Modifier.size(32.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(VividSpace.xs))
                     Text(
                         username,
                         style = MaterialTheme.typography.titleMedium,
@@ -352,11 +357,11 @@ internal fun PostCard(
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Header ──
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(VividSpace.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PostAuthorAvatar(post) { onOpenAuthorProfile(post.userId) }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(VividSpace.s))
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -433,7 +438,7 @@ internal fun PostCard(
         }
 
         // ── Actions ──
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.xs, vertical = VividSpace.xxs), verticalAlignment = Alignment.CenterVertically) {
             VividLikeButton(
                 isLiked = post.isLiked,
                 onToggle = { onToggleLike(post) }
@@ -467,14 +472,14 @@ internal fun PostCard(
         if (post.likesCount > 0 && !SettingsManager.hideLikesCount) {
             Text(
                 stringResource(R.string.feed_likes_count, post.likesCount),
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = VividSpace.m),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
             )
         }
 
         // ── Caption ──
         if (post.caption.isNotBlank()) {
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Row(modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xxs)) {
                 Text(post.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                 Spacer(Modifier.width(6.dp))
                 Text(SettingsManager.filterOffensiveWords(post.caption), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -483,7 +488,7 @@ internal fun PostCard(
 
         // ── Comments count ──
         if (post.commentsCount > 0) {
-            TextButton(onClick = { onOpenComments(post) }, modifier = Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { onOpenComments(post) }, modifier = Modifier.padding(horizontal = VividSpace.xs)) {
                 Text(
                     stringResource(R.string.feed_view_comments, post.commentsCount),
                     style = MaterialTheme.typography.labelMedium,
@@ -492,9 +497,9 @@ internal fun PostCard(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(VividSpace.s))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(VividSpace.s))
     }
 }
 

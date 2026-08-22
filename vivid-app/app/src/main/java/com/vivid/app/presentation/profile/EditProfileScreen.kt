@@ -25,6 +25,8 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.util.ImageCompressor
 import kotlinx.coroutines.launch
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividMaterialShapes
 
 @Composable
 fun EditProfileScreen(
@@ -70,12 +72,12 @@ fun EditProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(VividSpace.l),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("Editar perfil", style = MaterialTheme.typography.headlineSmall)
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(VividSpace.l))
 
         Box(contentAlignment = Alignment.BottomEnd) {
             if (profileImageUri != null) {
@@ -104,7 +106,7 @@ fun EditProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(VividSpace.xl))
 
         OutlinedTextField(
             value = displayName,
@@ -114,7 +116,7 @@ fun EditProfileScreen(
             singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(VividSpace.s))
 
         OutlinedTextField(
             value = username,
@@ -125,7 +127,7 @@ fun EditProfileScreen(
             singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(VividSpace.s))
 
         OutlinedTextField(
             value = bio,
@@ -136,15 +138,15 @@ fun EditProfileScreen(
         )
 
         errorMessage?.let {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(VividSpace.s))
             Text(it, color = MaterialTheme.colorScheme.error)
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(VividSpace.xl))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(VividSpace.s)
         ) {
             OutlinedButton(
                 onClick = onCancel,
@@ -176,7 +178,7 @@ fun EditProfileScreen(
                 enabled = !isSaving && displayName.isNotBlank() && username.isNotBlank()
             ) {
                 if (isSaving) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    LoadingIndicator(modifier = Modifier.size(20.dp), polygons = VividMaterialShapes.LoadingSequence)
                 } else {
                     Text("Guardar")
                 }

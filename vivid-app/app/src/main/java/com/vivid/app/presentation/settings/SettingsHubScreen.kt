@@ -15,6 +15,7 @@ import com.vivid.app.R
 import com.vivid.app.ui.components.VividSettingsGroup
 import com.vivid.app.ui.components.VividSettingsItem
 import com.vivid.app.ui.components.VividSettingsScaffold
+import com.vivid.app.theme.VividSpace
 
 data class SettingsHubEntry(
     val title: String,
@@ -53,8 +54,8 @@ fun SettingsHubScreen(
     VividSettingsScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = VividSpace.m, vertical = VividSpace.m),
+            verticalArrangement = Arrangement.spacedBy(VividSpace.m)
         ) {
             item {
                 VividSettingsGroup {
@@ -122,7 +123,7 @@ fun SettingsHubScreen(
                     "Vivid · Material You 3 Expressive",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = VividSpace.xs, vertical = VividSpace.xs)
                 )
             }
         }

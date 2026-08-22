@@ -36,6 +36,8 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
 
 /**
  * Pantalla de trim de video (estilo Instagram Reels editor).
@@ -131,17 +133,17 @@ fun VideoTrimmerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = VividSpace.m),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(VividSpace.xs))
 
             // Preview
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(380.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(VividExpressiveShapes.MediumCard)
                     .background(Color.Black)
             ) {
                 AndroidView(
@@ -155,10 +157,10 @@ fun VideoTrimmerScreen(
                 )
                 Surface(
                     color = Color.Black.copy(alpha = 0.45f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = VividExpressiveShapes.Media,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(12.dp)
+                        .padding(VividSpace.s)
                 ) {
                     Text(
                         "${formatMs(startMs)} – ${formatMs(endMs)}",
@@ -184,14 +186,14 @@ fun VideoTrimmerScreen(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(VividSpace.s))
 
             // Pista de frames
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(72.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(VividExpressiveShapes.Media)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 frameThumbs.forEachIndexed { idx, bmp ->
@@ -221,7 +223,7 @@ fun VideoTrimmerScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(VividSpace.s))
 
             Text(
                 "Duración: ${formatMs(endMs - startMs)}",
@@ -236,14 +238,14 @@ fun VideoTrimmerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = VividExpressiveShapes.SmallCard
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(VividSpace.xs))
                 Text("Continuar")
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(VividSpace.m))
         }
     }
 }
@@ -277,7 +279,7 @@ private fun TrimSlider(
                 .fillMaxWidth()
                 .height(6.dp)
                 .align(Alignment.Center)
-                .clip(RoundedCornerShape(50))
+                .clip(RoundedCornerShape(50.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         )
 
@@ -300,7 +302,7 @@ private fun TrimSlider(
                         .fillMaxWidth()
                         .height(6.dp)
                         .align(Alignment.Center)
-                        .clip(RoundedCornerShape(50))
+                        .clip(RoundedCornerShape(50.dp))
                         .background(MaterialTheme.colorScheme.primary)
                 )
             }

@@ -15,7 +15,6 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -69,6 +68,8 @@ import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.theme.VividSpace
+import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.ui.icons.VividIcons
 
 sealed class Screen(
@@ -618,7 +619,7 @@ private fun VividBottomBar(
                         .padding(vertical = 10.dp)
                         .width(CREATE_PILL_WIDTH)
                         .height(38.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(VividExpressiveShapes.MediumCard)
                         .background(MaterialTheme.colorScheme.primaryContainer)
                 )
             }
@@ -665,7 +666,7 @@ private fun VividBottomBar(
                                 verticalArrangement = Arrangement.Center,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(VividExpressiveShapes.MediumCard)
                                     .selectable(
                                         selected = isSelected,
                                         role = Role.Tab,
@@ -745,7 +746,7 @@ private fun VividNavigationRail(
                         haptics.tick()
                         scope.launch { railState.toggle() }
                     },
-                    modifier = Modifier.padding(start = 24.dp, top = 8.dp)
+                    modifier = Modifier.padding(start = VividSpace.l, top = VividSpace.xs)
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.MenuOpen else Icons.Filled.Menu,
@@ -757,7 +758,7 @@ private fun VividNavigationRail(
                 }
                 val createDestination = destinations.firstOrNull { it.screen == Screen.Create }
                 if (createDestination != null) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(VividSpace.xs))
                     val fabInteractions = remember { MutableInteractionSource() }
                     FloatingActionButton(
                         onClick = {
@@ -772,7 +773,7 @@ private fun VividNavigationRail(
                     ) {
                         Icon(VividIcons.Create, contentDescription = createDestination.screen.label())
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(VividSpace.xs))
                 }
             }
         }
