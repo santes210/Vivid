@@ -180,4 +180,32 @@
 
     <string name="data_saver_wifi_hint">On mobile data, reels and stories are not preloaded</string>
     <string name="appearance_subtitle">Theme, language and text size</string>
+
+    <!-- ========== Main navigation ========== -->
+    <string name="nav_home">Home</string>
+    <string name="nav_explore">Explore</string>
+    <string name="nav_create">Create</string>
+    <string name="nav_reels">Reels</string>
+    <string name="nav_profile">Profile</string>
+    <string name="nav_expand_menu">Expand menu</string>
+    <string name="nav_collapse_menu">Collapse menu</string>
+    <string name="a11y_selected">Selected</string>
+    <string name="a11y_not_selected">Not selected</string>
+
+    <!-- ========== Settings / session / account ========== -->
+    <string name="settings_title">Settings</string>
+    <string name="action_logout">Log out</string>
+    <string name="account_private">Private account</string>
+    <string name="account_public">Public account</string>
+    <string name="chat_online">• Online</string>
+    <string name="cd_create_reel">Create reel</string>
+
+    <!-- ========== Theme (canonical key in prefs; localized label here) ========== -->
+    <string name="theme_title">Theme</string>
+    <string name="theme_dialog_title">App theme</string>
+    <string name="theme_subtitle">Light, dark or system</string>
+    <string name="theme_system">System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_changed">Theme: %1$s</string>
 </resources>

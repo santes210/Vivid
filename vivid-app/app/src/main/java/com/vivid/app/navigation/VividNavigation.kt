@@ -74,16 +74,22 @@ import com.vivid.app.ui.icons.VividIcons
 sealed class Screen(
     val route: String,
     val title: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    /**
+     * Recurso de la etiqueta visible/localizada. Los destinos que se pintan
+     * en la barra de navegación DEBEN definirlo; `title` queda como respaldo
+     * para destinos internos que nunca se muestran al usuario.
+     */
+    @androidx.annotation.StringRes val titleRes: Int = 0
 ) {
     object Auth : Screen("auth", "Auth")
-    object Feed : Screen("feed", "Inicio", Icons.Default.Home)
-    object Search : Screen("search", "Explorar", Icons.Default.Search)
-    object Create : Screen("create", "Crear", VividIcons.Create)
+    object Feed : Screen("feed", "Inicio", Icons.Default.Home, com.vivid.app.R.string.nav_home)
+    object Search : Screen("search", "Explorar", Icons.Default.Search, com.vivid.app.R.string.nav_explore)
+    object Create : Screen("create", "Crear", VividIcons.Create, com.vivid.app.R.string.nav_create)
     object CreateReel : Screen("create_reel", "Reel", Icons.Default.MovieCreation)
     object CreateStory : Screen("create_story", "Story", Icons.Default.AutoAwesome)
-    object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow)
-    object Profile : Screen("profile", "Perfil", Icons.Default.Person)
+    object Reels : Screen("reels", "Reels", Icons.Default.PlayArrow, com.vivid.app.R.string.nav_reels)
+    object Profile : Screen("profile", "Perfil", Icons.Default.Person, com.vivid.app.R.string.nav_profile)
     object OtherProfile : Screen("profile/{userId}", "Perfil")
     object Messages : Screen("messages", "Mensajes")
     object Chat : Screen("chat/{chatId}/{receiverId}/{receiverName}", "Chat")
@@ -103,6 +109,11 @@ sealed class Screen(
     object VideoTrimmer : Screen("video_trimmer", "Trim")
     object PermissionsOnboarding : Screen("permissions_onboarding", "Permisos")
 }
+
+/** Etiqueta localizada de un destino: usa `titleRes` si existe, `title` como respaldo. */
+@Composable
+private fun Screen.label(): String =
+    if (titleRes != 0) androidx.compose.ui.res.stringResource(titleRes) else title
 
 @Composable
 fun VividNavigation(
@@ -571,6 +582,10 @@ private fun VividBottomBar(
     onNavigate: (Screen) -> Unit
 ) {
     val haptics = rememberVividHaptics()
+    // Resueltos aquí (contexto composable): dentro de semantics {} no se puede
+    // llamar a stringResource().
+    val selectedDescription = androidx.compose.ui.res.stringResource(com.vivid.app.R.string.a11y_selected)
+    val notSelectedDescription = androidx.compose.ui.res.stringResource(com.vivid.app.R.string.a11y_not_selected)
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp
@@ -639,7 +654,7 @@ private fun VividBottomBar(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         VividIcons.Create,
-                                        contentDescription = dest.screen.title,
+                                        contentDescription = dest.screen.label(),
                                         modifier = Modifier.size(30.dp)
                                     )
                                 }
@@ -661,7 +676,7 @@ private fun VividBottomBar(
                                         }
                                     )
                                     .semantics(mergeDescendants = true) {
-                                        stateDescription = if (isSelected) "Seleccionado" else "No seleccionado"
+                                        stateDescription = if (isSelected) selectedDescription else notSelectedDescription
                                     }
                             ) {
                                 Icon(
@@ -676,7 +691,7 @@ private fun VividBottomBar(
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text = dest.screen.title,
+                                    text = dest.screen.label(),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                     ),
@@ -734,7 +749,10 @@ private fun VividNavigationRail(
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.MenuOpen else Icons.Filled.Menu,
-                        contentDescription = if (expanded) "Colapsar menú" else "Expandir menú"
+                        contentDescription = androidx.compose.ui.res.stringResource(
+                            if (expanded) com.vivid.app.R.string.nav_collapse_menu
+                            else com.vivid.app.R.string.nav_expand_menu
+                        )
                     )
                 }
                 val createDestination = destinations.firstOrNull { it.screen == Screen.Create }
@@ -752,7 +770,7 @@ private fun VividNavigationRail(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(56.dp)
                     ) {
-                        Icon(VividIcons.Create, contentDescription = createDestination.screen.title)
+                        Icon(VividIcons.Create, contentDescription = createDestination.screen.label())
                     }
                     Spacer(Modifier.height(8.dp))
                 }
@@ -777,7 +795,7 @@ private fun VividNavigationRail(
                 },
                 label = {
                     Text(
-                        dest.screen.title,
+                        dest.screen.label(),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )

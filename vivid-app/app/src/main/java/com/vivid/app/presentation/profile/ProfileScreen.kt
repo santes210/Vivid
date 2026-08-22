@@ -1,6 +1,7 @@
 package com.vivid.app.presentation.profile
 
 import com.vivid.app.presentation.report.ReportHelper
+import com.vivid.app.R
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -303,7 +305,7 @@ fun ProfileScreen(
                         )
                         if (profile.isPrivate && !isOwnProfile) {
                             Text(
-                                "Cuenta privada",
+                                stringResource(R.string.account_private),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -326,7 +328,7 @@ fun ProfileScreen(
                             }
                             DropdownMenu(expanded = showProfileMenu, onDismissRequest = { showProfileMenu = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Ajustes") },
+                                    text = { Text(stringResource(R.string.settings_title)) },
                                     onClick = {
                                         showProfileMenu = false
                                         onSettings()
@@ -334,7 +336,7 @@ fun ProfileScreen(
                                     leadingIcon = { Icon(Icons.Default.Settings, null) }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Cerrar sesión", color = MaterialTheme.colorScheme.error) },
+                                    text = { Text(stringResource(R.string.action_logout), color = MaterialTheme.colorScheme.error) },
                                     onClick = {
                                         showProfileMenu = false
                                         com.vivid.app.util.PushNotificationHelper.unregisterToken()

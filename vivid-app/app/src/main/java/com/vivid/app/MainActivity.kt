@@ -87,8 +87,8 @@ class MainActivity : ComponentActivity() {
             val animationsEnabled = SettingsManager.smoothAnimationsEnabled &&
                 ValueAnimator.areAnimatorsEnabled()
             val darkTheme = when (selectedTheme) {
-                "Oscuro" -> true
-                "Claro" -> false
+                SettingsManager.THEME_DARK -> true
+                SettingsManager.THEME_LIGHT -> false
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
 

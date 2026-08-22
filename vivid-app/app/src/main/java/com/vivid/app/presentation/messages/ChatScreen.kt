@@ -195,7 +195,7 @@ fun ChatScreen(
                                 )
                             } else {
                                 Text(
-                                    if (canMessage) "• En línea" else "Cuenta privada",
+                                    if (canMessage) stringResource(R.string.chat_online) else stringResource(R.string.account_private),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (canMessage) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
