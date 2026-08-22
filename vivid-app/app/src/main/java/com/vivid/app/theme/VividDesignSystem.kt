@@ -18,6 +18,7 @@ package com.vivid.app.theme
  *  - [VividBrandColors] / [VividBrandColorsDark] — salida generada, 36 roles.
  *  - [VividAccentColors] + [VividAccents] — acentos de producto.
  *  - `theme/ColorHarmony.kt` — `Color.harmonizeWith` y [VividAccents].
+ *  - `theme/VividFeedback.kt` — snackbar/diálogo: 28 dp y ancho máx. 600 dp.
  *
  * Semillas en OkLCh (tono = `L*` de CIELAB, el mismo eje que HCT):
  *
@@ -66,6 +67,8 @@ package com.vivid.app.theme
  * | `FilterChip` en `LazyRow`                        | filtros por tema de Explorar (ver nota)    |
  * | `HorizontalFloatingToolbar`                      | acciones del detalle de publicación       |
  * | `WideNavigationRail`                             | navegación en tabletas                    |
+ * | `SearchBar` / `DockedSearchBar`                  | Explorar: historial, sugerencias, tablet  |
+ * | `VividSnackbarHost` / `VividAlertDialog`         | feedback 28 dp, surfaceContainerHigh      |
  *
  * **Riesgo asumido:** es alpha, las firmas pueden cambiar entre versiones. Los
  * usos están concentrados a propósito en esos siete archivos. Plan B si una

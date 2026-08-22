@@ -66,6 +66,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.compose.runtime.DisposableEffect
+import com.vivid.app.ui.components.VividSnackbarHost
+import com.vivid.app.ui.components.VividAlertDialog
+import com.vivid.app.ui.components.VividDialogTone
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -147,7 +150,7 @@ fun ChatScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 navigationIcon = {
@@ -574,9 +577,30 @@ fun ChatScreen(
         }
     }
 
+    pendingDelete?.let { message ->
+        VividAlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.msg_delete_confirm_title), fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.msg_delete_confirm_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteMessage(chatId, message)
+                        pendingDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text(stringResource(R.string.msg_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.action_cancel)) }
+            },
+            tone = VividDialogTone.Destructive
+        )
+    }
+
     editingMessage?.let { msg ->
         var draft by remember(msg.id) { mutableStateOf(msg.text) }
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { editingMessage = null },
             title = { Text(stringResource(R.string.msg_edit_title), fontWeight = FontWeight.Bold) },
             text = {

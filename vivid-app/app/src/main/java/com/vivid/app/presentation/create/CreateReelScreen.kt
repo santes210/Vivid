@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -27,10 +28,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
+import com.vivid.app.R
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
-import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.ui.components.VividCelebrationIcon
 
 /**
  * Pantalla "Crear Reel" — Material You 3 + Música
@@ -158,7 +160,10 @@ fun CreateReelScreen(
                 (state as? CreateReelUiState.Watermarking)?.let { ProgressOverlay("Marca de agua… ${it.percent}%") }
                 (state as? CreateReelUiState.Uploading)?.let { ProgressOverlay("Subiendo a B2… ${it.percent}%") }
                 if (state is CreateReelUiState.SavingMetadata) ProgressOverlay("Guardando…")
-                if (state is CreateReelUiState.Success) ProgressOverlay("¡Publicado! ✓", success = true)
+                if (state is CreateReelUiState.Success) ProgressOverlay(
+                    stringResource(R.string.published_title),
+                    success = true
+                )
             }
 
             Spacer(Modifier.height(VividSpace.m))
@@ -385,7 +390,7 @@ private fun formatTrimLabel(ms: Long): String {
 private fun ProgressOverlay(label: String, success: Boolean = false) {
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (success) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = LocalVividAccents.current.online, modifier = Modifier.size(64.dp))
+            if (success) VividCelebrationIcon(size = 72.dp)
             else LoadingIndicator(modifier = Modifier.size(64.dp), color = Color.White, polygons = VividMaterialShapes.LoadingSequence)
             Spacer(Modifier.height(VividSpace.s))
             Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)

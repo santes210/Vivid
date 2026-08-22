@@ -52,6 +52,7 @@ import kotlinx.coroutines.tasks.await
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.ui.components.VividSnackbarHost
 
 // Viewer model for screen
 private data class ViewerStory(
@@ -413,7 +414,7 @@ fun StoryViewerRoute(
                     }
                 }
 
-                SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
+                VividSnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
             }
         }
     }

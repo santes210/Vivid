@@ -27,6 +27,7 @@ import com.vivid.app.domain.repository.SocialUserPreview
 import kotlinx.coroutines.launch
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.ui.components.VividSnackbarHost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +47,7 @@ fun FollowRequestsScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { reload() }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Solicitudes") },
@@ -116,7 +117,7 @@ fun CloseFriendsScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { reload() }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Mejores amigos") },
@@ -179,7 +180,7 @@ fun BlockedUsersScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { reload() }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Bloqueados") },

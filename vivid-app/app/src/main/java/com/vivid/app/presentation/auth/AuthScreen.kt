@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +80,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
+import com.vivid.app.ui.components.VividAlertDialog
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -724,7 +724,7 @@ fun AuthScreen(
         var resetEmail by remember(email) { mutableStateOf(email) }
         var resetError by remember { mutableStateOf<String?>(null) }
 
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showForgotPasswordDialog = false },
             title = {
                 Text(

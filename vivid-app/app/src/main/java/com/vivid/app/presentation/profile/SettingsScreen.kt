@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.ui.components.VividSnackbarHost
 
 data class SettingsInfoDialog(
     val title: String,
@@ -153,7 +154,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             LargeTopAppBar(
                 title = {

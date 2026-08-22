@@ -46,6 +46,7 @@ import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividShapes
 import com.vivid.app.theme.VividPaints
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividAlertDialog
 
 /**
  * Editor de Story estilo Instagram.
@@ -369,7 +370,7 @@ private fun EditorToolButton(
 @Composable
 private fun TextInputDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Agregar texto") },
         text = {
@@ -430,7 +431,7 @@ private fun StickerPickerContent(onPick: (String) -> Unit) {
 @Composable
 private fun ColorPickerDialog(onPick: (Int) -> Unit, onDismiss: () -> Unit) {
     val colors = VividPaints.StoryText
-    AlertDialog(
+    VividAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Color") },
         text = {

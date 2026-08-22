@@ -40,6 +40,9 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.ui.components.VividAlertDialog
+import com.vivid.app.ui.components.VividDialogTone
+import com.vivid.app.ui.components.VividSnackbarHost
 
 private const val TAG = "FeedScreen"
 
@@ -426,7 +429,7 @@ fun FeedScreen(
 
     // ── UI ──
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { VividWordmark() },
@@ -547,7 +550,7 @@ fun FeedScreen(
         })
     }
     selectedPostForDelete?.let { post ->
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { selectedPostForDelete = null },
             title = { Text(stringResource(R.string.feed_delete_confirm_title)) },
             text = { Text(stringResource(R.string.feed_delete_confirm_body)) },
@@ -567,13 +570,14 @@ fun FeedScreen(
                     )
                 }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.feed_delete)) }
             },
-            dismissButton = { TextButton(onClick = { selectedPostForDelete = null }) { Text(stringResource(R.string.action_cancel)) } }
+            dismissButton = { TextButton(onClick = { selectedPostForDelete = null }) { Text(stringResource(R.string.action_cancel)) } },
+            tone = VividDialogTone.Destructive
         )
     }
 
     // ── Report dialog ──
     if (showReportDialog) {
-        AlertDialog(
+        VividAlertDialog(
             onDismissRequest = { showReportDialog = false },
             title = { Text(stringResource(R.string.report_title)) },
             text = {
