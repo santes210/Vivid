@@ -102,7 +102,7 @@ fun FeedScreen(
     var reportPostUser by remember { mutableStateOf("") }
     var reportPostCaption by remember { mutableStateOf("") }
     var reportReason by remember { mutableStateOf(context.getString(R.string.report_reason_inappropriate)) }
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     val displayPosts = remember(posts, savedPostIds) {
         posts.map { post ->
@@ -435,12 +435,12 @@ fun FeedScreen(
                 title = { VividWordmark() },
                 actions = {
                     BadgedBox(
-                        badge = { if (followRequestsCount > 0) Badge(containerColor = MaterialTheme.colorScheme.error) { Text(followRequestsCount.coerceAtMost(9).toString(), color = MaterialTheme.colorScheme.onError) } },
+                        badge = { if (followRequestsCount > 0) Badge(containerColor = MaterialTheme.colorScheme.error) { Text(if (followRequestsCount > 9) "9+" else followRequestsCount.toString(), color = MaterialTheme.colorScheme.onError) } },
                         modifier = Modifier.padding(end = VividSpace.xs)
                     ) {
-                        IconButton(onClick = onOpenRequests) { Icon(Icons.Default.Notifications, stringResource(R.string.feed_requests), tint = MaterialTheme.colorScheme.onSurface) }
+                        IconButton(onClick = onOpenRequests) { Icon(Icons.Default.Notifications, stringResource(R.string.feed_requests), tint = if (followRequestsCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
-                    IconButton(onClick = onOpenMessages) { Icon(Icons.Default.Email, stringResource(R.string.feed_messages), tint = MaterialTheme.colorScheme.onSurface) }
+                    IconButton(onClick = onOpenMessages) { Icon(Icons.Default.Email, stringResource(R.string.feed_messages), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 scrollBehavior = scrollBehavior

@@ -170,10 +170,12 @@ fun MessageBubble(
     onResignVoice: (Message) -> Unit = {}
 ) {
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
+    // La esquina inferior junto al autor funciona como una cola sutil: el resto
+    // conserva 20dp. Es la silueta asimétrica característica de un chat M3 moderno.
     val bubbleShape = if (isMine) {
-        RoundedCornerShape(topStart = 20.dp, topEnd = if (isGroupStart) 20.dp else 6.dp, bottomStart = 20.dp, bottomEnd = if (isGroupEnd) 20.dp else 6.dp)
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(topStart = if (isGroupStart) 20.dp else 6.dp, topEnd = 20.dp, bottomStart = if (isGroupEnd) 20.dp else 6.dp, bottomEnd = 20.dp)
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
     }
     // Burbujas con colores tonales del usuario: primario para las mías, neutro para las suyas.
     // Sin sombras ni degradados (M3 Expressive: superficies planas con jerarquía tonal).
