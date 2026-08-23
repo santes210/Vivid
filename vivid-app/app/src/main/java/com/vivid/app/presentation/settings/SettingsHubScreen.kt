@@ -75,7 +75,7 @@ fun SettingsHubScreen(
                     )
                     VividSettingsItem(
                         title = "Apariencia",
-                        subtitle = "Tema, idioma y tamaño de texto",
+                        subtitle = "Tema, color, idioma y tamaño de texto",
                         icon = Icons.Outlined.Palette,
                         value = appearanceValue,
                         onClick = onNavigateApariencia,

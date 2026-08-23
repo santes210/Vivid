@@ -44,6 +44,22 @@ package com.vivid.app.theme
  * [VividAccentColors] a pelo (así funcionan igual en marca, en dinámico y en
  * un `@Preview`).
  *
+ * Excepción deliberada: el **like** y el **live** solo se armonizan al 30 %
+ * (≈4,5° de giro). Son rojos semánticos; con un wallpaper verde una
+ * armonización completa los empuja al marrón y el corazón deja de leerse como
+ * "me gusta". Además todos los acentos pasan por `ensureContrastAgainst` para
+ * garantizar 3:1 contra la superficie activa (WCAG 1.4.11).
+ *
+ * Sin color dinámico el usuario elige la semilla en Ajustes → Apariencia
+ * ([VividSeedPalette]: Vivid Sunset, Océano, Bosque, Lavanda, Mono). Las
+ * paletas distintas de Sunset se construyen en runtime con el mismo algoritmo
+ * del script, portado en [vividToneColor] / [VividTonalRamp].
+ *
+ * Ortogonal a todo lo anterior: el **modo AMOLED** ([toAmoled]) transforma
+ * cualquier esquema oscuro — de marca o dinámico — poniendo fondo y superficie
+ * en #000000 y recolocando los contenedores en los tonos 4/7/11/15/18 para no
+ * perder jerarquía sobre negro puro.
+ *
  * ---
  * ## 2. Material 3 Expressive — APIs reales, no imitaciones
  *

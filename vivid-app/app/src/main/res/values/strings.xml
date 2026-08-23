@@ -229,4 +229,22 @@
     <string name="theme_dark">Oscuro</string>
     <string name="theme_light">Claro</string>
     <string name="theme_changed">Tema: %1$s</string>
+
+    <!-- ========== Apariencia: negro AMOLED y semillas de color ========== -->
+    <string name="amoled_title">Negro puro (AMOLED)</string>
+    <string name="amoled_subtitle_on">Fondo #000000 en modo oscuro</string>
+    <string name="amoled_subtitle_off">Oscuro cálido de Vivid</string>
+    <string name="amoled_needs_dark">Se aplicará cuando el tema oscuro esté activo</string>
+    <string name="amoled_enabled">Negro puro activado</string>
+    <string name="amoled_disabled">Oscuro cálido de Vivid</string>
+
+    <string name="seed_palette_title">Color de la app</string>
+    <string name="seed_palette_subtitle">Elige la semilla de la paleta</string>
+    <string name="seed_palette_dynamic_hint">Desactiva el color dinámico para elegir semilla</string>
+    <string name="seed_palette_changed">Paleta: %1$s</string>
+    <string name="palette_sunset">Vivid Sunset</string>
+    <string name="palette_ocean">Océano</string>
+    <string name="palette_forest">Bosque</string>
+    <string name="palette_lavender">Lavanda</string>
+    <string name="palette_mono">Mono</string>
 </resources>

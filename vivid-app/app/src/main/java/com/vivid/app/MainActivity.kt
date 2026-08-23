@@ -82,6 +82,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val selectedTheme = SettingsManager.selectedThemeOption
             val dynamicColor = SettingsManager.dynamicColorEnabled
+            val seedPalette = com.vivid.app.theme.VividSeedPalette
+                .fromId(SettingsManager.seedPaletteId)
+            val amoled = SettingsManager.amoledBlackEnabled
             // Respeta tanto la preferencia de Vivid como "Quitar animaciones" del sistema.
             // ValueAnimator también devuelve false cuando la escala de animación es 0.
             val animationsEnabled = SettingsManager.smoothAnimationsEnabled &&
@@ -97,7 +100,12 @@ class MainActivity : ComponentActivity() {
             val deepLinkProfileUserId = pendingProfileUserId
             val deepLinkPostId = pendingPostId
 
-            VividTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
+            VividTheme(
+                darkTheme = darkTheme,
+                dynamicColor = dynamicColor,
+                seedPalette = seedPalette,
+                amoled = amoled
+            ) {
                 CompositionLocalProvider(
                     LocalVividAnimationsEnabled provides animationsEnabled
                 ) {

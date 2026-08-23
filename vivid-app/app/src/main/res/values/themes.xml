@@ -1,8 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Vivid" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!--
+        Tema base de la Activity.
+
+        Vivid es 100 % Compose sobre ComponentActivity: NO usa AppCompat.
+        Heredar de Theme.AppCompat.DayNight.NoActionBar (como se hacía antes)
+        no pintaba nada, pero sí arrastraba los defaults de AppCompat —
+        ActionBar, tipografía, colores de selección de controles, estilos de
+        popup — que se cuelan en el arranque y en las ventanas que dibuja el
+        sistema y no Compose: el popup de autocompletar del teclado, el menú
+        contextual de texto y el frame anterior a la primera composición.
+
+        Con Theme.Material.*.NoActionBar del framework el arranque queda limpio
+        y no hay que añadir la dependencia androidx.appcompat (ni
+        com.google.android.material) solo por un tema base.
+
+        DayNight se resuelve con este fichero + values-night/themes.xml, que es
+        lo que hace DayNight por dentro; android:Theme.DeviceDefault.DayNight.*
+        existe desde API 29 y aquí el minSdk es 26.
+    -->
+    <style name="Theme.Vivid" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
+        <!-- Fondo de ventana igual al `background` del ColorScheme claro: sin
+             esto el frame previo a la primera composición es blanco puro y se
+             ve un flash contra el neutro cálido de la app. -->
+        <item name="android:windowBackground">@color/window_background</item>
+        <!-- Edge-to-edge: enableEdgeToEdge() lo aplica en runtime, pero
+             declararlo evita que el primer frame dibuje barras opacas. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="Theme.Vivid.Splash" parent="Theme.SplashScreen">

@@ -5,4 +5,7 @@
     <!-- Fallback para Android 8–11 sin paleta dinámica de Material You. -->
     <color name="splash_screen_background">#3E0218</color>
     <color name="splash_screen_foreground">#FFFFFFFF</color>
+    <!-- neutral 99 del esquema claro de "Vivid Sunset" (VividBrandColors.Background).
+         Evita el flash blanco del frame previo a la primera composición. -->
+    <color name="window_background">#FFFBFA</color>
 </resources>
