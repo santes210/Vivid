@@ -129,11 +129,15 @@ fun ReelsScreen(
             }
         }
 
-        // Banner de sin conexión, debajo de la píldora "Reels"
+        // Banner de sin conexión, debajo de la píldora "Reels".
+        // safeDrawing (y no statusBars): en pantallas inmersivas el Scaffold
+        // no aplica insets, así que cada overlay consume el suyo; con
+        // safeDrawing el notch/cutout queda cubierto también en modos
+        // borderless, donde statusBars solo daría el alto de la barra.
         VividOfflineBannerHost(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
+                .safeDrawingPadding()
                 .padding(top = 66.dp)
         )
 
@@ -144,7 +148,7 @@ fun ReelsScreen(
             shadowElevation = 0.dp,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
+                .safeDrawingPadding()
                 .padding(top = 10.dp)
         ) {
             Row(
@@ -206,6 +210,9 @@ fun ReelsScreen(
             onClick = onCreateReel,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                // safeDrawing: en nav de 3 botones el FAB ya no se pinta
+                // detrás de la barra; en gestual el inset es mínimo.
+                .safeDrawingPadding()
                 .padding(20.dp),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

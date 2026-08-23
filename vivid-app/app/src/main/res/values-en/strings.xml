@@ -231,4 +231,15 @@
     <string name="palette_forest">Forest</string>
     <string name="palette_lavender">Lavender</string>
     <string name="palette_mono">Mono</string>
+
+    <!-- ========== Launcher shortcuts (long-press) ========== -->
+    <string name="shortcut_new_post">New post</string>
+    <string name="shortcut_new_reel">New reel</string>
+    <string name="shortcut_new_story">New story</string>
+    <string name="shortcut_messages">Messages</string>
+    <string name="shortcut_search">Search</string>
+
+    <!-- ========== Launcher widget "Create" ========== -->
+    <string name="widget_create_label">Create</string>
+    <string name="widget_create_description">Open Vivid\'s creator</string>
 </resources>

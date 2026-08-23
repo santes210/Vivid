@@ -9,6 +9,8 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.vivid.app.MainActivity
@@ -19,6 +21,39 @@ class VividMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "VividMessaging"
     }
+
+    /**
+     * Tinte de marca para [NotificationCompat.Builder.setColor]: el sistema
+     * tiñe el icono pequeño con este color en la shade y en las acciones.
+     *
+     * No es una constante Kotlin de la paleta (VividBrandColors) porque las
+     * notificaciones se construyen FUERA de la composición de Compose y
+     * tienen que seguir el tema CLARO/OSCURO DEL SISTEMA (el de la shade),
+     * no la preferencia interna de la app: por eso se resuelve desde el
+     * recurso [R.color.notification_accent], que values-night sobreescribe
+     * al rosa del esquema oscuro (coral #B71454 en light, rosa #FFAFC1 en
+     * dark). El resultado coincide con brandPrimary en cada modo.
+     */
+    private fun brandAccentColor(): Int =
+        ContextCompat.getColor(this, R.color.notification_accent)
+
+    /**
+     * Metadatos de **Bubbles** para que un mensaje DM pueda expandirse a
+     * una burbuja y responder sin salir de la app que el usuario esté
+     * usando. Al expandir la burbuja se abre el chat ([openChatPendingIntent]
+     * es el mismo intent de la notificación); al deslizarla fuera se cierra
+     * en silencio y la notificación queda en la shade, igual que en apps de
+     * mensajería estándar.
+     *
+     * Solo se aplica en mensajes (task 38): las notificaciones de likes /
+     * seguidores / reels no son conversaciones y burbujearlas sería ruido.
+     * En API < 29 el sistema ignora los metadatos (el compat lo gestiona).
+     */
+    private fun bubbleMetadataForChat(openChatPendingIntent: PendingIntent): NotificationCompat.BubbleMetadata =
+        NotificationCompat.BubbleMetadata.Builder(
+            openChatPendingIntent,
+            IconCompat.createWithResource(this, R.drawable.ic_notification_bell)
+        ).build()
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         // El Worker envía mensajes data-only para que este servicio controle
@@ -101,12 +136,19 @@ class VividMessagingService : FirebaseMessagingService() {
 
         val builder = NotificationCompat.Builder(this, "messages_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
+            // Tinte de marca: el sistema tiñe la campana de Vivid con el
+            // primary de la app (coral en light, rosa en dark).
+            .setColor(brandAccentColor())
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setContentIntent(openChatPendingIntent)
+            // Bubbles: el DM puede expandirse a burbuja para chatear sin
+            // salir de otra app (ver bubbleMetadataForChat).
+            .setBubbleMetadata(bubbleMetadataForChat(openChatPendingIntent))
 
         // ── Acciones opcionales ──────────────────────────────────────────
         // Se construyen aisladas: si algo falla aquí, la notificación base
@@ -174,6 +216,7 @@ class VividMessagingService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, "general_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
+            .setColor(brandAccentColor())
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -198,6 +241,7 @@ class VividMessagingService : FirebaseMessagingService() {
         )
         val notification = NotificationCompat.Builder(this, "general_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
+            .setColor(brandAccentColor())
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -224,6 +268,7 @@ class VividMessagingService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, "general_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
+            .setColor(brandAccentColor())
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -248,6 +293,7 @@ class VividMessagingService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, "general_channel")
             .setSmallIcon(R.drawable.ic_notification_bell)
+            .setColor(brandAccentColor())
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -273,6 +319,9 @@ class VividMessagingService : FirebaseMessagingService() {
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "Notificaciones de mensajes directos"
+                    // Bubbles: explícito por si el usuario tuvo una versión
+                    // anterior con otro valor (es sticky en el channel).
+                    setAllowBubbles(true)
                 },
                 NotificationChannel(
                     "general_channel",

@@ -58,11 +58,15 @@ fun VividSettingsScaffold(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 ),
-                windowInsets = WindowInsets.statusBars
+                // El Scaffold de navegación ya aplica safeDrawing: ni la
+                // barra ni el contenido re-consumen insets (con
+                // statusBars/navigationBars el padding se pagaba dos veces,
+                // sobre todo la nav bar en la parte inferior).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         },
         containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = WindowInsets.navigationBars,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = snackbarHost,
         content = content
     )

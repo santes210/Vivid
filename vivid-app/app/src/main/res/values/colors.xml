@@ -8,4 +8,11 @@
     <!-- neutral 99 del esquema claro de "Vivid Sunset" (VividBrandColors.Background).
          Evita el flash blanco del frame previo a la primera composición. -->
     <color name="window_background">#FFFBFA</color>
+    <!-- Tinte de marca (setColor) en notificaciones: el sistema tiñe el
+         icono pequeño con este color. Coral en light; values-night lo
+         sobreescribe al rosa del esquema oscuro. -->
+    <color name="notification_accent">#B71454</color>
+    <!-- Widget "Crear": fondo del Burst (brand primary) y texto sobre él. -->
+    <color name="widget_create_bg">#B71454</color>
+    <color name="widget_create_text">#FFFFFFFF</color>
 </resources>

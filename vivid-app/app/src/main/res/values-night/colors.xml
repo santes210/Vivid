@@ -2,4 +2,12 @@
 <resources>
     <!-- neutral 6 del esquema oscuro de "Vivid Sunset" (VividBrandColorsDark.Background). -->
     <color name="window_background">#171211</color>
+    <!-- Tinte de marca (setColor) en notificaciones, modo oscuro: rosa
+         (primary 80 del esquema oscuro, VividBrandColorsDark.Primary).
+         El sistema tiñe el icono pequeño con este color en la shade. -->
+    <color name="notification_accent">#FFAFC1</color>
+    <!-- Widget "Crear" en modo oscuro: Burst rosa y texto en onPrimary
+         oscuro para mantener el contraste. -->
+    <color name="widget_create_bg">#FFAFC1</color>
+    <color name="widget_create_text">#64062B</color>
 </resources>

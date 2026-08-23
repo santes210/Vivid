@@ -219,7 +219,10 @@ fun CreateStoryScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                )
+                ),
+                // El Scaffold de navegación ya aplica safeDrawing: no
+                // re-consumir los top insets (doble padding de status bar).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         },
         // FIX CLAVE: el botón Publicar vive aquí, anclado abajo, SIEMPRE visible.
@@ -229,10 +232,12 @@ fun CreateStoryScreen(
                 tonalElevation = 3.dp
             ) {
                 Column(
+                    // El Scaffold de navegación (safeDrawing) ya empuja esta
+                    // bottomBar por encima de la nav bar: el
+                    // navigationBarsPadding() anterior la pagaba dos veces.
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = VividSpace.m, vertical = VividSpace.s)
-                        .navigationBarsPadding()
                 ) {
                     (state as? CreateStoryUiState.Error)?.let { err ->
                         Card(

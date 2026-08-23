@@ -78,7 +78,8 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.Vivid.Splash"
             android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:shortcuts="@xml/shortcuts">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -106,6 +107,19 @@
         <receiver
             android:name=".notifications.NotificationActionReceiver"
             android:exported="false" />
+
+        <!-- Widget del launcher "Crear" (2x2). exported=false: solo el
+             sistema (AppWidgetManager/launcher) lo enlaza. -->
+        <receiver
+            android:name=".widgets.CreateWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/create_widget_info" />
+        </receiver>
 
     </application>
 

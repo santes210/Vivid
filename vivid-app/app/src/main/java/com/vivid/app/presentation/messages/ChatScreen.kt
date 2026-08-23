@@ -698,7 +698,9 @@ fun ChatScreen(
                 Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 4f); offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan } }, contentAlignment = Alignment.Center) {
                     AsyncImage(model = url, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxWidth().padding(VividSpace.m).graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y), contentScale = ContentScale.Fit)
                 }
-                Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = VividSpace.l, vertical = VividSpace.s), shape = VividExpressiveShapes.SearchBar, color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
+                // safeDrawing: overlay inmersivo (el Scaffold no aplica
+                // insets en chat), se cubre notch/cutout incluso borderless.
+                Surface(modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(horizontal = VividSpace.l, vertical = VividSpace.s), shape = VividExpressiveShapes.SearchBar, color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
                     Row(modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(VividSpace.m)) {
                         Text(text = "Visor de Imagen", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))

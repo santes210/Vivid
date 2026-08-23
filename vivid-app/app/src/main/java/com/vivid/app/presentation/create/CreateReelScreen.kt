@@ -125,7 +125,10 @@ fun CreateReelScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.Close, contentDescription = "Cerrar")
                     }
-                }
+                },
+                // El Scaffold de navegación ya aplica safeDrawing: no
+                // re-consumir los top insets (doble padding de status bar).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         }
     ) { padding ->

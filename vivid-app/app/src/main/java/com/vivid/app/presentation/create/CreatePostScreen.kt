@@ -133,7 +133,10 @@ fun CreatePostScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                )
+                ),
+                // El Scaffold de navegación ya aplica safeDrawing: no
+                // re-consumir los top insets (doble padding de status bar).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
