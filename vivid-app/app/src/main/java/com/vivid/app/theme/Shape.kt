@@ -132,6 +132,19 @@ object VividMaterialShapes {
     /** Estado pulsado / activo del mismo control. */
     val MorphPressed: RoundedPolygon = MaterialShapes.Cookie9Sided
 
+    /**
+     * Reposo de un FAB **extendido** (ancho, no circular).
+     *
+     * El par Circle→Cookie9Sided funciona en un contenedor cuadrado (el botón
+     * Crear del bottom nav); estirado a la caja de un ExtendedFAB deformaría
+     * las puntas. Para esos casos el par es Pill→Cookie12Sided: al pulsar la
+     * píldora se ondula sin perder la proporción horizontal.
+     */
+    val FabResting: RoundedPolygon = MaterialShapes.Pill
+
+    /** Estado pulsado del FAB extendido. */
+    val FabPressed: RoundedPolygon = MaterialShapes.Cookie12Sided
+
     /** Avatar sin historias nuevas. */
     val AvatarResting: RoundedPolygon = MaterialShapes.Circle
 

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -47,12 +48,16 @@ import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.components.UserAvatar
+import com.vivid.app.ui.components.pressMorphShape
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.PushSender
 import com.vivid.app.util.rememberPooledExoPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+
+/** Alto del scrim inferior del reel (usuario + caption + acciones). */
+private val REEL_SCRIM_HEIGHT = 280.dp
 
 @Composable
 internal fun EmptyReelsState(onCreateReel: () -> Unit) {
@@ -286,15 +291,24 @@ internal fun ReelPage(
             }
         }
 
-        // Degradado inferior para legibilidad
+        // Scrim inferior: negro 0% → 55% donde viven usuario, caption y
+        // acciones. Es sutil a propósito (antes llegaba a 0.9 y "apagaba" el
+        // vídeo): con 55% el texto blanco pasa AA sobre cualquier fotograma
+        // sin convertir el tercio inferior en una banda negra.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
+                .height(REEL_SCRIM_HEIGHT)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
+                        // La parada intermedia evita la banda dura del
+                        // degradado lineal en pantallas de 8 bits.
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.55f to Color.Black.copy(alpha = 0.22f),
+                            1f to Color.Black.copy(alpha = 0.55f)
+                        )
                     )
                 )
         )
@@ -509,14 +523,23 @@ internal fun ReelActionButton(
     count: String? = null,
     onClick: () -> Unit
 ) {
+    // Contenedor de vidrio: blanco al 12% sobre el vídeo (estilo TikTok/Reels)
+    // en vez de un negro translúcido que compite con el scrim. La forma sale
+    // del sistema de Vivid: círculo en reposo que se transforma al pulsar
+    // (mismo pressMorphShape que el botón Crear).
+    val interactions = remember { MutableInteractionSource() }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
-            color = Color.Black.copy(alpha = 0.32f),
-            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.12f),
+            shape = pressMorphShape(interactions),
             shadowElevation = 0.dp,
             modifier = Modifier.size(46.dp)
         ) {
-            IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            IconButton(
+                onClick = onClick,
+                interactionSource = interactions,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(24.dp))
             }
         }

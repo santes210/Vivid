@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.VerticalPager
@@ -50,6 +51,7 @@ import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.pressMorphShape
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.PushSender
@@ -196,7 +198,10 @@ fun ReelsScreen(
             }
         }
 
-        // FAB Crear Reel
+        // FAB Crear Reel — misma gramática que el botón "Crear" del bottom nav:
+        // al pulsarlo la silueta se transforma (círculo → galleta de 9 puntas)
+        // en vez de limitarse a un ripple. Consistencia con pressMorphShape.
+        val createFabInteractions = remember { MutableInteractionSource() }
         ExtendedFloatingActionButton(
             onClick = onCreateReel,
             modifier = Modifier
@@ -204,7 +209,12 @@ fun ReelsScreen(
                 .padding(20.dp),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = VividExpressiveShapes.HeroCard
+            interactionSource = createFabInteractions,
+            shape = pressMorphShape(
+                interactionSource = createFabInteractions,
+                resting = VividMaterialShapes.FabResting,
+                pressed = VividMaterialShapes.FabPressed
+            )
         ) {
             Icon(Icons.Default.Add, contentDescription = stringResource(com.vivid.app.R.string.cd_create_reel), modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(VividSpace.xs))
