@@ -25,8 +25,12 @@ import com.vivid.app.util.LocaleManager
  *
  * Qué instala:
  *   - **ColorScheme**: color dinámico del wallpaper en Android 12+ cuando el
- *     usuario lo deja activado; si no, la paleta de marca "Vivid Sunset"
- *     generada en [VividBrandColors] / [VividBrandColorsDark].
+ *     usuario lo deja activado; si no, la semilla de marca elegida en
+ *     Ajustes → Apariencia ([VividSeedPalette], por defecto "Vivid Sunset",
+ *     precalculada en [VividBrandColors] / [VividBrandColorsDark]).
+ *   - **Modo AMOLED** ([amoled]): sobre el esquema oscuro que toque, pone el
+ *     fondo en negro puro y recoloca los contenedores 2-4 tonos por encima.
+ *     Ver [toAmoled].
  *   - **MotionScheme.expressive()**: springs con rebote que los componentes de
  *     material3 aplican automáticamente. Ver [VividMotion] para las
  *     animaciones propias de la app.
@@ -39,28 +43,34 @@ import com.vivid.app.util.LocaleManager
  *     `MainActivity`; pintarlas aquí con `window.statusBarColor` no haría nada
  *     (la API es no-op desde API 35).
  *
- * Perf: el esquema se cachea con `remember(darkTheme, dynamicColor)` para no
- * regenerar la paleta dinámica en cada recomposición (nota en gama baja).
+ * Perf: el esquema se cachea con `remember(darkTheme, dynamicColor,
+ * seedPalette, amoled)` para no regenerar la paleta (dinámica o de semilla) en
+ * cada recomposición (nota en gama baja).
  */
 @Composable
 fun VividTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    seedPalette: VividSeedPalette = VividSeedPalette.Default,
+    amoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val colorScheme: ColorScheme = remember(darkTheme, dynamicColor) {
+    val colorScheme: ColorScheme = remember(darkTheme, dynamicColor, seedPalette, amoled) {
         val supportsDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        when {
+        val base = when {
             supportsDynamic && darkTheme -> dynamicDarkColorScheme(context)
             supportsDynamic -> dynamicLightColorScheme(context)
-            darkTheme -> vividDarkColorScheme()
-            else -> vividLightColorScheme()
+            else -> vividSeedColorScheme(seedPalette, darkTheme)
         }
+        // AMOLED es una *transformación* del esquema oscuro, no un tercer
+        // esquema paralelo: así funciona igual con Material You y con
+        // cualquiera de las semillas de marca.
+        if (amoled) base.toAmoled(darkTheme) else base
     }
 
-    val accents = remember(colorScheme.primary, darkTheme) {
-        VividAccents.harmonizedTo(colorScheme.primary, darkTheme)
+    val accents = remember(colorScheme.primary, colorScheme.surface, darkTheme) {
+        VividAccents.harmonizedTo(colorScheme.primary, darkTheme, colorScheme.surface)
     }
 
     val view = LocalView.current

@@ -213,4 +213,22 @@
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
     <string name="theme_changed">Theme: %1$s</string>
+
+    <!-- ========== Appearance: AMOLED black and color seeds ========== -->
+    <string name="amoled_title">Pure black (AMOLED)</string>
+    <string name="amoled_subtitle_on">#000000 background in dark mode</string>
+    <string name="amoled_subtitle_off">Vivid warm dark</string>
+    <string name="amoled_needs_dark">Applies once the dark theme is active</string>
+    <string name="amoled_enabled">Pure black enabled</string>
+    <string name="amoled_disabled">Vivid warm dark</string>
+
+    <string name="seed_palette_title">App color</string>
+    <string name="seed_palette_subtitle">Pick the palette seed</string>
+    <string name="seed_palette_dynamic_hint">Turn off dynamic color to pick a seed</string>
+    <string name="seed_palette_changed">Palette: %1$s</string>
+    <string name="palette_sunset">Vivid Sunset</string>
+    <string name="palette_ocean">Ocean</string>
+    <string name="palette_forest">Forest</string>
+    <string name="palette_lavender">Lavender</string>
+    <string name="palette_mono">Mono</string>
 </resources>

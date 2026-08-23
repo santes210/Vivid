@@ -23,6 +23,9 @@ object SettingsManager {
     const val THEME_LIGHT = "light"
     val themeOptions = listOf(THEME_SYSTEM, THEME_DARK, THEME_LIGHT)
 
+    /** Id de la semilla de marca por defecto (ver VividSeedPalette.SUNSET). */
+    const val SEED_PALETTE_DEFAULT = "sunset"
+
     /** Normaliza cualquier valor legado (español/inglés) a su clave canónica. */
     fun normalizeThemeOption(raw: String?): String = when (raw) {
         THEME_DARK, "Oscuro", "Dark" -> THEME_DARK
@@ -41,6 +44,8 @@ object SettingsManager {
     // Keys
     private const val KEY_THEME = "selected_theme"
     private const val KEY_DYNAMIC_COLOR = "dynamic_color"
+    private const val KEY_SEED_PALETTE = "seed_palette"
+    private const val KEY_AMOLED = "amoled_black"
     private const val KEY_SMOOTH_ANIMATIONS = "smooth_animations"
     private const val KEY_HAPTICS = "haptic_feedback"
     private const val KEY_AUTOPLAY_REELS = "autoplay_reels"
@@ -65,6 +70,21 @@ object SettingsManager {
     var selectedThemeOption by mutableStateOf(THEME_SYSTEM)
         private set
     var dynamicColorEnabled by mutableStateOf(true)
+        private set
+    /**
+     * Semilla de marca cuando NO hay color dinámico (id de
+     * [com.vivid.app.theme.VividSeedPalette]). Se persiste el id estable
+     * ("sunset", "ocean"…), nunca la etiqueta visible: igual que con el tema,
+     * guardar el literal traducido rompe la preferencia al cambiar de idioma.
+     */
+    var seedPaletteId by mutableStateOf(SEED_PALETTE_DEFAULT)
+        private set
+    /**
+     * Negro puro (#000000) en modo oscuro. En paneles OLED el píxel negro está
+     * apagado: negro real, menos batería y ese look "AMOLED" que la gente pide
+     * explícitamente. No hace nada en tema claro.
+     */
+    var amoledBlackEnabled by mutableStateOf(false)
         private set
     var smoothAnimationsEnabled by mutableStateOf(true)
         private set
@@ -127,6 +147,9 @@ object SettingsManager {
             prefs.edit().putString(KEY_THEME, selectedThemeOption).apply()
         }
         dynamicColorEnabled = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
+        seedPaletteId = prefs.getString(KEY_SEED_PALETTE, SEED_PALETTE_DEFAULT)
+            ?: SEED_PALETTE_DEFAULT
+        amoledBlackEnabled = prefs.getBoolean(KEY_AMOLED, false)
         smoothAnimationsEnabled = prefs.getBoolean(KEY_SMOOTH_ANIMATIONS, true)
         hapticFeedbackEnabled = prefs.getBoolean(KEY_HAPTICS, true)
         autoplayReels = prefs.getBoolean(KEY_AUTOPLAY_REELS, true)
@@ -177,6 +200,18 @@ object SettingsManager {
         dynamicColorEnabled = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
+    }
+
+    fun setSeedPalette(context: Context, paletteId: String) {
+        seedPaletteId = paletteId
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_SEED_PALETTE, paletteId).apply()
+    }
+
+    fun setAmoledBlack(context: Context, value: Boolean) {
+        amoledBlackEnabled = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AMOLED, value).apply()
     }
 
     fun setSmoothAnimations(context: Context, value: Boolean) {

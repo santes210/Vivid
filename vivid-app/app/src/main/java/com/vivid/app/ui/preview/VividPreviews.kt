@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.vivid.app.theme.VividSeedPalette
 import com.vivid.app.theme.VividTheme
 
 /**
@@ -59,9 +60,20 @@ fun VividPreviewSurface(
     // claro y oscuro sin duplicar código.
     darkTheme: Boolean = isSystemInDarkTheme(),
     padding: Int = 16,
+    // Las dos variantes de Ajustes → Apariencia que cambian la pinta de todo:
+    // la semilla de marca y el negro puro. Un componente que se apoye en
+    // `surface` para separarse del fondo se rompe en AMOLED, y eso se ve aquí
+    // antes que en una captura de un usuario.
+    seedPalette: VividSeedPalette = VividSeedPalette.Default,
+    amoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    VividTheme(darkTheme = darkTheme, dynamicColor = false) {
+    VividTheme(
+        darkTheme = darkTheme,
+        dynamicColor = false,
+        seedPalette = seedPalette,
+        amoled = amoled
+    ) {
         Surface(color = MaterialTheme.colorScheme.background) {
             Box(Modifier.padding(padding.dp)) { content() }
         }

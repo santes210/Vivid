@@ -2,7 +2,13 @@ package com.vivid.app.presentation.settings
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,8 +23,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -40,6 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.VividSeedPalette
 import com.vivid.app.ui.components.VividAlertDialog
 
 // ─────────────────────────────────────────────────────────────
@@ -329,6 +338,21 @@ fun AparienciaSettingsScreen(
     val context = LocalContext.current
     val selectedTheme = SettingsManager.selectedThemeOption
     val dynamic = SettingsManager.dynamicColorEnabled
+    val seedPalette = VividSeedPalette.fromId(SettingsManager.seedPaletteId)
+    // El wallpaper solo manda si el dispositivo tiene Material You: en
+    // Android 11 e inferior el interruptor puede estar activado y la semilla
+    // seguir siendo la que decide, así que el selector no debe atenuarse.
+    val dynamicApplies = dynamic &&
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    val amoled = SettingsManager.amoledBlackEnabled
+    // El negro puro solo se ve si el tema oscuro está realmente activo; el
+    // switch se deja usable igualmente (preferencia, no estado) pero el
+    // subtítulo lo explica en vez de mentir.
+    val isDarkActive = when (selectedTheme) {
+        SettingsManager.THEME_DARK -> true
+        SettingsManager.THEME_LIGHT -> false
+        else -> isSystemInDarkTheme()
+    }
     val smooth = SettingsManager.smoothAnimationsEnabled
     val haptic = SettingsManager.hapticFeedbackEnabled
     val haptics = rememberVividHaptics()
@@ -381,6 +405,52 @@ fun AparienciaSettingsScreen(
                         onCheckedChange = { checked ->
                             SettingsManager.setDynamicColor(context, checked)
                             scope.launch { onShowSnackbar(if (checked) "Material You activado" else "Paleta Vivid clásica") }
+                        },
+                        showDivider = true
+                    )
+                    // Semillas de marca. Solo mandan cuando Material You está
+                    // apagado: con wallpaper el esquema lo genera el sistema.
+                    VividSeedPaletteSelector(
+                        selected = seedPalette,
+                        enabled = !dynamicApplies,
+                        onSelect = { palette ->
+                            SettingsManager.setSeedPalette(context, palette.id)
+                            haptics.confirm()
+                            val label = context.getString(palette.labelRes)
+                            scope.launch {
+                                onShowSnackbar(
+                                    context.getString(
+                                        com.vivid.app.R.string.seed_palette_changed,
+                                        label
+                                    )
+                                )
+                            }
+                        }
+                    )
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    VividSettingsSwitchItem(
+                        title = stringResource(com.vivid.app.R.string.amoled_title),
+                        subtitle = when {
+                            !isDarkActive ->
+                                stringResource(com.vivid.app.R.string.amoled_needs_dark)
+                            amoled -> stringResource(com.vivid.app.R.string.amoled_subtitle_on)
+                            else -> stringResource(com.vivid.app.R.string.amoled_subtitle_off)
+                        },
+                        icon = Icons.Outlined.Contrast,
+                        checked = amoled,
+                        onCheckedChange = { checked ->
+                            SettingsManager.setAmoledBlack(context, checked)
+                            haptics.confirm()
+                            scope.launch {
+                                onShowSnackbar(
+                                    context.getString(
+                                        if (checked) com.vivid.app.R.string.amoled_enabled
+                                        else com.vivid.app.R.string.amoled_disabled
+                                    )
+                                )
+                            }
                         },
                         showDivider = true
                     )
@@ -539,6 +609,103 @@ fun AparienciaSettingsScreen(
             confirmButton = { TextButton(onClick = { showFontDialog = false }) { Text("Cerrar") } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
+    }
+}
+
+/**
+ * Selector de semilla de marca: una fila de muestras circulares.
+ *
+ * Es un `radiogroup` a efectos de accesibilidad (una sola selección), no una
+ * lista de botones sueltos, para que TalkBack anuncie "2 de 5, seleccionado".
+ * Cuando el color dinámico está activo se muestra atenuado y no responde: la
+ * paleta la manda el wallpaper y desactivarlo visualmente es más honesto que
+ * dejar al usuario tocando muestras que no hacen nada.
+ */
+@Composable
+private fun VividSeedPaletteSelector(
+    selected: VividSeedPalette,
+    enabled: Boolean,
+    onSelect: (VividSeedPalette) -> Unit
+) {
+    val alpha = if (enabled) 1f else 0.38f
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = VividSpace.m, vertical = VividSpace.s)
+            .selectableGroup()
+    ) {
+        Text(
+            text = stringResource(com.vivid.app.R.string.seed_palette_title),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+        )
+        Text(
+            text = stringResource(
+                if (enabled) com.vivid.app.R.string.seed_palette_subtitle
+                else com.vivid.app.R.string.seed_palette_dynamic_hint
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+        )
+        Spacer(Modifier.height(VividSpace.s))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(VividSpace.s)
+        ) {
+            VividSeedPalette.entries.forEach { palette ->
+                val isSelected = palette == selected
+                val label = stringResource(palette.labelRes)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .selectable(
+                            selected = isSelected,
+                            enabled = enabled,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(palette) }
+                        )
+                        .padding(vertical = VividSpace.xxs),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(palette.swatch.copy(alpha = alpha), CircleShape)
+                            .border(
+                                width = if (isSelected) 3.dp else 1.dp,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+                                } else {
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = alpha)
+                                },
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = alpha),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(VividSpace.xxs))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

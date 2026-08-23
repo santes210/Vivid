@@ -22,6 +22,9 @@ object VividChangelog {
         VividRelease(
             version = "2.4.0",
             notes = listOf(
+                "Modo negro puro (AMOLED) en Ajustes → Apariencia: fondo #000000 para pantallas OLED.",
+                "Cinco paletas de color para elegir cuando no usas color dinámico: Vivid Sunset, Océano, Bosque, Lavanda y Mono.",
+                "El corazón del like conserva su rojo aunque tu fondo de pantalla sea verde.",
                 "Nueva identidad visual: paleta Vivid Sunset (magenta y ámbar sobre neutros cálidos) cuando no usas color dinámico.",
                 "El corazón, el anillo de historias y el resto de acentos ahora se adaptan al color de tu fondo de pantalla sin dejar de ser reconocibles.",
                 "Al abrir una foto del grid, la miniatura crece hasta la pantalla completa; al tocar un avatar, viaja hasta el perfil.",
