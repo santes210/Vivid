@@ -11,6 +11,8 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -21,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,6 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.vivid.app.theme.VividSpace
+import androidx.compose.animation.core.animateFloatAsState
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -51,6 +55,10 @@ fun CameraScreen(
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
+    var isCapturing by remember { mutableStateOf(false) }
+    val captureInteraction = remember { MutableInteractionSource() }
+    val capturePressed by captureInteraction.collectIsPressedAsState()
+    val captureScale by animateFloatAsState(if (capturePressed) 0.9f else 1f, label = "captureScale")
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -161,8 +169,12 @@ fun CameraScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = VividSpace.xxl)
         ) {
-            FloatingActionButton(
+            // Anillo clásico de captura: 72dp, escala al presionar y muestra progreso
+            // mientras CameraX termina de escribir la foto.
+            Surface(
                 onClick = {
+                    if (isCapturing) return@Surface
+                    isCapturing = true
                     val photoFile = File(
                         context.cacheDir,
                         "vivid_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"
@@ -170,29 +182,37 @@ fun CameraScreen(
 
                     val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
 
-                    imageCapture?.takePicture(
+                    val capture = imageCapture ?: run {
+                        isCapturing = false
+                        return@Surface
+                    }
+                    capture.takePicture(
                         outputOptions,
                         ContextCompat.getMainExecutor(context),
                         object : ImageCapture.OnImageSavedCallback {
                             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                isCapturing = false
                                 onPhotoTaken(Uri.fromFile(photoFile))
                             }
 
                             override fun onError(exception: ImageCaptureException) {
+                                isCapturing = false
                                 exception.printStackTrace()
                             }
                         }
                     )
                 },
-                modifier = Modifier.size(72.dp),
-                containerColor = MaterialTheme.colorScheme.primary
+                interactionSource = captureInteraction,
+                modifier = Modifier.size(72.dp).graphicsLayer { scaleX = captureScale; scaleY = captureScale },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = Color.White.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.primary,
+                border = androidx.compose.foundation.BorderStroke(3.dp, Color.White)
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = stringResource(R.string.cd_take_photo),
-                    modifier = Modifier.size(36.dp),
-                    tint = Color.White
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Surface(modifier = Modifier.size(56.dp), shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.primary) {}
+                    if (isCapturing) CircularProgressIndicator(modifier = Modifier.size(72.dp), strokeWidth = 3.dp, color = Color.White)
+                }
             }
         }
 

@@ -120,6 +120,9 @@ object VividMaterialShapes {
     /** Flor: logros y momentos "hero" del perfil. */
     val Achievement: Shape = MaterialShapes.Flower.toVividShape()
 
+    /** Sol suave para fondos de bienvenida y acentos de marca. */
+    val Sunny: Shape = MaterialShapes.Sunny.toVividShape()
+
     /** Gema: contenido destacado / verificado. */
     val Featured: Shape = MaterialShapes.Gem.toVividShape()
 

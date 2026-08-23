@@ -31,6 +31,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.theme.SoraFamily
 
 // ─────────────────────────────────────────────────────────────
 // Model
@@ -229,15 +230,15 @@ fun MusicSelectorBottomSheet(
                             Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(VividSpace.xs))
                             Text("Música", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.labelMedium)
-                            Slider(value = localVolume, onValueChange = { localVolume = it; onVolumeChange(localVolume, localOriginal) }, valueRange = 0f..1f, modifier = Modifier.weight(1f))
-                            Text("${(localVolume * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                            Slider(value = localVolume, onValueChange = { localVolume = it; onVolumeChange(localVolume, localOriginal) }, valueRange = 0f..1f, modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
+                            Text("${(localVolume * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontFamily = SoraFamily, fontWeight = FontWeight.SemiBold), modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(VividSpace.xs))
                             Text("Video original", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.labelMedium)
-                            Slider(value = localOriginal, onValueChange = { localOriginal = it; onVolumeChange(localVolume, localOriginal) }, valueRange = 0f..1f, modifier = Modifier.weight(1f))
-                            Text("${(localOriginal * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                            Slider(value = localOriginal, onValueChange = { localOriginal = it; onVolumeChange(localVolume, localOriginal) }, valueRange = 0f..1f, modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
+                            Text("${(localOriginal * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontFamily = SoraFamily, fontWeight = FontWeight.SemiBold), modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
                         }
                         Text("Tip: baja el volumen del video si quieres que la música destaque.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

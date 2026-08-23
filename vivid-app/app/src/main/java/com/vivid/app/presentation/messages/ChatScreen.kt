@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Check
@@ -152,7 +153,7 @@ fun ChatScreen(
     Scaffold(
         snackbarHost = { VividSnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
@@ -223,7 +224,7 @@ fun ChatScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
@@ -373,6 +374,8 @@ fun ChatScreen(
                         // ── Composer tipo dock: anclado al borde inferior, sin sombras ──
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainer,
+                            shape = RoundedCornerShape(28.dp),
+                            tonalElevation = 2.dp,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
@@ -402,7 +405,7 @@ fun ChatScreen(
                                     modifier = Modifier.weight(1f),
                                     placeholder = { Text("Escribe un mensaje…") },
                                     maxLines = 4,
-                                    shape = VividExpressiveShapes.SearchBar,
+                                    shape = RoundedCornerShape(28.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color.Transparent,
                                         unfocusedBorderColor = Color.Transparent,
@@ -421,7 +424,8 @@ fun ChatScreen(
                                                 messageText = ""
                                             }
                                         },
-                                        modifier = Modifier.size(46.dp),
+                                        modifier = Modifier.size(48.dp),
+                                        shape = CircleShape,
                                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
                                     ) {
                                         Icon(Icons.Default.Send, contentDescription = stringResource(R.string.cd_send_message), modifier = Modifier.size(20.dp))

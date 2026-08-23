@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +34,7 @@ import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividCelebrationIcon
+import com.vivid.app.ui.components.pressPrimaryButtonShape
 
 /**
  * Pantalla "Crear Reel" — Material You 3 + Música
@@ -52,6 +54,7 @@ fun CreateReelScreen(
     viewModel: CreateReelViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val publishInteraction = remember { MutableInteractionSource() }
     val state by viewModel.state.collectAsState()
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var caption by remember { mutableStateOf("") }
@@ -317,7 +320,8 @@ fun CreateReelScreen(
                 },
                 enabled = selectedUri != null && !isBusy,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = VividExpressiveShapes.PrimaryButton
+                interactionSource = publishInteraction,
+                shape = pressPrimaryButtonShape(publishInteraction)
             ) {
                 if (isBusy) {
                     LoadingIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.onPrimary, polygons = VividMaterialShapes.LoadingSequence)

@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -74,6 +75,7 @@ import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.VividExpressiveShapes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -369,8 +371,18 @@ fun AuthScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
     ) {
+        // Un acento suave deja que la marca sea memorable sin competir con el formulario.
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-76).dp)
+                .size(232.dp)
+                .clip(VividMaterialShapes.Sunny),
+            shape = VividMaterialShapes.Sunny,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
+        ) {}
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -398,7 +410,7 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Vivid",
-                style = MaterialTheme.typography.displaySmall.copy(brush = brandBrush),
+                style = MaterialTheme.typography.displayLarge.copy(fontFamily = SoraFamily, fontWeight = FontWeight.ExtraBold, brush = brandBrush),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(VividSpace.xxs))
@@ -645,7 +657,8 @@ fun AuthScreen(
                 onClick = { submit() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 52.dp),
+                    .heightIn(min = 56.dp),
+                shape = VividExpressiveShapes.PrimaryButton,
                 enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank()
             ) {
                 if (uiState.isLoading) {
@@ -691,11 +704,16 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // ── Google (Credential Manager) ────────────────────────────────
-            OutlinedButton(
+            Button(
                 onClick = startGoogleSignIn,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 52.dp),
+                    .heightIn(min = 56.dp),
+                shape = VividExpressiveShapes.PrimaryButton,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
                 enabled = !uiState.isLoading
             ) {
                 GoogleLogo()
