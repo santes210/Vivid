@@ -28,7 +28,9 @@ object VideoCacheManager {
 
     private const val TAG = "VideoCacheManager"
     private const val CACHE_DIR_NAME = "vivid_video_cache"
-    private const val MAX_CACHE_BYTES = 500L * 1024L * 1024L
+    private const val DEFAULT_MAX_CACHE_BYTES = 500L * 1024L * 1024L
+    private const val PREFS_NAME = "vivid_cache_control"
+    private const val KEY_MAX_CACHE_MB = "max_video_cache_mb"
     private const val CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
 
     @Volatile
@@ -51,6 +53,16 @@ object VideoCacheManager {
         }
     }
 
+    fun maxCacheMb(context: Context): Int = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getInt(KEY_MAX_CACHE_MB, 500)
+
+    fun setMaxCacheMb(context: Context, megabytes: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_MAX_CACHE_MB, megabytes.coerceIn(100, 1000)).apply()
+        // El nuevo límite se aplica al crear el siguiente SimpleCache.
+        synchronized(this) { simpleCache?.release(); simpleCache = null }
+    }
+
     /** Devuelve el SimpleCache compartido por la app. */
     fun getCache(context: Context): SimpleCache {
         ensureFreshCache(context)
@@ -60,7 +72,7 @@ object VideoCacheManager {
             simpleCache?.let { return it }
 
             val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
-            val evictor = LeastRecentlyUsedCacheEvictor(MAX_CACHE_BYTES)
+            val evictor = LeastRecentlyUsedCacheEvictor(maxCacheMb(context).toLong() * 1024L * 1024L)
 
             return SimpleCache(
                 cacheDir,
