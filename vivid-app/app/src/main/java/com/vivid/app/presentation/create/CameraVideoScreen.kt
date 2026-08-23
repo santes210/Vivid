@@ -11,6 +11,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,10 +27,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -57,6 +59,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.vivid.app.theme.VividSpace
+import androidx.compose.animation.core.animateFloatAsState
+import kotlinx.coroutines.delay
 
 /**
  * Pantalla de cámara con VideoCapture (CameraX).
@@ -121,7 +125,19 @@ fun CameraVideoScreen(
     var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
     var currentRecording by remember { mutableStateOf<Recording?>(null) }
     var isRecording by remember { mutableStateOf(false) }
+    var recordingSeconds by remember { mutableIntStateOf(0) }
     var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
+    val recordInteraction = remember { MutableInteractionSource() }
+    val recordPressed by recordInteraction.collectIsPressedAsState()
+    val recordScale by animateFloatAsState(if (recordPressed) 0.9f else 1f, label = "recordScale")
+
+    LaunchedEffect(isRecording) {
+        recordingSeconds = 0
+        while (isRecording) {
+            delay(1_000)
+            recordingSeconds++
+        }
+    }
 
     fun bindCamera() {
         val providerFuture = ProcessCameraProvider.getInstance(context)
@@ -184,21 +200,19 @@ fun CameraVideoScreen(
             Icon(Icons.Default.Cameraswitch, contentDescription = stringResource(R.string.cd_switch_camera), tint = Color.White)
         }
 
-        // Botón grabar (estilo IG: círculo grande, rojo cuando graba)
-        FloatingActionButton(
+        // Anillo de grabación: 72dp, responde a la presión y el progreso gira
+        // continuamente mientras el Recorder está activo.
+        Surface(
             onClick = {
-                val capture = videoCapture ?: return@FloatingActionButton
+                val capture = videoCapture ?: return@Surface
                 if (isRecording) {
-                    // Detener
                     currentRecording?.stop()
                     currentRecording = null
                     isRecording = false
                 } else {
-                    // Iniciar
                     val name = "vivid_reel_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.mp4"
                     val outFile = File(context.cacheDir, name)
                     val output = FileOutputOptions.Builder(outFile).build()
-
                     currentRecording = capture.output
                         .prepareRecording(context, output)
                         .withAudioEnabled()
@@ -217,18 +231,31 @@ fun CameraVideoScreen(
                         }
                 }
             },
+            interactionSource = recordInteraction,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 36.dp)
-                .size(80.dp),
-            containerColor = if (isRecording) Color.Red else MaterialTheme.colorScheme.primary
+                .size(72.dp)
+                .graphicsLayer { scaleX = recordScale; scaleY = recordScale },
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.92f),
+            contentColor = if (isRecording) Color.Red else MaterialTheme.colorScheme.primary,
+            border = androidx.compose.foundation.BorderStroke(3.dp, Color.White)
         ) {
-            Icon(
-                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Videocam,
-                contentDescription = if (isRecording) stringResource(R.string.cd_stop_recording) else stringResource(R.string.cd_record_video),
-                tint = Color.White,
-                modifier = Modifier.size(36.dp)
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Surface(
+                    modifier = Modifier.size(if (isRecording) 38.dp else 56.dp),
+                    shape = if (isRecording) MaterialTheme.shapes.extraSmall else CircleShape,
+                    color = if (isRecording) Color.Red else MaterialTheme.colorScheme.primary
+                ) {}
+                if (isRecording) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(72.dp),
+                        strokeWidth = 3.dp,
+                        color = Color.Red
+                    )
+                }
+            }
         }
 
         if (isRecording) {
@@ -247,7 +274,7 @@ fun CameraVideoScreen(
                         .background(Color.Red, shape = androidx.compose.foundation.shape.CircleShape)
                 )
                 Spacer(Modifier.width(VividSpace.xs))
-                Text("REC", color = Color.White)
+                Text("REC  ${recordingSeconds / 60}:${(recordingSeconds % 60).toString().padStart(2, '0')}", color = Color.White)
             }
         }
     }

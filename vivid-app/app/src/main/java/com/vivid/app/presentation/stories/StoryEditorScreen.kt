@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -47,6 +48,7 @@ import com.vivid.app.theme.VividShapes
 import com.vivid.app.theme.VividPaints
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.VividAlertDialog
+import com.vivid.app.ui.components.pressPrimaryButtonShape
 
 /**
  * Editor de Story estilo Instagram.
@@ -78,6 +80,7 @@ fun StoryEditorScreen(
     var showTextDialog by remember { mutableStateOf(false) }
     var showStickerSheet by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    val nextInteraction = remember { MutableInteractionSource() }
 
     val density = LocalDensity.current
 
@@ -126,16 +129,18 @@ fun StoryEditorScreen(
                     }
                 },
                 actions = {
-                    TextButton(
+                    Button(
                         onClick = {
                             baseBitmap?.let { bmp ->
                                 val rendered = StoryOverlayRenderer.renderOverlays(bmp, overlays)
                                 onPublish(rendered, overlays)
                             }
                         },
-                        enabled = baseBitmap != null
+                        enabled = baseBitmap != null,
+                        interactionSource = nextInteraction,
+                        shape = pressPrimaryButtonShape(nextInteraction)
                     ) {
-                        Text("Siguiente", color = MaterialTheme.colorScheme.primary)
+                        Text("Siguiente")
                     }
                 }
             )

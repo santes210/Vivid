@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -127,4 +128,20 @@ fun pressMorphShape(
         label = "pressMorph"
     )
     return rememberVividMorph(resting, pressed, progress)
+}
+
+/**
+ * Versión horizontal del feedback de presión para botones de acción principales.
+ * A diferencia del morph poligonal (pensado para cajas cuadradas), anima el radio
+ * 20dp → 12dp y mantiene los bordes de un botón ancho sin deformarlos.
+ */
+@Composable
+fun pressPrimaryButtonShape(interactionSource: InteractionSource): Shape {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val corner by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isPressed) 12.dp else 20.dp,
+        animationSpec = VividMotion.fastSpatial(),
+        label = "primaryButtonPressShape"
+    )
+    return androidx.compose.foundation.shape.RoundedCornerShape(corner)
 }

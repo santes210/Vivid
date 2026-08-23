@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -48,6 +49,7 @@ import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.VividCelebrationIcon
+import com.vivid.app.ui.components.pressPrimaryButtonShape
 import kotlinx.coroutines.delay
 
 /**
@@ -74,6 +76,7 @@ fun CreateStoryScreen(
     viewModel: CreateStoryViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val publishInteraction = remember { MutableInteractionSource() }
     val state by viewModel.state.collectAsState()
     var mediaUri by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf<MediaKind?>(null) }
@@ -296,7 +299,8 @@ fun CreateStoryScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = VividExpressiveShapes.PrimaryButton
+                        interactionSource = publishInteraction,
+                shape = pressPrimaryButtonShape(publishInteraction)
                     ) {
                         if (isBusy) {
                             LoadingIndicator(

@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +26,7 @@ import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.ui.components.pressPrimaryButtonShape
 
 private enum class CreateContentType {
     POST,
@@ -65,6 +67,7 @@ fun CreatePostScreen(
     var showTrimSheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val publishInteraction = remember { MutableInteractionSource() }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val capturedPhotoPathState = currentBackStackEntry
         ?.savedStateHandle
@@ -455,7 +458,8 @@ fun CreatePostScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = VividExpressiveShapes.PrimaryButton,
+                interactionSource = publishInteraction,
+                shape = pressPrimaryButtonShape(publishInteraction),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
             ) {
                 if (isUploading) {

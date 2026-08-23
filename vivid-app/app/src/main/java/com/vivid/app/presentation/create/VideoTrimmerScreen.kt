@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
+import com.vivid.app.ui.components.pressPrimaryButtonShape
 
 /**
  * Pantalla de trim de video (estilo Instagram Reels editor).
@@ -69,6 +71,7 @@ fun VideoTrimmerScreen(
     var endMs by remember { mutableStateOf(0L) }
     var frameThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    val continueInteraction = remember { MutableInteractionSource() }
 
     // Cargar duración + generar thumbnails de la pista
     LaunchedEffect(inputUri) {
@@ -238,7 +241,8 @@ fun VideoTrimmerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = VividExpressiveShapes.SmallCard
+                interactionSource = continueInteraction,
+                shape = pressPrimaryButtonShape(continueInteraction)
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(Modifier.width(VividSpace.xs))
