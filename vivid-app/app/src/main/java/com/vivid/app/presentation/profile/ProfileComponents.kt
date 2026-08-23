@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -26,14 +27,19 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.vivid.app.theme.LocalVividAccents
 import com.vivid.app.ui.components.VividVerifiedBadge
+import com.vivid.app.ui.components.pressMorphShape
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
 import com.vivid.app.ui.motion.vividSharedElement
@@ -58,6 +64,7 @@ internal fun ProfileHeader(
     onEditProfile: () -> Unit
 ) {
     val haptics = rememberVividHaptics()
+    var showAvatarViewer by remember(profile.uid) { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -68,6 +75,14 @@ internal fun ProfileHeader(
         // El anillo usa los acentos de producto (armonizados con el color
         // dinámico); el círculo es el destino de la transición compartida que
         // arranca en el avatar del feed, del chat o del buscador.
+        // Al mantenerlo pulsado la silueta se transforma (pressMorphShape),
+        // el mismo lenguaje que el botón Crear y el FAB de Reels.
+        val avatarInteractions = remember { MutableInteractionSource() }
+        val avatarShape = pressMorphShape(
+            interactionSource = avatarInteractions,
+            resting = com.vivid.app.theme.VividMaterialShapes.AvatarResting,
+            pressed = com.vivid.app.theme.VividMaterialShapes.AvatarActive
+        )
         Box(
             modifier = Modifier
                 .vividSharedElement(
@@ -75,7 +90,15 @@ internal fun ProfileHeader(
                     zIndexInOverlay = 1f
                 )
                 .size(116.dp)
-                .clip(CircleShape)
+                .clip(avatarShape)
+                .clickable(
+                    interactionSource = avatarInteractions,
+                    indication = null,
+                    onClickLabel = "Ver foto de perfil"
+                ) {
+                    haptics.tick()
+                    showAvatarViewer = true
+                }
                 .background(Brush.sweepGradient(LocalVividAccents.current.storyRing))
                 .padding(3.dp),
             contentAlignment = Alignment.Center
@@ -83,12 +106,19 @@ internal fun ProfileHeader(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(CircleShape)
+                    .clip(avatarShape)
                     .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
                 ProfileAvatar(profile.displayName, profile.avatarUrl, profile.avatarBase64)
             }
+        }
+
+        if (showAvatarViewer) {
+            ProfileAvatarViewerDialog(
+                profile = profile,
+                onDismiss = { showAvatarViewer = false }
+            )
         }
 
         Spacer(Modifier.height(14.dp))
@@ -97,8 +127,17 @@ internal fun ProfileHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 profile.displayName,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.Center
+                // headlineMedium (no headlineLarge): en un teléfono pequeño
+                // un nombre largo con headlineLarge se comía dos líneas y
+                // empujaba stats y acción fuera de la primera pantalla.
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontFamily = SoraFamily,
+                    fontWeight = FontWeight.Bold
+                ),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
             // Badge de verificado con forma de gema: solo si la cuenta lo es.
             if (isVerified) {
@@ -122,55 +161,53 @@ internal fun ProfileHeader(
             )
         }
 
-        // ── Badge privado ──
+        // ── Cuenta privada ──
+        // AssistChip con candado: un label diminuto de 10sp no comunicaba que
+        // el contenido está restringido; el chip es un elemento reconocible y
+        // el texto explícito evita la duda de "privada… ¿para quién?".
         if (profile.isPrivate) {
-            Spacer(Modifier.height(VividSpace.xs))
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = VividExpressiveShapes.Media
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = VividSpace.xxs),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Lock, null, modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Spacer(Modifier.width(VividSpace.xxs))
-                    Text("Privada", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer)
-                }
-            }
+            Spacer(Modifier.height(VividSpace.s))
+            AssistChip(
+                onClick = {},
+                enabled = false,
+                label = {
+                    Text(
+                        "Esta cuenta es privada",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(AssistChipDefaults.IconSize)
+                    )
+                },
+                shape = VividExpressiveShapes.ChipUnselected,
+                colors = AssistChipDefaults.assistChipColors(
+                    disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    disabledLeadingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ),
+                border = null
+            )
         }
 
         Spacer(Modifier.height(VividSpace.m))
 
-        // ── Estadísticas en un grupo coherente (contenedor tonal) ──
-        Surface(
-            shape = VividExpressiveShapes.MediumCard,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            modifier = Modifier.fillMaxWidth()
+        // ── Estadísticas: una tarjeta por métrica ──
+        // Antes eran Text sueltos dentro de una fila con divisores: nada
+        // sugería que fueran tocables ni dónde acababa cada zona. Ahora cada
+        // métrica es su propia Surface (SmallCard), con el número en Sora Bold
+        // 20sp y la etiqueta en labelSmall onSurfaceVariant.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
         ) {
-            Row(
-                modifier = Modifier.padding(vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ProfileStat(profile.postsCount.toString(), "Publicaciones", Modifier.weight(1f))
-                VerticalDivider(
-                    modifier = Modifier.height(34.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-                ProfileStat(profile.reelsCount.toString(), "Reels", Modifier.weight(1f))
-                VerticalDivider(
-                    modifier = Modifier.height(34.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-                ProfileStat(profile.followersCount.toString(), "Seguidores", Modifier.weight(1f))
-                VerticalDivider(
-                    modifier = Modifier.height(34.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-                ProfileStat(profile.followingCount.toString(), "Siguiendo", Modifier.weight(1f))
-            }
+            ProfileStat(profile.postsCount.toString(), "Posts", Modifier.weight(1f))
+            ProfileStat(profile.reelsCount.toString(), "Reels", Modifier.weight(1f))
+            ProfileStat(profile.followersCount.toString(), "Seguidores", Modifier.weight(1f))
+            ProfileStat(profile.followingCount.toString(), "Siguiendo", Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(VividSpace.m))
@@ -558,26 +595,95 @@ internal fun ProfilePostViewerDialog(
     }
 }
 
+/**
+ * Métrica del perfil como tarjeta propia.
+ *
+ * Número en Sora Bold 20sp (dominante, escala con la fuente del sistema) y
+ * etiqueta en labelSmall onSurfaceVariant. Si se pasa [onClick] la tarjeta
+ * se vuelve tocable con rol de botón; si no, se agrupa como un solo nodo de
+ * accesibilidad ("1.893 Seguidores") en vez de leerse en dos trozos.
+ */
 @Composable
-fun ProfileStat(count: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            count,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontFamily = SoraFamily,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
+fun ProfileStat(
+    count: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val haptics = rememberVividHaptics()
+    val clickModifier = if (onClick != null) {
+        Modifier.clickable(role = Role.Button) {
+            haptics.tick()
+            onClick()
+        }
+    } else {
+        Modifier
+    }
+    Surface(
+        shape = VividExpressiveShapes.SmallCard,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier
+            .clip(VividExpressiveShapes.SmallCard)
+            .then(clickModifier)
+            .semantics(mergeDescendants = true) { contentDescription = "$count $label" }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = VividSpace.xxs),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                count,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontFamily = SoraFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontFamily = SoraFamily,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** Visor a pantalla completa del avatar (se abre al tocar el hero del perfil). */
+@Composable
+internal fun ProfileAvatarViewerDialog(profile: ProfileUiState, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = VividExpressiveShapes.HeroCard,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Column(
+                modifier = Modifier.padding(VividSpace.l),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                ProfileAvatar(
+                    profile.displayName,
+                    profile.avatarUrl,
+                    profile.avatarBase64,
+                    size = 240.dp
+                )
+                Spacer(Modifier.height(VividSpace.m))
+                Text(
+                    "@${profile.username}",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                Spacer(Modifier.height(VividSpace.xs))
+                TextButton(onClick = onDismiss) { Text("Cerrar") }
+            }
+        }
     }
 }
 

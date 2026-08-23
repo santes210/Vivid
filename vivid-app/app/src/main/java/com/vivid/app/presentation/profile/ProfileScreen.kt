@@ -409,14 +409,18 @@ fun ProfileScreen(
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
+            // Adaptive en vez de Fixed(3): en una tablet o en horizontal,
+            // tres columnas daban miniaturas de medio palmo. Con minSize el
+            // grid crece a 5-7 columnas manteniendo el tamaño de la celda,
+            // y en un teléfono estrecho sigue cayendo en 3.
+            columns = GridCells.Adaptive(minSize = 120.dp),
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = VividSpace.s, vertical = VividSpace.xs),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             // ── Header del perfil (skeleton mientras carga) ──
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                 if (isProfileLoaded) {
                     ProfileHeader(
                         profile = profile, isOwnProfile = isOwnProfile,
@@ -433,7 +437,7 @@ fun ProfileScreen(
 
             // ── Pestañas primarias M3 (Posts / Reels / Guardados) ──
             if (canViewContent) {
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     // Pestañas como grupo de selección única con ButtonGroup
                     // (M3 Expressive): son 3-4 FIJAS, justo su caso de uso, y se
                     // anima con el MotionScheme (el activo se ensancha y comprime
@@ -474,14 +478,14 @@ fun ProfileScreen(
 
             // ── Contenido de la pestaña activa ──
             if (!canViewContent) {
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     PrivateProfileLock(
                         username = profile.username,
                         hasPendingRequest = profile.isFollowRequestPending
                     )
                 }
             } else if (loadFailed && currentDisplayList.isEmpty()) {
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     VividErrorState(
                         title = "No se pudieron cargar los datos del perfil",
                         onRetry = {
@@ -497,11 +501,11 @@ fun ProfileScreen(
             } else if (activeTabLoading) {
                 items(9) { ProfileGridSkeletonCell() }
             } else if (selectedTabIndex == 2 && savedPosts.isEmpty()) {
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     EmptySavedPostsPlaceholder()
                 }
             } else if (currentDisplayList.isEmpty()) {
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     EmptyPostsPlaceholder()
                 }
             } else {
