@@ -221,7 +221,7 @@ fun VividApp(
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
     deepLinkPostId: String? = null,
-    deepLinkShortcut: ShortcutRequest? = null
+    deepLinkShortcut: MainActivity.ShortcutRequest? = null
 ) {
     val navController = rememberNavController()
     VividNavigation(

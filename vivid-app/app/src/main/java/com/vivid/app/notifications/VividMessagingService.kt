@@ -175,11 +175,22 @@ class VividMessagingService : FirebaseMessagingService() {
                     putExtra(NotificationActionReceiver.EXTRA_CHAT_ID, safeChatId)
                     putExtra(NotificationActionReceiver.EXTRA_RECEIVER_ID, safeFromUserId)
                 }
+                // FIX: en API 31+ un broadcast con RemoteInput DEBE ser
+                // FLAG_MUTABLE: el sistema necesita modificar el intent para
+                // adjuntar el texto escrito por el usuario. Con
+                // FLAG_IMMUTABLE la respuesta nunca llegaba al receiver y la
+                // acción "Responder" parecía muerta. En < 31 el flag de
+                // mutabilidad no existe y se ignora.
+                val replyFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
                 val replyPendingIntent = PendingIntent.getBroadcast(
                     this,
                     requestCode xor 0x2000, // requestCode diferente
                     replyIntent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    replyFlags or PendingIntent.FLAG_UPDATE_CURRENT
                 )
                 val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
                     .setLabel("Responder")
