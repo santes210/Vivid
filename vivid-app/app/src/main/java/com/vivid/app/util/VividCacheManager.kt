@@ -18,6 +18,22 @@ import java.io.File
  */
 object VividCacheManager {
 
+    data class CacheBreakdown(
+        val databaseBytes: Long = 0L,
+        val imageBytes: Long = 0L,
+        val mediaBytes: Long = 0L,
+        val temporaryBytes: Long = 0L
+    ) {
+        val totalBytes: Long get() = databaseBytes + imageBytes + mediaBytes + temporaryBytes
+    }
+
+    internal fun isTemporaryFile(file: File): Boolean = temporaryPrefixes.any(file.name::startsWith)
+
+    private val temporaryPrefixes = listOf(
+        "story_", "reel_", "post_music_", "compressed_", "trimmed_",
+        "watermarked_", "wm_", "thumb_", "voice_"
+    )
+
     private const val PREFS_NAME = "vivid_cache_control"
     private const val KEY_POSTS_CACHED_AT = "posts_cached_at"
     private const val KEY_STORIES_CACHED_AT = "stories_cached_at"
@@ -80,46 +96,38 @@ object VividCacheManager {
     /**
      * Calcula el tamaño real de todos los cachés combinados en MB.
      */
-    suspend fun calculateCacheSizeMB(context: Context): Float = withContext(Dispatchers.IO) {
-        var totalBytes = 0L
-
-        // 1. Base de datos Room
-        val dbPath = context.getDatabasePath("vivid_database")
-        if (dbPath.exists()) totalBytes += dbPath.length()
-        val walPath = File(dbPath.path + "-wal")
-        if (walPath.exists()) totalBytes += walPath.length()
-        val shmPath = File(dbPath.path + "-shm")
-        if (shmPath.exists()) totalBytes += shmPath.length()
-
-        // 2. Caché de Coil (imágenes)
-        val coilCacheDir = context.cacheDir.resolve("vivid_image_cache")
-        if (coilCacheDir.exists()) {
-            totalBytes += coilCacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-        }
-
-        // 3. Caché de video/audio de ExoPlayer
-        totalBytes += VideoCacheManager.cacheSizeBytes(context)
-
-        // 4. Archivos temporales de la app (stories, reels, music)
-        totalBytes += context.cacheDir.walkTopDown()
-            .filter { it.isFile && (
-                it.name.startsWith("story_") ||
-                it.name.startsWith("reel_") ||
-                it.name.startsWith("post_music_") ||
-                it.name.startsWith("compressed_") ||
-                it.name.startsWith("trimmed_") ||
-                it.name.startsWith("watermarked_") ||
-                it.name.startsWith("wm_") ||
-                it.name.startsWith("thumb_")
-            ) }
+    suspend fun cacheBreakdown(context: Context): CacheBreakdown = withContext(Dispatchers.IO) {
+        val db = context.getDatabasePath("vivid_database")
+        val database = sequenceOf(db, File("${db.path}-wal"), File("${db.path}-shm"))
+            .filter { it.isFile }.sumOf { it.length() }
+        val imageDir = context.cacheDir.resolve("vivid_image_cache")
+        val images = if (imageDir.exists()) imageDir.walkTopDown().filter { it.isFile }.sumOf { it.length() } else 0L
+        val media = VideoCacheManager.cacheSizeBytes(context)
+        val temporary = context.cacheDir.walkTopDown()
+            .filter { it.isFile && temporaryPrefixes.any(it.name::startsWith) }
             .sumOf { it.length() }
-
-        (totalBytes / (1024f * 1024f)).coerceAtLeast(0f)
+        CacheBreakdown(database, images, media, temporary)
     }
 
-    /**
-     * Limpia TODOS los cachés: Room, Coil, archivos temporales y resetea timestamps.
-     */
+    suspend fun calculateCacheSizeMB(context: Context): Float =
+        (cacheBreakdown(context).totalBytes / (1024f * 1024f)).coerceAtLeast(0f)
+
+    /** Borra únicamente medios temporales; conserva mensajes y contenido offline. */
+    @OptIn(coil3.annotation.ExperimentalCoilApi::class)
+    suspend fun clearMediaCaches(context: Context, imageLoader: ImageLoader) = withContext(Dispatchers.IO) {
+        imageLoader.diskCache?.clear()
+        VideoCacheManager.clearCache(context)
+        deleteTemporaryFiles(context)
+    }
+
+    /** Borra el contenido offline de Room, explícitamente separado del caché multimedia. */
+    suspend fun clearOfflineContent(database: VividDatabase) = withContext(Dispatchers.IO) {
+        database.postDao().clearPosts()
+        database.storyDao().clearStories()
+        database.reelDao().clearReels()
+    }
+
+    /** Limpia TODOS los cachés y datos offline (acción avanzada). */
     @OptIn(coil3.annotation.ExperimentalCoilApi::class)
     suspend fun clearAllCaches(
         context: Context,
@@ -165,20 +173,12 @@ object VividCacheManager {
      * Limpia solo los archivos temporales (no Room ni Coil).
      */
     suspend fun clearTempFilesOnly(context: Context) = withContext(Dispatchers.IO) {
-        val cacheDir = context.cacheDir
-        if (cacheDir.exists()) {
-            cacheDir.walkTopDown()
-                .filter { it.isFile && (
-                    it.name.startsWith("story_") ||
-                    it.name.startsWith("reel_") ||
-                    it.name.startsWith("post_music_") ||
-                    it.name.startsWith("compressed_") ||
-                    it.name.startsWith("trimmed_") ||
-                    it.name.startsWith("watermarked_") ||
-                    it.name.startsWith("wm_") ||
-                    it.name.startsWith("thumb_")
-                ) }
-                .forEach { it.delete() }
-        }
+        deleteTemporaryFiles(context)
+    }
+
+    private fun deleteTemporaryFiles(context: Context) {
+        context.cacheDir.walkTopDown()
+            .filter { it.isFile && temporaryPrefixes.any(it.name::startsWith) }
+            .forEach { it.delete() }
     }
 }

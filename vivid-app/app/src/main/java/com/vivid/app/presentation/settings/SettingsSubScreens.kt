@@ -40,6 +40,7 @@ import com.vivid.app.ui.components.VividSettingsSwitchItem
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.VividCacheManager
+import com.vivid.app.util.VideoCacheManager
 import com.vivid.app.util.VividChangelog
 import com.vivid.app.util.composeEmail
 import com.vivid.app.util.launchExternalIntent
@@ -50,6 +51,12 @@ import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividSeedPalette
 import com.vivid.app.ui.components.VividAlertDialog
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> String.format("%.1f MB", bytes / (1024f * 1024f))
+    bytes >= 1024L -> String.format("%.0f KB", bytes / 1024f)
+    else -> "$bytes B"
+}
 
 // ─────────────────────────────────────────────────────────────
 // Cuenta
@@ -815,12 +822,17 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
     val quality = SettingsManager.downloadQualityOption
     var showQuality by remember { mutableStateOf(false) }
     var isClearingCache by remember { mutableStateOf(false) }
+    var showClearCacheConfirmation by remember { mutableStateOf(false) }
+    var showCacheLimit by remember { mutableStateOf(false) }
+    var showOfflineConfirmation by remember { mutableStateOf(false) }
+    var cacheLimitMb by remember { mutableIntStateOf(VideoCacheManager.maxCacheMb(appContext)) }
 
     // Lee el tamaño real del caché (Room + Coil + archivos temporales)
-    var realCacheSizeMB by remember { mutableFloatStateOf(0f) }
+    var cacheBreakdown by remember { mutableStateOf(VividCacheManager.CacheBreakdown()) }
     var cacheChecked by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        realCacheSizeMB = runCatching { VividCacheManager.calculateCacheSizeMB(appContext) }.getOrDefault(0f)
+        cacheBreakdown = runCatching { VividCacheManager.cacheBreakdown(appContext) }
+            .getOrDefault(VividCacheManager.CacheBreakdown())
         cacheChecked = true
     }
 
@@ -835,10 +847,10 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
                 )
                 val db = entryPoint.database()
                 val imageLoader = entryPoint.imageLoader()
-                VividCacheManager.clearAllCaches(appContext, db, imageLoader)
+                VividCacheManager.clearMediaCaches(appContext, imageLoader)
                 SettingsManager.recordCacheClear(appContext)
-                realCacheSizeMB = 0f
-                onShowSnackbar("Caché limpiada — se regenerará al recargar")
+                cacheBreakdown = VividCacheManager.CacheBreakdown()
+                onShowSnackbar("Caché multimedia limpiada — se regenerará al recargar")
             }.onFailure { e ->
                 onShowSnackbar("Error al limpiar caché: ${e.message}")
             }
@@ -855,12 +867,12 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
             item {
                 VividSettingsGroup {
                     VividSettingsItem(
-                        title = "Borrar caché local",
+                        title = "Borrar caché multimedia",
                         subtitle = if (isClearingCache) "Limpiando…"
-                            else if (cacheChecked) "Aprox. ${String.format("%.1f", realCacheSizeMB)} MB"
+                            else if (cacheChecked) "Aprox. ${String.format("%.1f", cacheBreakdown.totalBytes / (1024f * 1024f))} MB"
                             else "Calculando…",
                         icon = Icons.Outlined.Cached,
-                        onClick = { clearCache() },
+                        onClick = { showClearCacheConfirmation = true },
                         showDivider = true
                     )
                     VividSettingsItem(
@@ -884,7 +896,72 @@ fun AlmacenamientoSettingsScreen(onBack: () -> Unit, onShowSnackbar: suspend (St
                     )
                 }
             }
+            item {
+                VividSettingsGroup {
+                    VividSettingsItem(title = "Eliminar contenido offline", subtitle = "Posts, stories y reels guardados localmente", icon = Icons.Outlined.CloudOff, onClick = { showOfflineConfirmation = true }, showDivider = true)
+                    VividSettingsItem(title = "Límite de caché de video", subtitle = "$cacheLimitMb MB", icon = Icons.Outlined.Tune, onClick = { showCacheLimit = true }, showDivider = true)
+                    VividSettingsItem(title = "Imágenes", subtitle = formatBytes(cacheBreakdown.imageBytes), icon = Icons.Outlined.Image)
+                    VividSettingsItem(title = "Videos y audio", subtitle = formatBytes(cacheBreakdown.mediaBytes), icon = Icons.Outlined.Movie)
+                    VividSettingsItem(title = "Archivos temporales", subtitle = formatBytes(cacheBreakdown.temporaryBytes), icon = Icons.Outlined.FolderDelete)
+                    VividSettingsItem(title = "Datos offline", subtitle = formatBytes(cacheBreakdown.databaseBytes), icon = Icons.Outlined.Storage)
+                }
+            }
         }
+    }
+    if (showClearCacheConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheConfirmation = false },
+            title = { Text("¿Borrar caché multimedia?") },
+            text = { Text("Se eliminarán imágenes, videos, audio y archivos temporales. Tus mensajes y datos offline se conservarán.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearCacheConfirmation = false
+                    clearCache()
+                }) { Text("Borrar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheConfirmation = false }) { Text("Cancelar") }
+            }
+        )
+    }
+    if (showOfflineConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showOfflineConfirmation = false },
+            title = { Text("¿Eliminar contenido offline?") },
+            text = { Text("Se eliminarán posts, stories y reels guardados localmente. La caché multimedia no se modificará.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOfflineConfirmation = false
+                    scope.launch {
+                        runCatching {
+                            val ep = dagger.hilt.android.EntryPointAccessors.fromApplication(appContext, com.vivid.app.di.VividCacheEntryPoint::class.java)
+                            VividCacheManager.clearOfflineContent(ep.database())
+                            cacheBreakdown = runCatching { VividCacheManager.cacheBreakdown(appContext) }.getOrDefault(VividCacheManager.CacheBreakdown())
+                            onShowSnackbar("Contenido offline eliminado")
+                        }.onFailure { onShowSnackbar("No se pudo eliminar el contenido offline") }
+                    }
+                }) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton(onClick = { showOfflineConfirmation = false }) { Text("Cancelar") } }
+        )
+    }
+    if (showCacheLimit) {
+        AlertDialog(
+            onDismissRequest = { showCacheLimit = false },
+            title = { Text("Límite de caché de video") },
+            text = {
+                Column {
+                    listOf(100, 250, 500, 1000).forEach { value ->
+                        TextButton(onClick = {
+                            VideoCacheManager.setMaxCacheMb(appContext, value)
+                            cacheLimitMb = value
+                            showCacheLimit = false
+                        }, modifier = Modifier.fillMaxWidth()) { Text("$value MB") }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showCacheLimit = false }) { Text("Cancelar") } }
+        )
     }
     if (showQuality) {
         VividAlertDialog(

@@ -2,6 +2,10 @@ package com.vivid.app
 
 import android.app.Application
 import android.content.Context
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import com.google.firebase.crashlytics.FirebaseCrashlytics
@@ -41,6 +45,13 @@ class VividApplication : Application(), SingletonImageLoader.Factory {
         NetworkMonitor.init(this)
 
         PushSender.initialize(this)
+
+        // Limpieza conservadora diaria: solo temporales abandonados (>24 h).
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "vivid-cache-cleanup",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<com.vivid.app.util.CacheCleanupWorker>(1, TimeUnit.DAYS).build()
+        )
     }
 
     override fun onTerminate() {
