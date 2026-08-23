@@ -91,6 +91,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="vivid" android:host="post" />
             </intent-filter>
+
+            <!-- Atajos estáticos del launcher (long-press). No es un
+                 atributo del activity (no existe android:shortcuts): la
+                 forma correcta de declararlos es este meta-data. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Firebase Messaging Service -->
@@ -106,6 +113,19 @@
         <receiver
             android:name=".notifications.NotificationActionReceiver"
             android:exported="false" />
+
+        <!-- Widget del launcher "Crear" (2x2). exported=false: solo el
+             sistema (AppWidgetManager/launcher) lo enlaza. -->
+        <receiver
+            android:name=".widgets.CreateWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/create_widget_info" />
+        </receiver>
 
     </application>
 

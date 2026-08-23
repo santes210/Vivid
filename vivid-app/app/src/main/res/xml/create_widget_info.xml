@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Definición del widget "Crear" (2x2).
+
+    - targetCellWidth/Height + widgetCategory: API 31+ (ignorados en
+      versiones anteriores, que solo respetan minWidth/minHeight).
+    - updatePeriodMillis=0: el widget es estático (no cambia solo); el
+      sistema lo redibuja al cambiar el tema claro/oscuro.
+    - previewLayout (API 31+) renderiza este mismo layout en el picker;
+      previewImage es el fallback para versiones anteriores.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="180dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:widgetCategory="home_screen"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_create"
+    android:previewImage="@drawable/vivid_burst"
+    android:previewLayout="@layout/widget_create"
+    android:description="@string/widget_create_description" />

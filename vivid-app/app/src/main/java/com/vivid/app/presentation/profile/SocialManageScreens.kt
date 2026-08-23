@@ -55,7 +55,10 @@ fun FollowRequestsScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
-                }
+                },
+                // El Scaffold de navegación ya aplica safeDrawing: no
+                // re-consumir los top insets (doble padding de status bar).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         }
     ) { padding ->
@@ -125,7 +128,10 @@ fun CloseFriendsScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
-                }
+                },
+                // El Scaffold de navegación ya aplica safeDrawing: no
+                // re-consumir los top insets (doble padding de status bar).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         }
     ) { padding ->
@@ -188,7 +194,10 @@ fun BlockedUsersScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
-                }
+                },
+                // El Scaffold de navegación ya aplica safeDrawing: no
+                // re-consumir los top insets (doble padding de status bar).
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         }
     ) { padding ->

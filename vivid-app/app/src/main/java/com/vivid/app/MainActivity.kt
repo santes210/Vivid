@@ -34,10 +34,36 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /**
+         * Extra que mandan los **atajos del launcher** (long-press) y el
+         * **widget "Crear"**: qué parte de la app abrir al arrancar.
+         * El valor literal vive también en res/xml/shortcuts.xml (no puede
+         * referenciar una const Kotlin): mantenerlos en sincronía.
+         */
+        const val EXTRA_SHORTCUT_ACTION = "com.vivid.app.extra.SHORTCUT_ACTION"
+
+        const val SHORTCUT_CREATE_POST = "create_post"
+        const val SHORTCUT_CREATE_REEL = "create_reel"
+        const val SHORTCUT_CREATE_STORY = "create_story"
+        const val SHORTCUT_MESSAGES = "messages"
+        const val SHORTCUT_SEARCH = "search"
+    }
+
+    /**
+     * Un toque a un atajo/widget: la acción + un [seq] que crece en cada
+     * lanzamiento. Sin la secuencia, repetir el MISMO atajo dos veces
+     * (mismo string) no re-dispararía la navegación porque la clave del
+     * LaunchedEffect no cambiaría.
+     */
+    data class ShortcutRequest(val action: String, val seq: Int)
+
     private var pendingChatId: String? by mutableStateOf(null)
     private var pendingReelId: String? by mutableStateOf(null)
     private var pendingProfileUserId: String? by mutableStateOf(null)
     private var pendingPostId: String? by mutableStateOf(null)
+    private var pendingShortcutRequest: ShortcutRequest? by mutableStateOf(null)
+    private var shortcutSeq = 0
 
     // ── Auth listener: registra el token FCM de la sesión ──
     // Guardado como campo para poder removerlo en onDestroy(): un listener
@@ -99,6 +125,7 @@ class MainActivity : ComponentActivity() {
             val deepLinkReelId = pendingReelId
             val deepLinkProfileUserId = pendingProfileUserId
             val deepLinkPostId = pendingPostId
+            val deepLinkShortcut = pendingShortcutRequest
 
             VividTheme(
                 darkTheme = darkTheme,
@@ -117,7 +144,8 @@ class MainActivity : ComponentActivity() {
                             deepLinkChatId = deepLinkChatId,
                             deepLinkReelId = deepLinkReelId,
                             deepLinkProfileUserId = deepLinkProfileUserId,
-                            deepLinkPostId = deepLinkPostId
+                            deepLinkPostId = deepLinkPostId,
+                            deepLinkShortcut = deepLinkShortcut
                         )
                     }
                 }
@@ -173,6 +201,17 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("openPost", false)) {
             pendingPostId = intent.getStringExtra("postId")
         }
+        // Atajos del launcher (long-press) y widget "Crear": llegan como
+        // Intent ACTION_VIEW con targetClass MainActivity + este extra.
+        // Se lee aquí (onCreate y onNewIntent) para que funcione tanto el
+        // arranque frío como el warm start con la app ya en segundo plano.
+        // El seq crece en cada lanzamiento para que repetir el mismo atajo
+        // re-dispare la navegación (ver ShortcutRequest).
+        val shortcutAction = intent.getStringExtra(EXTRA_SHORTCUT_ACTION)
+        if (shortcutAction != null) {
+            shortcutSeq += 1
+            pendingShortcutRequest = ShortcutRequest(shortcutAction, shortcutSeq)
+        }
     }
 }
 
@@ -181,7 +220,8 @@ fun VividApp(
     deepLinkChatId: String? = null,
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
-    deepLinkPostId: String? = null
+    deepLinkPostId: String? = null,
+    deepLinkShortcut: MainActivity.ShortcutRequest? = null
 ) {
     val navController = rememberNavController()
     VividNavigation(
@@ -189,6 +229,7 @@ fun VividApp(
         deepLinkChatId = deepLinkChatId,
         deepLinkReelId = deepLinkReelId,
         deepLinkProfileUserId = deepLinkProfileUserId,
-        deepLinkPostId = deepLinkPostId
+        deepLinkPostId = deepLinkPostId,
+        deepLinkShortcut = deepLinkShortcut
     )
 }

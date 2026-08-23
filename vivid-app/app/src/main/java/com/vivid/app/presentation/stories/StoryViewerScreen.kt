@@ -527,7 +527,9 @@ private fun StoryViewerOverlay(
     onClose: () -> Unit,
     onViewersClick: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(VividSpace.m)) {
+    // safeDrawing: pantalla inmersiva (el Scaffold no aplica insets), así
+    // la cabecera de la story evita el notch/cutout incluso en borderless.
+    Column(modifier = Modifier.fillMaxWidth().safeDrawingPadding().padding(VividSpace.m)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs)) {
             stories.forEachIndexed { idx, _ ->
                 LinearProgressIndicator(

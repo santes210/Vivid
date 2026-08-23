@@ -47,6 +47,7 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.domain.repository.ChatRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.vivid.app.presentation.auth.AuthScreen
@@ -123,7 +124,8 @@ fun VividNavigation(
     deepLinkChatId: String? = null,
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
-    deepLinkPostId: String? = null
+    deepLinkPostId: String? = null,
+    deepLinkShortcut: com.vivid.app.MainActivity.ShortcutRequest? = null
 ) {
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
@@ -199,6 +201,38 @@ fun VividNavigation(
         }
     }
 
+    // ── Atajos del launcher (long-press) y widget "Crear" ─────────────────
+    // Llegan como extra `shortcutAction` en el Intent. En arranque frío
+    // FirebaseAuth aún puede estar restaurando la sesión, así que se espera
+    // (con tope de 3s) a que el usuario exista antes de navegar: si no, los
+    // atajos caerían en Auth y la acción se perdería.
+    LaunchedEffect(deepLinkShortcut) {
+        val shortcut = deepLinkShortcut ?: return@LaunchedEffect
+        var user = auth.currentUser
+        var waitedMs = 0L
+        while (user == null && waitedMs < 3000L) {
+            delay(150)
+            waitedMs += 150
+            user = auth.currentUser
+        }
+        if (user == null) return@LaunchedEffect
+
+        val action = shortcut.action
+        val route = when (action) {
+            com.vivid.app.MainActivity.SHORTCUT_CREATE_POST -> Screen.Create.route
+            com.vivid.app.MainActivity.SHORTCUT_CREATE_REEL -> Screen.CreateReel.route
+            com.vivid.app.MainActivity.SHORTCUT_CREATE_STORY -> Screen.CreateStory.route
+            com.vivid.app.MainActivity.SHORTCUT_MESSAGES -> Screen.Messages.route
+            com.vivid.app.MainActivity.SHORTCUT_SEARCH -> Screen.Search.route
+            else -> return@LaunchedEffect
+        }
+        navController.navigate(route) {
+            popUpTo(Screen.Feed.route) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     // Edge-to-edge: oculta bottomBar en pantallas inmersivas (Reels, Chat, story)
     val isImmersive = remember(currentRoute) {
         currentRoute?.startsWith("reels") == true ||
@@ -229,7 +263,17 @@ fun VividNavigation(
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = if (isImmersive) WindowInsets(0, 0, 0, 0) else WindowInsets.navigationBars
+        // Edge-to-edge con `safeDrawing` (y no `navigationBars`): en pantallas
+        // normales el contenido queda DENTRO del área segura — status bar,
+        // nav bar y display cutout (notch) — y cada pantalla consume lo que
+        // necesite: las TopAppBar declaran `windowInsets = 0` porque ya les
+        // llega el padding de aquí, y las sin barra de título (Explorar,
+        // Ajustes, Auth…) por fin no se dibujan bajo la status bar.
+        // En inmersivas (Reels, Chat, cámara) el Scaffold no aplica insets:
+        // el vídeo/chat se dibuja a sangre completa y cada pantalla aplica
+        // sus propios insets (safeDrawing) a los overlays que deben evitar
+        // el notch.
+        contentWindowInsets = if (isImmersive) WindowInsets(0, 0, 0, 0) else WindowInsets.safeDrawing
     ) { innerPadding ->
         // Toda la navegación vive dentro de un SharedTransitionLayout: es el
         // requisito para que miniatura→detalle y avatar→perfil sean el mismo

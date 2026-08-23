@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Widget del launcher "Crear" (2x2).
+
+    Fondo: la forma Burst de VividMaterialShapes (drawable/vivid_burst.xml)
+    a sangre completa, con el fondo del launcher mostrando alrededor
+    (el widget es transparente fuera de la estrella).
+
+    RemoteViews: solo layouts simples (FrameLayout/ImageView/TextView).
+    El click completo lo pone CreateWidgetProvider con un PendingIntent
+    a MainActivity + extra SHORTCUT_ACTION=create_post (mismo mecanismo
+    que los atajos del launcher).
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:src="@drawable/vivid_burst"
+        android:importantForAccessibility="no"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:fontFamily="@font/sora_semibold"
+        android:gravity="center"
+        android:text="@string/widget_create_label"
+        android:textColor="@color/widget_create_text"
+        android:textSize="24sp"
+        android:includeFontPadding="false" />
+
+</FrameLayout>

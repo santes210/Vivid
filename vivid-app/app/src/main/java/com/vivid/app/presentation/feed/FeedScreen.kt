@@ -443,7 +443,11 @@ fun FeedScreen(
                     IconButton(onClick = onOpenMessages) { Icon(Icons.Default.Email, stringResource(R.string.feed_messages), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                scrollBehavior = scrollBehavior
+                scrollBehavior = scrollBehavior,
+                // El Scaffold de navegación ya aplica safeDrawing (task 35):
+                // la barra no re-consume los top insets o la status bar se
+                // pagaría dos veces.
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         },
         containerColor = MaterialTheme.colorScheme.background

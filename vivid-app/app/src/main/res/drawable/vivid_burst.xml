@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    VividMaterialShapes.Burst como vector: es exactamente el polígono que
+    define MaterialShapes.Burst en material3 — estrella de 12 puntas con
+    radio punta 0.506 y radio valle 0.354 (proporción 0.7), puntos cada
+    15°, esquina apenas redondeada (se simula con strokeLineJoin="round"
+    + stroke fino del mismo color).
+
+    Centrado en (54,54) con radio 52 para que las puntas toquen el borde
+    del viewport (2..106) sin recortes. El color se resuelve contra el
+    tema del contexto al inflarse: coral (#B71454) en light, rosa
+    (#FFAFC1) en values-night.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/widget_create_bg"
+        android:strokeColor="@color/widget_create_bg"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round"
+        android:pathData="M54,2 L63.42,18.84 L80,8.97 L79.74,28.26 L99.03,28 L89.16,44.58 L106,54 L89.16,63.42 L99.03,80 L79.74,79.74 L80,99.03 L63.42,89.16 L54,106 L44.58,89.16 L28,99.03 L28.26,79.74 L8.97,80 L18.84,63.42 L2,54 L18.84,44.58 L8.97,28 L28.26,28.26 L28,8.97 L44.58,18.84 Z" />
+</vector>

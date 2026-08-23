@@ -247,4 +247,15 @@
     <string name="palette_forest">Bosque</string>
     <string name="palette_lavender">Lavanda</string>
     <string name="palette_mono">Mono</string>
+
+    <!-- ========== Atajos del launcher (long-press) ========== -->
+    <string name="shortcut_new_post">Nueva publicación</string>
+    <string name="shortcut_new_reel">Nuevo reel</string>
+    <string name="shortcut_new_story">Nueva historia</string>
+    <string name="shortcut_messages">Mensajes</string>
+    <string name="shortcut_search">Buscar</string>
+
+    <!-- ========== Widget del launcher "Crear" ========== -->
+    <string name="widget_create_label">Crear</string>
+    <string name="widget_create_description">Abre el creador de Vivid</string>
 </resources>
