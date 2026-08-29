@@ -23,7 +23,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,7 +33,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -221,11 +219,12 @@ internal fun ReelPage(
     ) {
         // Thumbnail mientras carga
         if (!isPlayerReady && reel.thumbnailUrl.isNotBlank()) {
-            AsyncImage(
+            com.vivid.app.ui.components.VividAsyncImage(
                 model = reel.thumbnailUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                placeholderColor = Color.Black,
+                errorColor = Color.Black
             )
         }
 
@@ -430,12 +429,13 @@ internal fun ReelCreatorCard(
                     .border(2.dp, Color.White.copy(alpha = 0.95f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                if (reel.userAvatar.isNotBlank()) {
-                    AsyncImage(
+                var reelAvatarFailed by remember(reel.userAvatar) { mutableStateOf(false) }
+                if (reel.userAvatar.isNotBlank() && !reelAvatarFailed) {
+                    com.vivid.app.ui.components.VividAsyncImage(
                         model = reel.userAvatar,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize().clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                        onError = { reelAvatarFailed = true }
                     )
                 } else {
                     Box(
@@ -722,12 +722,13 @@ internal data class ReelComment(
 @Composable
 internal fun ReelCommentRow(comment: ReelComment) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        if (comment.avatarUrl.isNotBlank()) {
-            AsyncImage(
+        var commentAvatarFailed by remember(comment.avatarUrl) { mutableStateOf(false) }
+        if (comment.avatarUrl.isNotBlank() && !commentAvatarFailed) {
+            com.vivid.app.ui.components.VividAsyncImage(
                 model = comment.avatarUrl,
                 contentDescription = comment.username,
                 modifier = Modifier.size(36.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop
+                onError = { commentAvatarFailed = true }
             )
         } else {
             Box(

@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -36,20 +35,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.VividExpressiveShapes
-import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividAsyncImage
 import com.vivid.app.ui.components.VividLikeButton
+import com.vivid.app.ui.components.VividSkeleton
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
 import com.vivid.app.ui.motion.vividSharedElement
@@ -135,10 +133,16 @@ fun PostDetailScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    ContainedLoadingIndicator(
-                        polygons = VividMaterialShapes.LoadingSequence
-                    )
+                loading -> Column(Modifier.fillMaxSize()) {
+                    // Skeleton con la silueta del detalle: imagen 1:1 + autor +
+                    // caption. La pantalla no cambia de forma al llegar el post.
+                    VividSkeleton(modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+                    Spacer(Modifier.height(VividSpace.m))
+                    Column(Modifier.padding(horizontal = VividSpace.m)) {
+                        VividSkeleton(modifier = Modifier.fillMaxWidth(0.4f).height(18.dp))
+                        Spacer(Modifier.height(VividSpace.s))
+                        VividSkeleton(modifier = Modifier.fillMaxWidth(0.85f).height(14.dp))
+                    }
                 }
 
                 post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -153,17 +157,16 @@ fun PostDetailScreen(
                             .verticalScroll(rememberScrollState())
                     ) {
                         if (loaded.imageUrl.isNotBlank()) {
-                            AsyncImage(
+                            VividAsyncImage(
                                 model = loaded.imageUrl,
                                 contentDescription = stringResource(R.string.cd_post_detail_image),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1f)
-                                    // Misma clave que la miniatura del grid: es
-                                    // literalmente la misma imagen, no otra.
-                                    .vividSharedElement(VividSharedKeys.postImage(loaded.id))
                                     .clip(VividExpressiveShapes.MediaLarge),
-                                contentScale = ContentScale.Crop
+                                // Misma clave que la miniatura del grid: es
+                                // literalmente la misma imagen, no otra.
+                                sharedKey = VividSharedKeys.postImage(loaded.id)
                             )
                         }
 

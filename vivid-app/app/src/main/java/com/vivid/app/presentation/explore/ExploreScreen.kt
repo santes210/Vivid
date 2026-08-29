@@ -17,9 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Card
-import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -53,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -66,7 +63,6 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import coil3.compose.AsyncImage
 import com.vivid.app.R
 import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel
@@ -79,12 +75,14 @@ import com.vivid.app.presentation.search.UserSearchItem
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividAsyncImage
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.ui.components.VividSearchBar
+import com.vivid.app.ui.components.VividSkeletonGrid
+import com.vivid.app.ui.components.VividSkeletonListItem
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
-import com.vivid.app.ui.motion.vividSharedElement
 
 private const val TABLET_MIN_WIDTH_DP = 600
 
@@ -283,11 +281,10 @@ private fun ColumnScope.ExploreSearchPanel(
 
     when {
         users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(VividSpace.xxl),
-                contentAlignment = Alignment.Center
-            ) {
-                ContainedLoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
+            // Filas skeleton con la misma estructura que UserSearchItem:
+            // avatar + dos líneas. Consistente con el resto de la app.
+            Column(modifier = Modifier.fillMaxWidth()) {
+                repeat(5) { VividSkeletonListItem() }
             }
         }
         users.loadState.refresh is LoadState.Error && users.itemCount == 0 -> {
@@ -430,8 +427,10 @@ private fun ExploreBrowseContent(
 
     when {
         posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                ContainedLoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
+            // Skeleton con la MISMA estructura que el grid final: la pantalla
+            // no "salta" cuando llegan los datos, solo se rellena.
+            Box(modifier = Modifier.fillMaxSize().padding(VividSpace.xxs)) {
+                VividSkeletonGrid(columns = 3, count = 18)
             }
         }
         posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {
@@ -470,12 +469,19 @@ private fun ExploreBrowseContent(
             }
         }
         else -> {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
+            // Mosaico estilo "descubrimiento": staggered grid de 3 columnas
+            // donde la mayoría de celdas son 1:1 pero cada pocas aparece un
+            // acento vertical (3:4) u horizontal (4:3). Un grid 100 % uniforme
+            // se ve como tablero de ajedrez; el ritmo mixto hace que el ojo
+            // recorra en diagonal y la pantalla "respire". El patrón es
+            // determinista (función del índice) para que se sienta diseñado,
+            // no aleatorio, y las posiciones sean estables entre recomposiciones.
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(3),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(VividSpace.xxs),
                 horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs),
-                verticalArrangement = Arrangement.spacedBy(VividSpace.xxs)
+                verticalItemSpacing = VividSpace.xxs
             ) {
                 items(
                     count = posts.itemCount,
@@ -485,19 +491,19 @@ private fun ExploreBrowseContent(
                     val postCd = stringResource(R.string.cd_post_by, post.username)
                     Card(
                         modifier = Modifier
-                            .aspectRatio(1f)
+                            .aspectRatio(exploreCellAspectRatio(index))
                             .semantics { contentDescription = postCd }
                             .clickable { onPostClick(post.id) },
                         shape = MaterialTheme.shapes.extraLarge
                     ) {
                         if (post.imageUrl.isNotBlank()) {
-                            AsyncImage(
+                            VividAsyncImage(
                                 model = post.imageUrl,
                                 contentDescription = postCd,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .vividSharedElement(VividSharedKeys.postImage(post.id)),
-                                contentScale = ContentScale.Crop
+                                modifier = Modifier.fillMaxSize(),
+                                // La miniatura ES la del detalle: misma clave
+                                // compartida que PostDetailScreen.
+                                sharedKey = VividSharedKeys.postImage(post.id)
                             )
                         } else {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -510,7 +516,7 @@ private fun ExploreBrowseContent(
                     }
                 }
                 if (posts.loadState.append is LoadState.Loading) {
-                    items(3, span = { GridItemSpan(1) }) {
+                    items(3) {
                         Box(
                             modifier = Modifier.aspectRatio(1f),
                             contentAlignment = Alignment.Center
@@ -525,4 +531,16 @@ private fun ExploreBrowseContent(
             }
         }
     }
+}
+
+/**
+ * Ritmo del mosaico de Explore (ver comentario en el grid):
+ *   - índices ≡ 2 y 7 (módulo 10): retrato 3:4 → 0.75
+ *   - índice ≡ 5 (módulo 10): paisaje 4:3 → 1.33
+ *   - resto: cuadrado 1:1
+ */
+private fun exploreCellAspectRatio(index: Int): Float = when (index % 10) {
+    2, 7 -> 0.75f
+    5 -> 1.33f
+    else -> 1f
 }

@@ -22,14 +22,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.vivid.app.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
@@ -213,7 +211,14 @@ internal fun ImageMessageContent(message: Message, isMine: Boolean, onImageClick
     var resignAttempted by remember(message.id) { mutableStateOf(false) }
     Column {
         Box(modifier = Modifier.defaultMinSize(minWidth = 160.dp, minHeight = 160.dp).sizeIn(maxWidth = 240.dp, maxHeight = 320.dp).clip(VividExpressiveShapes.Media).combinedClickable(onClick = { onImageClick(message.imageUrl) }, onLongClick = { onLongPress() }, onDoubleClick = { onDoubleTap() })) {
-            AsyncImage(model = message.imageUrl, contentDescription = "Imagen del chat", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, onError = { if (message.imageKey.isNotBlank() && !resignAttempted) { resignAttempted = true; onResignImage(message) } })
+            // Placeholder mientras baja la imagen: la burbuja ya tiene su
+            // tamaño desde el primer frame (antes: burbuja vacía que "estallaba").
+            com.vivid.app.ui.components.VividAsyncImage(
+                model = message.imageUrl,
+                contentDescription = "Imagen del chat",
+                modifier = Modifier.fillMaxSize(),
+                onError = { if (message.imageKey.isNotBlank() && !resignAttempted) { resignAttempted = true; onResignImage(message) } }
+            )
         }
         Spacer(Modifier.height(3.dp))
         MessageMetaRow(message = message, isMine = isMine)

@@ -27,15 +27,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.vivid.app.R
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.ui.components.VividSkeletonListItem
 import com.vivid.app.util.CrashReporter
 import com.vivid.app.util.toUserFacingMessage
 import com.vivid.app.util.withNetworkTimeout
@@ -47,7 +49,6 @@ import java.util.Locale
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.LocalVividAccents
-import com.vivid.app.theme.VividMaterialShapes
 
 private const val TAG = "ChatListScreen"
 
@@ -286,7 +287,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar conversación....") },
+                placeholder = { Text(stringResource(R.string.chat_list_search_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -348,19 +349,26 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
 
             when {
                 isLoading -> {
-                    Box(
+                    // Skeleton con la misma silueta que ChatPreviewCard:
+                    // la lista "existe" desde el primer frame; los datos la
+                    // rellenan. Igual que feed y explore.
+                    Column(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                        verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
                     ) {
-                        LoadingIndicator(color = MaterialTheme.colorScheme.primary, polygons = VividMaterialShapes.LoadingSequence)
+                        repeat(7) { VividSkeletonListItem() }
                     }
                 }
 
                 errorMessage != null -> {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         VividErrorState(
-                            title = if (currentUserId.isBlank()) "Inicia sesión" else "No se pudieron cargar los mensajes",
-                            message = errorMessage ?: "Error",
+                            title = if (currentUserId.isBlank()) {
+                                stringResource(R.string.chat_list_error_signed_out)
+                            } else {
+                                stringResource(R.string.chat_list_error_loading)
+                            },
+                            message = errorMessage ?: stringResource(R.string.chat_list_error_loading),
                             onRetry = when {
                                 currentUserId.isBlank() -> null
                                 else -> ({
@@ -380,7 +388,7 @@ fun ChatListScreen(onChatClick: (chatId: String, otherUserId: String, otherUserN
                     ) {
                         if (searchQuery.isNotBlank()) {
                             Text(
-                                "No se encontraron usuarios como '$searchQuery'",
+                                stringResource(R.string.chat_list_no_matches, searchQuery),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

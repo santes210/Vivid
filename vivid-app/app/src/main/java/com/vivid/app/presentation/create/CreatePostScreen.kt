@@ -16,12 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil3.compose.AsyncImage
+import com.vivid.app.R
 import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
@@ -417,7 +419,12 @@ fun CreatePostScreen(
                         onClick = { showMusicSheet = true },
                         shape = VividExpressiveShapes.SegmentedControl
                     ) {
-                        Text(if (selectedTrack != null) "Cambiar" else "Elegir")
+                        Text(
+                            stringResource(
+                                if (selectedTrack != null) R.string.create_music_change
+                                else R.string.create_music_pick
+                            )
+                        )
                     }
                 }
             }
@@ -428,8 +435,8 @@ fun CreatePostScreen(
             OutlinedTextField(
                 value = caption,
                 onValueChange = { caption = it },
-                label = { Text("Caption") },
-                placeholder = { Text("Simplemente....  Escribe....") },
+                label = { Text(stringResource(R.string.create_caption_label)) },
+                placeholder = { Text(stringResource(R.string.create_caption_placeholder)) },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
                 shape = VividExpressiveShapes.FieldFocused,
