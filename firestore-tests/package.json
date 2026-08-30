@@ -11,5 +11,6 @@
     "@firebase/rules-unit-testing": "^5.0.1",
     "firebase": "^12.0.0",
     "firebase-admin": "^12.7.0"
-  }
+  },
+  "test": "node --test rules.test.js > \"${TMPDIR:-/tmp}/vivid_rules.log\" 2>&1; VIVID_CODE=$?; cat \"${TMPDIR:-/tmp}/vivid_rules.log\"; if [ \"$VIVID_CODE\" -ne 0 ]; then VIVID_N=0; grep -E '✖|✕|not ok|# fail|AssertionError|assertion|Error:|PERMISSION|permission' \"${TMPDIR:-/tmp}/vivid_rules.log\" | while IFS= read -r VIVID_LINE && [ \"$VIVID_N\" -lt 10 ]; do printf '::error title=rules::%s\\n' \"$(printf '%s' \"$VIVID_LINE\" | sed 's/%/%25/g' | cut -c1-230)\"; VIVID_N=$((VIVID_N + 1)); done; fi; exit \"$VIVID_CODE\""
 }
