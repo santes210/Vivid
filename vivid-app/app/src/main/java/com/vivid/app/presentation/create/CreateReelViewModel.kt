@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.data.storage.VideoCompressor
+import com.vivid.app.util.Hashtags
 import com.vivid.app.util.VideoThumbnailer
 import com.vivid.app.util.VideoTrimmer
 import com.vivid.app.util.VideoWatermarker
@@ -205,6 +206,7 @@ class CreateReelViewModel @Inject constructor(
             "storageKey" to storageKey,
             "provider" to "backblaze-direct",
             "caption" to caption.trim(),
+            "hashtags" to Hashtags.extract(caption),
             "likes" to 0,
             "comments" to 0,
             "shares" to 0,

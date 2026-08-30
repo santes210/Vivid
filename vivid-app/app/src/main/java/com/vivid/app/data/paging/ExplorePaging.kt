@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.vivid.app.domain.model.PostVisibility
 import com.vivid.app.presentation.feed.PostData
+import com.vivid.app.util.Hashtags
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -19,14 +20,41 @@ object ExplorePaging {
     const val MIN_QUERY_LENGTH = 2
     const val PREFETCH_DISTANCE = 6
 
+    /**
+     * Temas curados de Explorar. La clave coincide con [Hashtags.normalize]
+     * (sin tildes) para que `#música` y el chip "musica" peguen en Firestore.
+     */
     val TAGS = listOf("vivid", "arte", "musica", "viaje", "comida", "tecnologia", "moda", "deporte")
 
     fun normalizeQuery(raw: String): String = raw.trim().lowercase()
 
-    fun isValidUserQuery(query: String): Boolean = query.length >= MIN_QUERY_LENGTH
+    /**
+     * Búsqueda de personas. Un `#tag` no es un username: si no se excluye,
+     * Firestore busca usuarios que empiezan por `#arte` y no sale nadie.
+     */
+    fun isValidUserQuery(query: String): Boolean {
+        if (query.startsWith("#")) return false
+        return query.length >= MIN_QUERY_LENGTH
+    }
 
     /** Cota superior de un prefijo de username (rango Firestore startAt/endAt). */
     fun usernamePrefixEnd(query: String): String = query + "\uf8ff"
+
+    /**
+     * Cada 5 ítems el grid pinta uno a doble columna. El patrón llena filas
+     * de 3 celdas: [2+1] [1+1+1] [2+1] … sin huecos.
+     */
+    fun isFeaturedIndex(index: Int): Boolean = index >= 0 && index % 5 == 0
+
+    /**
+     * Chips visibles: los curados, y si el usuario buscó un tag suelto
+     * (`#atardecer`) se antepone para que se vea seleccionado.
+     */
+    fun visibleTags(selected: String): List<String> {
+        val tag = Hashtags.normalize(selected)
+        if (tag.isEmpty() || tag in TAGS) return TAGS
+        return listOf(tag) + TAGS
+    }
 }
 
 /**
@@ -93,6 +121,7 @@ internal fun mapExplorePost(doc: DocumentSnapshot, blockedUserIds: Set<String>):
         imageUrl = doc.getString("imageUrl") ?: "",
         videoUrl = doc.getString("videoUrl") ?: "",
         isVideo = doc.getBoolean("isVideo") ?: false,
+        thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
         caption = doc.getString("caption") ?: "",
         likesCount = doc.getLong("likesCount")?.toInt() ?: 0,
         commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0,
@@ -100,7 +129,10 @@ internal fun mapExplorePost(doc: DocumentSnapshot, blockedUserIds: Set<String>):
         isLiked = false,
         isSaved = false,
         storageKey = doc.getString("storageKey") ?: "",
-        hashtags = (doc.get("hashtags") as? List<*>)?.mapNotNull { it as? String }?.map { it.lowercase() }.orEmpty(),
+        hashtags = (doc.get("hashtags") as? List<*>)?.mapNotNull { it as? String }
+            ?.map { Hashtags.normalize(it) }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty(),
         visibility = visibility
     )
 }

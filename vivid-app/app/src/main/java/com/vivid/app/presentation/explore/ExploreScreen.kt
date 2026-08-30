@@ -1,10 +1,14 @@
 package com.vivid.app.presentation.explore
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,16 +21,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PersonSearch
-import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -39,6 +45,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,6 +66,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.LoadState
@@ -76,16 +84,20 @@ import com.vivid.app.presentation.search.SearchViewModel
 import com.vivid.app.presentation.search.UserSearchItem
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
+import com.vivid.app.theme.VividMotion
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.VividAsyncImage
 import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBanner
 import com.vivid.app.ui.components.VividOfflineBannerHost
+import com.vivid.app.ui.components.VividPullToRefreshBox
 import com.vivid.app.ui.components.VividSearchBar
 import com.vivid.app.ui.components.VividSkeletonGrid
 import com.vivid.app.ui.components.VividSkeletonListItem
+import com.vivid.app.ui.components.rememberVividMorph
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
+import com.vivid.app.util.Hashtags
 
 private const val TABLET_MIN_WIDTH_DP = 600
 
@@ -107,9 +119,12 @@ fun ExploreScreen(
     val searchQuery by searchViewModel.query.collectAsState()
     val history by searchViewModel.history.collectAsState()
 
-    // Navegar desde un #tag (feed/detalle) preselecciona el filtro.
     LaunchedEffect(initialTag) {
         if (initialTag.isNotBlank()) exploreViewModel.selectTag(initialTag)
+    }
+
+    LaunchedEffect(selectedTag) {
+        exploreViewModel.loadCachedPosts(selectedTag)
     }
 
     LaunchedEffect(blockedUsersState.userIds, blockedUsersState.isLoaded) {
@@ -122,7 +137,9 @@ fun ExploreScreen(
     val haptics = rememberVividHaptics()
     val posts = exploreViewModel.posts.collectAsLazyPagingItems()
     val users = searchViewModel.users.collectAsLazyPagingItems()
-    val searching = ExplorePaging.isValidUserQuery(ExplorePaging.normalizeQuery(searchQuery))
+    val normalizedQuery = ExplorePaging.normalizeQuery(searchQuery)
+    val tagQuery = Hashtags.parseQuery(searchQuery)
+    val searching = ExplorePaging.isValidUserQuery(normalizedQuery)
     val isTablet = LocalConfiguration.current.screenWidthDp >= TABLET_MIN_WIDTH_DP
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -133,6 +150,15 @@ fun ExploreScreen(
     }
 
     fun applyQuery(raw: String) {
+        val tag = Hashtags.parseQuery(raw)
+        if (tag != null) {
+            haptics.tick()
+            searchViewModel.setQuery("")
+            searchViewModel.recordSearch(Hashtags.display(tag))
+            exploreViewModel.selectTag(tag)
+            collapseSearch()
+            return
+        }
         searchViewModel.setQuery(raw)
         searchViewModel.recordSearch(raw)
         searchExpanded = true
@@ -141,6 +167,7 @@ fun ExploreScreen(
     fun applyTag(tag: String) {
         haptics.tick()
         searchViewModel.setQuery("")
+        searchViewModel.recordSearch(Hashtags.display(tag))
         exploreViewModel.selectTag(tag)
         collapseSearch()
     }
@@ -153,10 +180,15 @@ fun ExploreScreen(
                 query = searchQuery,
                 onQueryChange = searchViewModel::setQuery,
                 onSearch = { raw ->
-                    if (SearchHistory.canRecord(raw)) {
-                        searchViewModel.recordSearch(raw)
+                    val tag = Hashtags.parseQuery(raw) ?: tagQuery
+                    if (tag != null) {
+                        applyTag(tag)
+                    } else {
+                        if (SearchHistory.canRecord(raw)) {
+                            searchViewModel.recordSearch(raw)
+                        }
+                        searchExpanded = true
                     }
-                    searchExpanded = true
                 },
                 expanded = searchExpanded,
                 onExpandedChange = { next ->
@@ -164,7 +196,7 @@ fun ExploreScreen(
                     if (!next) searchViewModel.setQuery("")
                 },
                 docked = isTablet,
-                placeholder = stringResource(R.string.search_people_label)
+                placeholder = stringResource(R.string.search_people_or_tags)
             ) {
                 ExploreSearchPanel(
                     searching = searching,
@@ -205,6 +237,7 @@ fun ExploreScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ColumnScope.ExploreSearchPanel(
     searching: Boolean,
@@ -242,10 +275,16 @@ private fun ColumnScope.ExploreSearchPanel(
                     }
                 }
                 items(recents, key = { "recent_${it.query}" }) { recent ->
+                    val isTag = Hashtags.parseQuery(recent.query) != null
                     ListItem(
                         headlineContent = { Text(recent.query) },
                         leadingContent = {
-                            Icon(Icons.Default.History, contentDescription = null)
+                            Icon(
+                                if (isTag) ExploreTopics.icon(
+                                    Hashtags.parseQuery(recent.query).orEmpty()
+                                ) else Icons.Default.History,
+                                contentDescription = null
+                            )
                         },
                         trailingContent = {
                             IconButton(onClick = { onRecentRemove(recent.query) }) {
@@ -268,15 +307,29 @@ private fun ColumnScope.ExploreSearchPanel(
                         modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s)
                     )
                 }
-                items(tags, key = { "tag_${it.tag}" }) { suggestion ->
-                    ListItem(
-                        headlineContent = { Text("#${suggestion.tag}") },
-                        leadingContent = {
-                            Icon(Icons.Default.Tag, contentDescription = null)
-                        },
-                        modifier = Modifier.clickable { onTagClick(suggestion.tag) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
+                item(key = "tags_flow") {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
+                        horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
+                        verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
+                    ) {
+                        tags.forEach { suggestion ->
+                            SuggestionChip(
+                                onClick = { onTagClick(suggestion.tag) },
+                                label = { Text(Hashtags.display(suggestion.tag)) },
+                                icon = {
+                                    Icon(
+                                        ExploreTopics.icon(suggestion.tag),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                shape = VividExpressiveShapes.ChipUnselected
+                            )
+                        }
+                    }
                 }
             }
             if (recents.isEmpty() && tags.isEmpty()) {
@@ -295,8 +348,6 @@ private fun ColumnScope.ExploreSearchPanel(
 
     when {
         users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
-            // Filas skeleton con la misma estructura que UserSearchItem:
-            // avatar + dos líneas. Consistente con el resto de la app.
             Column(modifier = Modifier.fillMaxWidth()) {
                 repeat(5) { VividSkeletonListItem() }
             }
@@ -346,13 +397,29 @@ private fun ColumnScope.ExploreSearchPanel(
                             modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s)
                         )
                     }
-                    items(matchingTags, key = { "hit_tag_${it.tag}" }) { suggestion ->
-                        ListItem(
-                            headlineContent = { Text("#${suggestion.tag}") },
-                            leadingContent = { Icon(Icons.Default.Tag, contentDescription = null) },
-                            modifier = Modifier.clickable { onTagClick(suggestion.tag) },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                        )
+                    item(key = "inline_tags_flow") {
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
+                            horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
+                            verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
+                        ) {
+                            matchingTags.forEach { suggestion ->
+                                SuggestionChip(
+                                    onClick = { onTagClick(suggestion.tag) },
+                                    label = { Text(Hashtags.display(suggestion.tag)) },
+                                    icon = {
+                                        Icon(
+                                            ExploreTopics.icon(suggestion.tag),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    shape = VividExpressiveShapes.ChipUnselected
+                                )
+                            }
+                        }
                     }
                     item(key = "people_divider") {
                         HorizontalDivider(
@@ -391,7 +458,7 @@ private fun ColumnScope.ExploreSearchPanel(
 }
 
 @Composable
-private fun ExploreBrowseContent(
+private fun ColumnScope.ExploreBrowseContent(
     selectedTag: String,
     tags: List<ExploreTag>,
     cachedPosts: List<PostData>,
@@ -399,77 +466,81 @@ private fun ExploreBrowseContent(
     onSelectTag: (String) -> Unit,
     onPostClick: (String) -> Unit
 ) {
-    // Filtros por tema.
-    //
-    // Aquí vivía un ButtonGroup de M3 Expressive y fue un error de
-    // diseño mío: ButtonGroup está pensado para un grupo PEQUEÑO y
-    // FIJO de acciones relacionadas (3-5), que se comprimen entre
-    // sí y mandan el sobrante a un menú. Con 8 temas (y la lista
-    // puede crecer) en un teléfono no cabe ninguno, todo se va al
-    // overflow y el cálculo de anchos del componente revienta en
-    // runtime ("ButtonGroup width cannot be unbounded" / crash por
-    // densidad). Para una lista de filtros que crece, el patrón de
-    // Material es una fila desplazable de chips.
-    //
-    // Se conservan las mejoras que sí aportaban: háptico al
-    // cambiar de filtro y formas expresivas según la selección.
-    // El tag activo siempre tiene chip: puede ser uno recién descubierto o
-    // uno llegado por navegación (#tag en un post) que aún no está en el
-    // catálogo; sin esto el filtro se aplicaría "a ciegas".
     val chipTags = remember(tags, selectedTag) {
         if (tags.any { it.tag == selectedTag }) tags
         else listOf(ExploreTag(selectedTag, 0)) + tags
     }
+    val chipListState = rememberLazyListState()
+    LaunchedEffect(selectedTag, chipTags) {
+        val index = chipTags.indexOfFirst { it.tag == selectedTag }
+        if (index >= 0) {
+            runCatching { chipListState.animateScrollToItem(index) }
+        }
+    }
 
     LazyRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.s, vertical = VividSpace.xs),
+        state = chipListState,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = VividSpace.s, vertical = VividSpace.xs),
         horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
     ) {
         items(chipTags, key = { it.tag }) { tagItem ->
-            val isSelected = selectedTag == tagItem.tag
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelectTag(tagItem.tag) },
-                label = {
-                    // El conteo es el número de posts recientes que usan el
-                    // tag: popularidad real, no decoración.
-                    Text(
-                        if (tagItem.count > 0) "#${tagItem.tag} · ${tagItem.count}"
-                        else "#${tagItem.tag}"
-                    )
-                },
-                shape = if (isSelected) {
-                    VividExpressiveShapes.ChipSelected
-                } else {
-                    VividExpressiveShapes.ChipUnselected
-                },
-                leadingIcon = if (isSelected) {
-                    { Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)) }
-                } else {
-                    null
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+            ExploreTagChip(
+                tag = tagItem.tag,
+                selected = selectedTag == tagItem.tag,
+                count = tagItem.count,
+                onClick = { onSelectTag(tagItem.tag) }
             )
         }
     }
 
-    when {
-        posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
-            // Skeleton con la MISMA estructura que el grid final: la pantalla
-            // no "salta" cuando llegan los datos, solo se rellena.
-            Box(modifier = Modifier.fillMaxSize().padding(VividSpace.xxs)) {
-                VividSkeletonGrid(columns = 3, count = 18)
+    ExploreTopicHeader(tag = selectedTag)
+
+    val refreshing = posts.loadState.refresh is LoadState.Loading && posts.itemCount > 0
+    VividPullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { posts.refresh() },
+        modifier = Modifier.weight(1f).fillMaxWidth()
+    ) {
+        when {
+            posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
+                Box(modifier = Modifier.fillMaxSize().padding(VividSpace.xxs)) {
+                    VividSkeletonGrid(columns = 3, count = 18)
+                }
             }
-        }
-        posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {
-            if (cachedPosts.isNotEmpty()) {
-                // Sin conexión pero con cache: el mismo mosaico servido desde
-                // Room (posts que el feed/Explorar ya guardaron). Firestore
-                // deja de ser requisito para abrir Explorar.
-                VividOfflineBanner(message = stringResource(R.string.explore_offline_cached))
+            posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {
+                if (cachedPosts.isNotEmpty()) {
+                    VividOfflineBanner(message = stringResource(R.string.explore_offline_cached))
+                    LazyVerticalStaggeredGrid(
+                        columns = StaggeredGridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(VividSpace.xxs),
+                        horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs),
+                        verticalItemSpacing = VividSpace.xxs
+                    ) {
+                        itemsIndexed(cachedPosts, key = { _, post -> post.id }) { index, post ->
+                            ExplorePostCard(
+                                post = post,
+                                aspect = exploreCellAspectRatio(index),
+                                onClick = { onPostClick(post.id) }
+                            )
+                        }
+                    }
+                } else {
+                    val err = posts.loadState.refresh as LoadState.Error
+                    VividErrorState(
+                        message = err.error.localizedMessage ?: stringResource(R.string.explore_error),
+                        onRetry = { posts.retry() }
+                    )
+                }
+            }
+            posts.itemCount == 0 -> {
+                ExploreEmptyTagState(
+                    selectedTag = selectedTag,
+                    onSelectTag = onSelectTag
+                )
+            }
+            else -> {
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(3),
                     modifier = Modifier.fillMaxSize(),
@@ -477,88 +548,213 @@ private fun ExploreBrowseContent(
                     horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs),
                     verticalItemSpacing = VividSpace.xxs
                 ) {
-                    itemsIndexed(cachedPosts, key = { _, post -> post.id }) { index, post ->
+                    items(
+                        count = posts.itemCount,
+                        key = posts.itemKey { it.id }
+                    ) { index ->
+                        val post = posts[index] ?: return@items
                         ExplorePostCard(
                             post = post,
                             aspect = exploreCellAspectRatio(index),
                             onClick = { onPostClick(post.id) }
                         )
                     }
-                }
-            } else {
-                val err = posts.loadState.refresh as LoadState.Error
-                VividErrorState(
-                    message = err.error.localizedMessage ?: stringResource(R.string.explore_error),
-                    onRetry = { posts.retry() }
-                )
-            }
-        }
-        posts.itemCount == 0 -> {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(VividSpace.l),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Surface(
-                    shape = VividMaterialShapes.EmptyStateContainer,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.size(112.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.GridView,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(VividSpace.m))
-                Text(
-                    stringResource(R.string.explore_empty, selectedTag),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-        else -> {
-            // Mosaico estilo "descubrimiento": staggered grid de 3 columnas
-            // donde la mayoría de celdas son 1:1 pero cada pocas aparece un
-            // acento vertical (3:4) u horizontal (4:3). Un grid 100 % uniforme
-            // se ve como tablero de ajedrez; el ritmo mixto hace que el ojo
-            // recorra en diagonal y la pantalla "respire". El patrón es
-            // determinista (función del índice) para que se sienta diseñado,
-            // no aleatorio, y las posiciones sean estables entre recomposiciones.
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(VividSpace.xxs),
-                horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs),
-                verticalItemSpacing = VividSpace.xxs
-            ) {
-                items(
-                    count = posts.itemCount,
-                    key = posts.itemKey { it.id }
-                ) { index ->
-                    val post = posts[index] ?: return@items
-                    ExplorePostCard(
-                        post = post,
-                        aspect = exploreCellAspectRatio(index),
-                        onClick = { onPostClick(post.id) }
-                    )
-                }
-                if (posts.loadState.append is LoadState.Loading) {
-                    items(3) {
-                        Box(
-                            modifier = Modifier.aspectRatio(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator(
-                                Modifier.size(28.dp),
-                                polygons = VividMaterialShapes.LoadingSequence
-                            )
+                    if (posts.loadState.append is LoadState.Loading) {
+                        items(3) {
+                            Box(
+                                modifier = Modifier.aspectRatio(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LoadingIndicator(
+                                    Modifier.size(28.dp),
+                                    polygons = VividMaterialShapes.LoadingSequence
+                                )
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ExploreTagChip(
+    tag: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    count: Int = 0
+) {
+    val corner by animateDpAsState(
+        targetValue = if (selected) 12.dp else 20.dp,
+        animationSpec = VividMotion.fastSpatial(),
+        label = "exploreTagCorner"
+    )
+    val morphProgress by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = VividMotion.fastSpatial(),
+        label = "exploreTagMorph"
+    )
+    val iconShape = rememberVividMorph(
+        start = VividMaterialShapes.MorphResting,
+        end = VividMaterialShapes.topicPolygon(tag),
+        progress = morphProgress
+    )
+    val pair = ExploreTopics.containerPair(tag)
+    val chipCd = stringResource(R.string.cd_explore_tag, Hashtags.display(tag))
+    val label = if (count > 0) "${Hashtags.display(tag)} · $count" else Hashtags.display(tag)
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        modifier = modifier.semantics { contentDescription = chipCd },
+        label = { Text(label) },
+        shape = RoundedCornerShape(corner),
+        leadingIcon = {
+            Surface(
+                shape = iconShape,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    pair.container
+                },
+                contentColor = if (selected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    pair.onContainer
+                },
+                modifier = Modifier.size(22.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        ExploreTopics.icon(tag),
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = pair.container,
+            selectedLabelColor = pair.onContainer,
+            selectedLeadingIconColor = pair.onContainer
+        )
+    )
+}
+
+@Composable
+internal fun ExploreTopicHeader(tag: String, modifier: Modifier = Modifier) {
+    val pair = ExploreTopics.containerPair(tag)
+    val shape = rememberVividMorph(
+        start = VividMaterialShapes.MorphResting,
+        end = VividMaterialShapes.topicPolygon(tag),
+        progress = 1f
+    )
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = VividSpace.s, vertical = VividSpace.xs),
+        shape = VividExpressiveShapes.MediumCard,
+        color = pair.container,
+        contentColor = pair.onContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = shape,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        ExploreTopics.icon(tag),
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.size(VividSpace.s))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    Hashtags.display(tag),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    stringResource(R.string.explore_topic_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = pair.onContainer.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExploreEmptyTagState(
+    selectedTag: String,
+    onSelectTag: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(VividSpace.l),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            shape = VividMaterialShapes.EmptyStateContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.size(112.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.GridView,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(VividSpace.m))
+        Text(
+            stringResource(R.string.explore_empty, selectedTag),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(VividSpace.xs))
+        Text(
+            stringResource(R.string.explore_empty_hint),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(VividSpace.m))
+        val others = ExplorePaging.TAGS.filter { it != selectedTag }.take(6)
+        if (others.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
+                verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
+            ) {
+                others.forEach { tag ->
+                    SuggestionChip(
+                        onClick = { onSelectTag(tag) },
+                        label = { Text(Hashtags.display(tag)) },
+                        icon = {
+                            Icon(
+                                ExploreTopics.icon(tag),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        shape = VividExpressiveShapes.ChipUnselected
+                    )
                 }
             }
         }
@@ -570,37 +766,82 @@ private fun ExploreBrowseContent(
  * fallback offline (mismo aspecto, misma transición compartida).
  */
 @Composable
-private fun ExplorePostCard(post: PostData, aspect: Float, onClick: () -> Unit) {
+internal fun ExplorePostCard(
+    post: PostData,
+    aspect: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val postCd = stringResource(R.string.cd_post_by, post.username)
+    val imageModel = post.imageUrl.ifBlank { post.thumbnailUrl }
     Card(
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(aspect)
             .semantics { contentDescription = postCd }
             .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.extraLarge
     ) {
-        if (post.imageUrl.isNotBlank()) {
-            VividAsyncImage(
-                model = post.imageUrl,
-                contentDescription = postCd,
-                modifier = Modifier.fillMaxSize(),
-                // La miniatura ES la del detalle: misma clave compartida que
-                // PostDetailScreen.
-                sharedKey = VividSharedKeys.postImage(post.id)
-            )
-        } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "#${post.caption.take(10)}",
-                    fontSize = MaterialTheme.typography.bodySmall.fontSize
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (imageModel.isNotBlank()) {
+                VividAsyncImage(
+                    model = imageModel,
+                    contentDescription = postCd,
+                    modifier = Modifier.fillMaxSize(),
+                    sharedKey = VividSharedKeys.postImage(post.id)
                 )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        Hashtags.display(post.caption.take(12).trim()).ifBlank {
+                            post.caption.take(10)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (post.isVideo) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.55f),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(VividSpace.xs)
+                        .size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = stringResource(R.string.cd_explore_video),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+/** Alias de preview: tile cuadrado del mosaico. */
+@Composable
+internal fun ExplorePostTile(
+    post: PostData,
+    featured: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) = ExplorePostCard(
+    post = post,
+    aspect = if (featured) 0.75f else 1f,
+    onClick = onClick,
+    modifier = modifier.fillMaxWidth()
+)
+
 /**
- * Ritmo del mosaico de Explore (ver comentario en el grid):
+ * Ritmo del mosaico de Explore:
  *   - índices ≡ 2 y 7 (módulo 10): retrato 3:4 → 0.75
  *   - índice ≡ 5 (módulo 10): paisaje 4:3 → 1.33
  *   - resto: cuadrado 1:1

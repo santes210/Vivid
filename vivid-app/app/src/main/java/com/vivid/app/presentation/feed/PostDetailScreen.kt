@@ -46,6 +46,7 @@ import com.vivid.app.R
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.VividAsyncImage
+import com.vivid.app.ui.components.VividHashtagCaption
 import com.vivid.app.ui.components.VividLikeButton
 import com.vivid.app.ui.components.VividSkeleton
 import com.vivid.app.ui.haptics.rememberVividHaptics
@@ -200,8 +201,9 @@ fun PostDetailScreen(
                                 )
                             )
                             if (loaded.caption.isNotBlank()) {
-                                com.vivid.app.ui.components.VividHashtagCaption(
+                                VividHashtagCaption(
                                     caption = loaded.caption,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.padding(top = VividSpace.xs),
                                     onHashtagClick = onOpenHashtag
                                 )

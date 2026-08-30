@@ -65,6 +65,7 @@ import com.vivid.app.ui.motion.VividSharedTransitionHost
 import com.vivid.app.ui.motion.sharedComposable
 import com.vivid.app.presentation.search.SearchScreen
 import com.vivid.app.presentation.explore.ExploreScreen
+import com.vivid.app.presentation.explore.rememberExploreSession
 import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.stories.CreateStoryScreen
 import com.vivid.app.presentation.stories.StoryViewerRoute
@@ -137,6 +138,15 @@ fun VividNavigation(
 ) {
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
+    val exploreSession = rememberExploreSession()
+    fun openHashtag(tag: String) {
+        exploreSession.openTag(tag)
+        navController.navigate("search?tag=${Uri.encode(tag)}") {
+            popUpTo(Screen.Feed.route) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     val startDestination = remember(auth.currentUser?.uid) {
         when {
             auth.currentUser == null -> Screen.Auth.route
@@ -377,14 +387,7 @@ fun VividNavigation(
                         navController.navigate("story_viewer/${Uri.encode(storyId)}")
                     },
                     onCreateStory = { navController.navigate(Screen.CreateStory.route) },
-                    // Un #hashtag tocado en un caption abre Explorar ya filtrado.
-                    onOpenHashtag = { tag ->
-                        navController.navigate("search?tag=${Uri.encode(tag)}") {
-                            popUpTo(Screen.Feed.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
+                    onOpenHashtag = { openHashtag(it) }
                 )
             }
             sharedComposable(
@@ -588,9 +591,7 @@ fun VividNavigation(
                     onOpenProfile = { userId ->
                         navController.navigate("profile/${Uri.encode(userId)}")
                     },
-                    onOpenHashtag = { tag ->
-                        navController.navigate("search?tag=${Uri.encode(tag)}")
-                    }
+                    onOpenHashtag = { openHashtag(it) }
                 )
             }
             composable(Screen.BlockedUsers.route) {

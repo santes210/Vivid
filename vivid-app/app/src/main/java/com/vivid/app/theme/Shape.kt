@@ -136,6 +136,23 @@ object VividMaterialShapes {
     val MorphPressed: RoundedPolygon = MaterialShapes.Cookie9Sided
 
     /**
+     * Polígono del tema de Explorar. Cada tag tiene una silueta para que el
+     * chip y la cabecera "sepan" a ese tema al seleccionarse (morph desde
+     * [MorphResting]), no un tinte suelto.
+     */
+    fun topicPolygon(tag: String): RoundedPolygon = when (tag) {
+        "vivid" -> MaterialShapes.Sunny
+        "arte" -> MaterialShapes.Flower
+        "musica" -> MaterialShapes.SoftBurst
+        "viaje" -> MaterialShapes.Gem
+        "comida" -> MaterialShapes.Cookie9Sided
+        "tecnologia" -> MaterialShapes.PixelCircle
+        "moda" -> MaterialShapes.Diamond
+        "deporte" -> MaterialShapes.VerySunny
+        else -> MaterialShapes.Pill
+    }
+
+    /**
      * Reposo de un FAB **extendido** (ancho, no circular).
      *
      * El par Circle→Cookie9Sided funciona en un contenedor cuadrado (el botón

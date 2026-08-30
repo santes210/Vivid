@@ -13,6 +13,7 @@ import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.data.paging.ExplorePostsPagingSource
 import com.vivid.app.domain.repository.HashtagRepository
 import com.vivid.app.presentation.feed.PostData
+import com.vivid.app.util.Hashtags
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -21,8 +22,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -38,7 +42,8 @@ data class ExploreTag(
 class ExploreViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val hashtagRepository: HashtagRepository,
-    private val postDao: PostDao
+    private val postDao: PostDao,
+    private val exploreSession: ExploreSession
 ) : ViewModel() {
 
     private val _selectedTag = MutableStateFlow(ExplorePaging.TAGS.first())
@@ -71,6 +76,16 @@ class ExploreViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { hashtagRepository.refresh() }
         }
+        // Un `#tag` tocado en el feed llega aquí aunque Explorar aún no
+        // se haya abierto: el StateFlow replayea el valor pendiente.
+        // Complementa `search?tag=` (restoreState a veces ignora el arg nuevo).
+        exploreSession.pendingTag
+            .filterNotNull()
+            .onEach { tag ->
+                selectTag(tag)
+                exploreSession.consume()
+            }
+            .launchIn(viewModelScope)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -89,8 +104,6 @@ class ExploreViewModel @Inject constructor(
                     firestore = firestore,
                     tag = tag,
                     blockedUserIds = blocked,
-                    // Cada página traída de Firestore alimenta el cache de
-                    // posts en Room, que luego sirve el fallback offline.
                     onPostsLoaded = { page ->
                         runCatching {
                             postDao.insertPosts(page.map { it.toCachedEntity() })
@@ -106,8 +119,8 @@ class ExploreViewModel @Inject constructor(
     val cachedPosts: StateFlow<List<PostData>> = _cachedPosts.asStateFlow()
 
     fun selectTag(tag: String) {
-        val normalized = com.vivid.app.util.Hashtags.normalize(tag)
-        if (normalized.isBlank() || normalized == _selectedTag.value) return
+        val normalized = Hashtags.normalize(tag)
+        if (normalized.isEmpty() || normalized == _selectedTag.value) return
         _selectedTag.value = normalized
     }
 
