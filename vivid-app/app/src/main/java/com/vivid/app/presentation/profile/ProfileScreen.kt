@@ -175,7 +175,17 @@ fun ProfileScreen(
                         return@addSnapshotListener
                     }
                     loadFailed = false
-                    photoPosts = snapshot?.documents.orEmpty().map { doc ->
+                    photoPosts = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                        // "Solo amigos" en el grid: el autor y quienes lo
+                        // siguen. Un visitante sin seguir no los ve.
+                        // (Nota: si el estado de seguimiento llega después
+                        // que los posts, el grid se corrige en el siguiente
+                        // evento del listener de posts.)
+                        val visibility = doc.getString("visibility") ?: "public"
+                        val audienceFriends = visibility == com.vivid.app.domain.model.PostVisibility.FRIENDS.value
+                        if (audienceFriends && !isOwnProfile && !profile.isFollowedByCurrentUser) {
+                            return@mapNotNull null
+                        }
                         ProfilePost(
                             id = doc.id,
                             imageUrl = doc.getString("imageUrl").orEmpty(),

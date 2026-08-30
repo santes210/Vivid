@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -489,9 +490,15 @@ internal fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64:
             return
         }
     }
-    if (avatarUrl.isNotBlank()) {
+    // Igual que UserAvatar: bloque de superficie mientras carga y letra si
+    // la URL falla (antes: hueco vacío o flash blanco).
+    var avatarFailed by remember(avatarUrl) { mutableStateOf(false) }
+    if (avatarUrl.isNotBlank() && !avatarFailed) {
         AsyncImage(model = avatarUrl, contentDescription = "Avatar",
-            modifier = Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
+            modifier = Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop,
+            placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHigh),
+            error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHigh),
+            onError = { avatarFailed = true })
     } else {
         Box(modifier = Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
             Text(displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "V",
@@ -522,9 +529,19 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
         contentAlignment = Alignment.Center
     ) {
+        var imageFailed by remember(post.imageUrl) { mutableStateOf(false) }
         when {
             bitmap != null -> Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            post.imageUrl.isNotBlank() -> AsyncImage(model = post.imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            post.imageUrl.isNotBlank() && !imageFailed -> AsyncImage(
+                model = post.imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                // Mismo color que el fondo del Box: la celda no parpadea.
+                placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerLow),
+                error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerLow),
+                onError = { imageFailed = true }
+            )
             else -> Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
         }
         if (post.isVideo) {
@@ -586,7 +603,9 @@ internal fun ProfilePostViewerDialog(
                             val bmp = remember(post.imageBase64) { try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } }
                             if (bmp != null) Image(bitmap = bmp.asImageBitmap(), null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                         }
-                        post.imageUrl.isNotBlank() -> AsyncImage(model = post.imageUrl, null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        post.imageUrl.isNotBlank() -> AsyncImage(model = post.imageUrl, null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                            placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHigh),
+                            error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest))
                     }
                 }
                 if (post.caption.isNotBlank()) Text(post.caption, modifier = Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)

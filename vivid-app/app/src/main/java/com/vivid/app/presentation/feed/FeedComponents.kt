@@ -33,6 +33,7 @@ import com.vivid.app.theme.VividShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.ui.components.DoubleTapLikeBox
 import com.vivid.app.ui.components.UserAvatar
+import com.vivid.app.ui.components.VividHashtagCaption
 import com.vivid.app.ui.components.VividLikeButton
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.util.SettingsManager
@@ -376,7 +377,8 @@ internal fun PostCard(
     onReportPost: (String, String, String) -> Unit = { _, _, _ -> },
     onImageUrlExpired: (PostData) -> Unit = {},
     onMusicUrlExpired: (PostData) -> Unit = {},
-    onVideoUrlExpired: (PostData) -> Unit = {}
+    onVideoUrlExpired: (PostData) -> Unit = {},
+    onHashtagClick: (String) -> Unit = {}
 ) {
     val haptics = rememberVividHaptics()
 
@@ -504,11 +506,17 @@ internal fun PostCard(
         }
 
         // ── Caption ──
+        // Los #hashtags son tocables: abren Explorar filtrado por el tag.
         if (post.caption.isNotBlank()) {
             Row(modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xxs)) {
                 Text(post.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                 Spacer(Modifier.width(6.dp))
-                Text(SettingsManager.filterOffensiveWords(post.caption), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                VividHashtagCaption(
+                    caption = post.caption,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    onHashtagClick = onHashtagClick
+                )
             }
         }
 

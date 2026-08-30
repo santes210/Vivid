@@ -258,4 +258,29 @@
     <!-- ========== Widget del launcher "Crear" ========== -->
     <string name="widget_create_label">Crear</string>
     <string name="widget_create_description">Abre el creador de Vivid</string>
+
+    <!-- ========== Mensajes: lista de chats ========== -->
+    <string name="chat_list_search_placeholder">Buscar conversación…</string>
+    <string name="chat_list_error_signed_out">Inicia sesión</string>
+    <string name="chat_list_error_loading">No se pudieron cargar los mensajes</string>
+    <string name="chat_list_no_matches">No se encontraron usuarios como \'%1$s\'</string>
+
+    <!-- ========== Crear: caption y música ========== -->
+    <string name="create_caption_label">Leyenda</string>
+    <string name="create_caption_placeholder">Simplemente escribe…</string>
+    <string name="create_music_pick">Elegir</string>
+    <string name="create_music_change">Cambiar</string>
+
+    <!-- ========== Explorar: hashtags y offline ========== -->
+    <string name="explore_offline_cached">Sin conexión · Mostrando lo guardado en tu dispositivo</string>
+
+    <!-- ========== Publicación no disponible (solo amigos / borrada) ========== -->
+    <string name="post_not_available">Esta publicación no está disponible</string>
+
+    <!-- ========== Audiencia de la publicación (Material You) ========== -->
+    <string name="audience_title">¿Quién puede ver tu publicación?</string>
+    <string name="audience_public">Público</string>
+    <string name="audience_friends">Solo amigos</string>
+    <string name="audience_public_hint">Todos pueden verla, también en Explorar</string>
+    <string name="audience_friends_hint">Solo las personas que te siguen pueden verla</string>
 </resources>

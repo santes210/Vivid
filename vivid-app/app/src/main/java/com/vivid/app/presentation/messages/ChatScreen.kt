@@ -53,6 +53,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.VividSpace
@@ -63,11 +64,13 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.compose.runtime.DisposableEffect
 import com.vivid.app.ui.components.VividSnackbarHost
+import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.ui.components.VividAlertDialog
 import com.vivid.app.ui.components.VividDialogTone
 
@@ -125,6 +128,22 @@ fun ChatScreen(
         viewModel.openChat(chatId, receiverId, otherUserName)
     }
 
+    // Foto real del otro usuario para la cabecera: la ruta de navegación solo
+    // trae id y nombre, así que se consulta el perfil aquí. Si tarda o falla,
+    // UserAvatar muestra su bloque de carga y luego la letra inicial.
+    var otherUserAvatar by remember(receiverId) { mutableStateOf("") }
+    LaunchedEffect(receiverId) {
+        if (receiverId.isBlank()) return@LaunchedEffect
+        otherUserAvatar = runCatching {
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(receiverId)
+                .get()
+                .await()
+                .getString("avatarUrl")
+        }.getOrNull().orEmpty()
+    }
+
     LaunchedEffect(userMessage) {
         userMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -164,27 +183,17 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { if (receiverId.isNotBlank()) onOpenProfile(receiverId) }
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.primary,
-                                            MaterialTheme.colorScheme.tertiary
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = otherUserName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        // Avatar real del otro usuario (antes: letra sobre un
+                        // gradiente que ignoraba la foto). Con userId el avatar
+                        // es el ancla de la transición compartida hacia el
+                        // perfil: el círculo viaja de la cabecera del chat a la
+                        // cabecera del perfil.
+                        UserAvatar(
+                            imageUrl = otherUserAvatar,
+                            name = otherUserName,
+                            userId = receiverId.ifBlank { null },
+                            size = 40.dp
+                        )
                         Spacer(Modifier.width(VividSpace.s))
                         Column {
                             Text(

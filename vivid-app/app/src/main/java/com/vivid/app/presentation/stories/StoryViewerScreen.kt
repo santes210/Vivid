@@ -36,7 +36,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import coil3.compose.AsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import com.vivid.app.util.rememberPlaybackPolicy
@@ -603,9 +602,21 @@ private fun PhotoStoryView(story: ViewerStory) {
     val bitmap = remember(story.mediaBase64) { decodeBase64Bitmap(story.mediaBase64) }
     when {
         // Fotos nuevas se suben a B2: mediaUrl trae la URL firmada.
-        story.mediaUrl.isNotBlank() -> AsyncImage(model = story.mediaUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        story.mediaUrl.isNotBlank() -> com.vivid.app.ui.components.VividAsyncImage(
+            model = story.mediaUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            placeholderColor = Color.Black,
+            errorColor = Color.Black
+        )
         bitmap != null -> Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        story.thumbnailUrl.isNotBlank() -> AsyncImage(model = story.thumbnailUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        story.thumbnailUrl.isNotBlank() -> com.vivid.app.ui.components.VividAsyncImage(
+            model = story.thumbnailUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            placeholderColor = Color.Black,
+            errorColor = Color.Black
+        )
         else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Story", color = Color.White) }
     }
 }

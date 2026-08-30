@@ -47,4 +47,12 @@ interface PostDao {
 
     @Query("SELECT MAX(cachedAt) FROM posts")
     suspend fun getLastCachedAt(): Long?
+
+    /**
+     * Posts cacheados que llevan exactamente este hashtag. `hashtags` se
+     * guarda con comas de ambos lados (",arte,musica,"), así el LIKE de
+     * ",tag," no produce falsos positivos (",arte," no matchea ",smart,").
+     */
+    @Query("SELECT * FROM posts WHERE hashtags LIKE '%,' || :tag || ',%' ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getPostsByHashtag(tag: String, limit: Int): List<PostEntity>
 }

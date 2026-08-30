@@ -23,7 +23,13 @@ data class PostData(
     val musicArtist: String = "",
     val musicAssetFile: String = "",
     val musicUrl: String = "",
-    val musicStorageKey: String = ""
+    val musicStorageKey: String = "",
+    // Hashtags del caption (minúsculas, sin "#"). Indexados en Firestore para
+    // Explorar y serializados en el cache Room.
+    val hashtags: List<String> = emptyList(),
+    // Audiencia: "public" | "friends" (ver PostVisibility). Los posts legacy
+    // sin el campo se tratan como públicos.
+    val visibility: String = "public"
 )
 
 @Immutable

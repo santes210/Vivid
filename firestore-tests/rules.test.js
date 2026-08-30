@@ -224,6 +224,63 @@ describe("posts", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Posts: audiencia por publicación (visibility: public | friends)
+// ---------------------------------------------------------------------------
+
+describe("posts: audiencia por publicación", () => {
+  test("post 'friends': un no-seguidor no puede leerlo por get", async () => {
+    await seedUser("alice");
+    await seedPost("pFriends", { visibility: "friends", caption: "#vivid solo amigos" });
+    const carol = env.authenticatedContext("carol").firestore();
+    await assertFails(carol.doc("posts/pFriends").get());
+  });
+
+  test("post 'friends': el autor y un seguidor sí pueden", async () => {
+    await seedUser("alice");
+    await seedPost("pFriends", { visibility: "friends" });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("users/alice/followers/bob").set({ timestamp: 1 });
+    });
+    const alice = env.authenticatedContext("alice").firestore();
+    const bob = env.authenticatedContext("bob").firestore();
+    await assertSucceeds(alice.doc("posts/pFriends").get());
+    await assertSucceeds(bob.doc("posts/pFriends").get());
+  });
+
+  test("post público (y legacy sin el campo) se lee igual que antes", async () => {
+    await seedUser("alice");
+    await seedPost("pPublic", { visibility: "public" });
+    await seedPost("pLegacy");
+    const carol = env.authenticatedContext("carol").firestore();
+    await assertSucceeds(carol.doc("posts/pPublic").get());
+    await assertSucceeds(carol.doc("posts/pLegacy").get());
+  });
+
+  test("la query pública (list) no cambia: el filtro 'friends' es del cliente", async () => {
+    await seedUser("alice");
+    await seedPost("p1", { visibility: "public" });
+    await seedPost("p2", { visibility: "friends" });
+    const carol = env.authenticatedContext("carol").firestore();
+    // where() (SDK cliente), no whereEqualTo() (eso es de firebase-admin).
+    await assertSucceeds(
+      carol.collection("posts").where("isPrivate", "==", false).get()
+    );
+  });
+
+  test("los comentarios de un post 'friends' tampoco se leen sin seguir", async () => {
+    await seedUser("alice");
+    await seedPost("pFriends", { visibility: "friends" });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("posts/pFriends/comments/c1").set({
+        userId: "alice", text: "hola", likesCount: 0
+      });
+    });
+    const carol = env.authenticatedContext("carol").firestore();
+    await assertFails(carol.doc("posts/pFriends/comments/c1").get());
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Stories y Reels: contadores y privacidad
 // ---------------------------------------------------------------------------
 

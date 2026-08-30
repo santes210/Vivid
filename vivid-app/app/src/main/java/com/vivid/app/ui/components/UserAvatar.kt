@@ -7,6 +7,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -15,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import androidx.compose.ui.graphics.painter.ColorPainter
 import com.vivid.app.ui.motion.VividSharedKeys
 import com.vivid.app.ui.motion.vividSharedElement
 
@@ -47,12 +52,19 @@ fun UserAvatar(
     }
     val shapeModifier = sharedModifier.size(size).clip(CircleShape)
     val letter = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-    if (imageUrl.isNotBlank()) {
+    // Carga: bloque de superficie (nunca un círculo vacío); error de URL:
+    // mismo fallback de letra que cuando no hay foto. Así el avatar se ve
+    // "completo" desde el primer frame en listas con scroll rápido.
+    var loadFailed by remember(imageUrl) { mutableStateOf(false) }
+    if (imageUrl.isNotBlank() && !loadFailed) {
         AsyncImage(
             model = imageUrl,
             contentDescription = contentDescription,
             modifier = shapeModifier,
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
+            placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHigh),
+            error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHigh),
+            onError = { loadFailed = true }
         )
     } else {
         Box(

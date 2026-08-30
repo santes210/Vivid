@@ -242,4 +242,29 @@
     <!-- ========== Launcher widget "Create" ========== -->
     <string name="widget_create_label">Create</string>
     <string name="widget_create_description">Open Vivid\'s creator</string>
+
+    <!-- ========== Messages: chat list ========== -->
+    <string name="chat_list_search_placeholder">Search chats…</string>
+    <string name="chat_list_error_signed_out">Sign in required</string>
+    <string name="chat_list_error_loading">Couldn\'t load your messages</string>
+    <string name="chat_list_no_matches">No users found for \'%1$s\'</string>
+
+    <!-- ========== Create: caption and music ========== -->
+    <string name="create_caption_label">Caption</string>
+    <string name="create_caption_placeholder">Just write something…</string>
+    <string name="create_music_pick">Pick</string>
+    <string name="create_music_change">Change</string>
+
+    <!-- ========== Explore: hashtags and offline ========== -->
+    <string name="explore_offline_cached">Offline · Showing what\'s saved on your device</string>
+
+    <!-- ========== Post unavailable (friends-only / deleted) ========== -->
+    <string name="post_not_available">This post isn\'t available</string>
+
+    <!-- ========== Post audience (Material You) ========== -->
+    <string name="audience_title">Who can see your post?</string>
+    <string name="audience_public">Public</string>
+    <string name="audience_friends">Friends only</string>
+    <string name="audience_public_hint">Anyone can see it, including Explore</string>
+    <string name="audience_friends_hint">Only people who follow you can see it</string>
 </resources>

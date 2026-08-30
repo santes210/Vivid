@@ -12,7 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,7 +68,15 @@ internal fun PostVideoPlayer(
 
     Box(Modifier.fillMaxWidth().height(380.dp).background(Color.Black)) {
         if (!isReady && thumbnailUrl.isNotBlank()) {
-            AsyncImage(model = thumbnailUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            // El poster ya está pintado desde el primer frame; cuando el video
+            // está listo, el PlayerView lo tapa.
+            com.vivid.app.ui.components.VividAsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                placeholderColor = Color.Black,
+                errorColor = Color.Black
+            )
         }
         AndroidView(
             factory = { ctx2 ->

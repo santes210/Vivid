@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.vivid.app.data.local.VividDatabase
 import com.vivid.app.data.local.dao.ChatDao
+import com.vivid.app.data.local.dao.HashtagDao
 import com.vivid.app.data.local.dao.MessageDao
 import com.vivid.app.data.local.dao.PostDao
 import com.vivid.app.data.local.dao.ReelDao
@@ -53,4 +54,7 @@ object DatabaseModule {
 
     @Provides
     fun provideReelDao(db: VividDatabase): ReelDao = db.reelDao()
+
+    @Provides
+    fun provideHashtagDao(db: VividDatabase): HashtagDao = db.hashtagDao()
 }

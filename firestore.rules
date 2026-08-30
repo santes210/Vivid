@@ -29,7 +29,27 @@ service cloud.firestore {
 
     function canReadPost(postId) {
       let post = get(/databases/$(database)/documents/posts/$(postId)).data;
-      return canReadOwnedContent(post.userId, post.get('isPrivate', true));
+      return canReadOwnedContent(post.userId, post.get('isPrivate', true))
+        && canReadPostVisibility(post.userId, post);
+    }
+
+    /**
+     * Audiencia por publicación ("visibility": "public" | "friends").
+     *
+     * "friends" = solo el autor y quienes lo siguen. Los posts legacy (sin
+     * el campo) se tratan como públicos. Aplica SOLO a la lectura directa
+     * (get): una query (list) no puede demostrar este filtro —los posts
+     * legacy no tienen el campo, así que whereEqualTo("visibility")
+     * los excluiría del índice— y el cliente descarta los "friends" que
+     * llegan en resultados públicos (feed, explorar, perfil).
+     */
+    function canReadPostVisibility(authorId, data) {
+      return signedIn() && (
+        request.auth.uid == authorId
+        || data.get('visibility', 'public') == 'public'
+        || (authorId is string
+          && exists(/databases/$(database)/documents/users/$(authorId)/followers/$(request.auth.uid)))
+      );
     }
 
     function canReadReel(reelId) {
@@ -163,7 +183,12 @@ service cloud.firestore {
     //  Posts
     // ─────────────────────────────────────────────────
     match /posts/{postId} {
-      allow read: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true));
+      // get: privacidad de cuenta + audiencia por publicación.
+      // list: las queries públicas siguen la regla de cuenta (ver nota en
+      // canReadPostVisibility); el cliente filtra los "friends" que caen.
+      allow get: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true))
+        && canReadPostVisibility(resource.data.userId, resource.data);
+      allow list: if canReadOwnedContent(resource.data.userId, resource.data.get('isPrivate', true));
 
       // Un post nace siempre con los contadores en cero y la privacidad
       // desnormalizada coincide con el perfil actual del autor.

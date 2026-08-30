@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -36,20 +35,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil3.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.VividExpressiveShapes
-import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividSpace
+import com.vivid.app.ui.components.VividAsyncImage
 import com.vivid.app.ui.components.VividLikeButton
+import com.vivid.app.ui.components.VividSkeleton
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
 import com.vivid.app.ui.motion.vividSharedElement
@@ -73,6 +71,8 @@ fun PostDetailScreen(
     postId: String,
     onBack: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
+    /** Tocar un #hashtag del caption abre Explorar filtrado por ese tag. */
+    onOpenHashtag: (tag: String) -> Unit = {},
     feedViewModel: FeedViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -90,9 +90,22 @@ fun PostDetailScreen(
         post = runCatching {
             val doc = db.collection("posts").document(postId).get().await()
             if (!doc.exists()) return@runCatching null
+            val authorId = doc.getString("userId").orEmpty()
+            val visibility = doc.getString("visibility") ?: "public"
+            // "Solo amigos" llegado por deep link / notificación: solo el
+            // autor y sus seguidores. Las reglas de Firestore lo bloquean a
+            // nivel documento; aquí se traduce a estado de UI (no a crash).
+            if (visibility == "friends" && currentUserId != authorId) {
+                val isFollower = currentUserId.isNotBlank() && runCatching {
+                    db.collection("users").document(authorId)
+                        .collection("followers").document(currentUserId)
+                        .get().await().exists()
+                }.getOrDefault(false)
+                if (!isFollower) return@runCatching null
+            }
             PostData(
                 id = postId,
-                userId = doc.getString("userId").orEmpty(),
+                userId = authorId,
                 username = doc.getString("username").orEmpty(),
                 userProfilePicture = doc.getString("userProfilePicture").orEmpty(),
                 userProfilePictureBase64 = "",
@@ -105,7 +118,9 @@ fun PostDetailScreen(
                 timestamp = doc.getLong("timestamp") ?: 0L,
                 isLiked = false,
                 isSaved = false,
-                storageKey = doc.getString("storageKey").orEmpty()
+                storageKey = doc.getString("storageKey").orEmpty(),
+                hashtags = (doc.get("hashtags") as? List<*>)?.mapNotNull { it as? String }?.map { it.lowercase() }.orEmpty(),
+                visibility = visibility
             )
         }.getOrNull()
         likesCount = post?.likesCount ?: 0
@@ -135,14 +150,22 @@ fun PostDetailScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    ContainedLoadingIndicator(
-                        polygons = VividMaterialShapes.LoadingSequence
-                    )
+                loading -> Column(Modifier.fillMaxSize()) {
+                    // Skeleton con la silueta del detalle: imagen 1:1 + autor +
+                    // caption. La pantalla no cambia de forma al llegar el post.
+                    VividSkeleton(modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+                    Spacer(Modifier.height(VividSpace.m))
+                    Column(Modifier.padding(horizontal = VividSpace.m)) {
+                        VividSkeleton(modifier = Modifier.fillMaxWidth(0.4f).height(18.dp))
+                        Spacer(Modifier.height(VividSpace.s))
+                        VividSkeleton(modifier = Modifier.fillMaxWidth(0.85f).height(14.dp))
+                    }
                 }
 
                 post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.explore_error))
+                    // Cubre tanto "no existe" como "solo amigos y no sigues al
+                    // autor": al usuario final es lo mismo.
+                    Text(stringResource(R.string.post_not_available))
                 }
 
                 else -> {
@@ -153,17 +176,16 @@ fun PostDetailScreen(
                             .verticalScroll(rememberScrollState())
                     ) {
                         if (loaded.imageUrl.isNotBlank()) {
-                            AsyncImage(
+                            VividAsyncImage(
                                 model = loaded.imageUrl,
                                 contentDescription = stringResource(R.string.cd_post_detail_image),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1f)
-                                    // Misma clave que la miniatura del grid: es
-                                    // literalmente la misma imagen, no otra.
-                                    .vividSharedElement(VividSharedKeys.postImage(loaded.id))
                                     .clip(VividExpressiveShapes.MediaLarge),
-                                contentScale = ContentScale.Crop
+                                // Misma clave que la miniatura del grid: es
+                                // literalmente la misma imagen, no otra.
+                                sharedKey = VividSharedKeys.postImage(loaded.id)
                             )
                         }
 
@@ -178,10 +200,10 @@ fun PostDetailScreen(
                                 )
                             )
                             if (loaded.caption.isNotBlank()) {
-                                Text(
-                                    loaded.caption,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.padding(top = VividSpace.xs)
+                                com.vivid.app.ui.components.VividHashtagCaption(
+                                    caption = loaded.caption,
+                                    modifier = Modifier.padding(top = VividSpace.xs),
+                                    onHashtagClick = onOpenHashtag
                                 )
                             }
                             if (likesCount > 0) {

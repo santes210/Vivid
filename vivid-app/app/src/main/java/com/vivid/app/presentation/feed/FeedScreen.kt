@@ -57,6 +57,8 @@ fun FeedScreen(
     onOpenRequests: () -> Unit = {},
     onOpenProfile: () -> Unit,
     onOpenUserProfile: (userId: String) -> Unit = {},
+    /** Tocar un #hashtag del caption abre Explorar filtrado por ese tag. */
+    onOpenHashtag: (tag: String) -> Unit = {},
     onOpenStoryViewer: (storyId: String) -> Unit = {},
     onCreateStory: () -> Unit = {}
 ) {
@@ -275,6 +277,15 @@ fun FeedScreen(
                         val data = doc.data ?: return@mapNotNull null
                         val authorId = data["userId"] as? String ?: ""
                         if (authorId in blockedUserIds) return@mapNotNull null
+                        val visibility = data["visibility"] as? String ?: "public"
+                        // "Solo amigos": visible para el autor y sus seguidores.
+                        // El listener público global también devuelve estos
+                        // documentos, así que aquí se descartan los de autores
+                        // que el usuario no sigue.
+                        if (visibility == "friends" &&
+                            authorId != currentUserId &&
+                            authorId !in followingUserIds
+                        ) return@mapNotNull null
                         PostData(
                             id = doc.id,
                             userId = authorId,
@@ -295,7 +306,9 @@ fun FeedScreen(
                             musicArtist = data["musicArtist"] as? String ?: "",
                             musicAssetFile = data["musicAssetFile"] as? String ?: "",
                             musicUrl = resignedMusicUrls[doc.id] ?: data["musicUrl"] as? String ?: "",
-                            musicStorageKey = data["musicStorageKey"] as? String ?: ""
+                            musicStorageKey = data["musicStorageKey"] as? String ?: "",
+                            hashtags = (data["hashtags"] as? List<*>)?.mapNotNull { it as? String }?.map { it.lowercase() }.orEmpty(),
+                            visibility = visibility
                         )
                     } catch (_: Exception) { null }
                 }
@@ -387,7 +400,7 @@ fun FeedScreen(
         if (shouldLoadMore.value && !isLoadingMore && hasMore && lastVisibleDoc != null) {
             isLoadingMore = true
             val result = runCatching {
-                loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, blockedUserIds, feedViewModel)
+                loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, blockedUserIds, feedViewModel, followingUserIds)
             }.getOrElse { FeedPageResult(emptyList(), null) }
             if (result.posts.isNotEmpty()) {
                 val existingIds = posts.map { it.id }.toSet()
@@ -520,7 +533,8 @@ fun FeedScreen(
                                         onReportPost = onReportPost,
                                         onImageUrlExpired = onImageUrlExpired,
                                         onMusicUrlExpired = onMusicUrlExpired,
-                                        onVideoUrlExpired = onVideoUrlExpired
+                                        onVideoUrlExpired = onVideoUrlExpired,
+                                        onHashtagClick = onOpenHashtag
                                     )
                                 }
                             }
@@ -630,7 +644,8 @@ private suspend fun loadMorePostsFromFirebase(
     lastDoc: DocumentSnapshot?,
     likedPostIds: Set<String>?,
     blockedUserIds: Set<String>,
-    feedViewModel: FeedViewModel
+    feedViewModel: FeedViewModel,
+    followingUserIds: Set<String> = emptySet()
 ): FeedPageResult = withContext(Dispatchers.IO) {
     if (lastDoc == null) return@withContext FeedPageResult(emptyList(), null)
     val firestore = FirebaseFirestore.getInstance()
@@ -652,7 +667,9 @@ private suspend fun loadMorePostsFromFirebase(
         val mapped = coroutineScope {
             snapshot.documents
                 .filterNot { it.getString("userId") in blockedUserIds }
-                .map { doc -> async { mapPostDoc(doc, currentUserId, likedPostIds) } }
+                .map { doc ->
+                    async { mapPostDoc(doc, currentUserId, likedPostIds, followingUserIds) }
+                }
                 .awaitAll().filterNotNull()
         }
         visiblePosts += mapped
@@ -664,9 +681,17 @@ private suspend fun loadMorePostsFromFirebase(
 private suspend fun mapPostDoc(
     doc: DocumentSnapshot,
     currentUserId: String,
-    likedPostIds: Set<String>?
+    likedPostIds: Set<String>?,
+    /** Ids de autores que el usuario sigue (audiencia "friends"). */
+    followingUserIds: Set<String> = emptySet()
 ): PostData? {
     val data = doc.data ?: return null
+    val paginationAuthorId = data["userId"] as? String ?: ""
+    val paginationVisibility = data["visibility"] as? String ?: "public"
+    if (paginationVisibility == "friends" &&
+        paginationAuthorId != currentUserId &&
+        paginationAuthorId !in followingUserIds
+    ) return null
     val isLiked = when {
         currentUserId.isBlank() -> false
         likedPostIds != null -> doc.id in likedPostIds
@@ -696,6 +721,8 @@ private suspend fun mapPostDoc(
         commentsCount = (data["commentsCount"] as? Long)?.toInt() ?: 0,
         timestamp = data["timestamp"] as? Long ?: 0L,
         isLiked = isLiked,
+        hashtags = (data["hashtags"] as? List<*>)?.mapNotNull { it as? String }?.map { it.lowercase() }.orEmpty(),
+        visibility = paginationVisibility,
         musicTitle = data["musicTitle"] as? String ?: "",
         musicArtist = data["musicArtist"] as? String ?: "",
         musicAssetFile = data["musicAssetFile"] as? String ?: "",

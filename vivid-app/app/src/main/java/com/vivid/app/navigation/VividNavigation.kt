@@ -87,7 +87,7 @@ sealed class Screen(
 ) {
     object Auth : Screen("auth", "Auth")
     object Feed : Screen("feed", "Inicio", Icons.Default.Home, com.vivid.app.R.string.nav_home)
-    object Search : Screen("search", "Explorar", Icons.Default.Search, com.vivid.app.R.string.nav_explore)
+    object Search : Screen("search?tag={tag}", "Explorar", Icons.Default.Search, com.vivid.app.R.string.nav_explore)
     object Create : Screen("create", "Crear", VividIcons.Create, com.vivid.app.R.string.nav_create)
     object CreateReel : Screen("create_reel", "Reel", Icons.Default.MovieCreation)
     object CreateStory : Screen("create_story", "Story", Icons.Default.AutoAwesome)
@@ -112,6 +112,14 @@ sealed class Screen(
     object VideoTrimmer : Screen("video_trimmer", "Trim")
     object PermissionsOnboarding : Screen("permissions_onboarding", "Permisos")
 }
+
+/**
+ * Comparación de rutas por su base (sin query params): los destinos con
+ * argumentos opcionales —p. ej. `search?tag={tag}`— reportan el patrón
+ * completo como `currentRoute`, y la barra debe seguir marcando "Explorar".
+ */
+private fun String?.matchesRoute(route: String): Boolean =
+    this?.substringBefore('?') == route.substringBefore('?')
 
 /** Etiqueta localizada de un destino: usa `titleRes` si existe, `title` como respaldo. */
 @Composable
@@ -223,7 +231,7 @@ fun VividNavigation(
             com.vivid.app.MainActivity.SHORTCUT_CREATE_REEL -> Screen.CreateReel.route
             com.vivid.app.MainActivity.SHORTCUT_CREATE_STORY -> Screen.CreateStory.route
             com.vivid.app.MainActivity.SHORTCUT_MESSAGES -> Screen.Messages.route
-            com.vivid.app.MainActivity.SHORTCUT_SEARCH -> Screen.Search.route
+            com.vivid.app.MainActivity.SHORTCUT_SEARCH -> Screen.Search.route.substringBefore('?')
             else -> return@LaunchedEffect
         }
         navController.navigate(route) {
@@ -251,8 +259,8 @@ fun VividNavigation(
                     currentRoute = currentRoute,
                     destinations = primaryDestinations,
                     onNavigate = { screen ->
-                        if (currentRoute != screen.route) {
-                            navController.navigate(screen.route) {
+                        if (!currentRoute.matchesRoute(screen.route)) {
+                            navController.navigate(screen.route.substringBefore('?')) {
                                 popUpTo(Screen.Feed.route) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
@@ -285,8 +293,8 @@ fun VividNavigation(
                     currentRoute = currentRoute,
                     destinations = primaryDestinations,
                     onNavigate = { screen ->
-                        if (currentRoute != screen.route) {
-                            navController.navigate(screen.route) {
+                        if (!currentRoute.matchesRoute(screen.route)) {
+                            navController.navigate(screen.route.substringBefore('?')) {
                                 popUpTo(Screen.Feed.route) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
@@ -368,11 +376,29 @@ fun VividNavigation(
                     onOpenStoryViewer = { storyId ->
                         navController.navigate("story_viewer/${Uri.encode(storyId)}")
                     },
-                    onCreateStory = { navController.navigate(Screen.CreateStory.route) }
+                    onCreateStory = { navController.navigate(Screen.CreateStory.route) },
+                    // Un #hashtag tocado en un caption abre Explorar ya filtrado.
+                    onOpenHashtag = { tag ->
+                        navController.navigate("search?tag=${Uri.encode(tag)}") {
+                            popUpTo(Screen.Feed.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 )
             }
-            sharedComposable(Screen.Search.route) {
+            sharedComposable(
+                route = Screen.Search.route,
+                arguments = listOf(
+                    navArgument("tag") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val initialTag = backStackEntry.arguments?.getString("tag").orEmpty()
                 ExploreScreen(
+                    initialTag = initialTag,
                     onPostClick = { postId -> navController.navigate("post/$postId") },
                     onProfileClick = { userId -> navController.navigate("profile/$userId") }
                 )
@@ -561,6 +587,9 @@ fun VividNavigation(
                     onBack = { navController.popBackStack() },
                     onOpenProfile = { userId ->
                         navController.navigate("profile/${Uri.encode(userId)}")
+                    },
+                    onOpenHashtag = { tag ->
+                        navController.navigate("search?tag=${Uri.encode(tag)}")
                     }
                 )
             }
@@ -643,7 +672,7 @@ private fun VividBottomBar(
         ) {
             val barWidth = constraints.maxWidth.toFloat()
             val itemWidth = if (destinations.isNotEmpty()) barWidth / destinations.size else barWidth
-            val selectedIndex = destinations.indexOfFirst { currentRoute == it.screen.route }
+            val selectedIndex = destinations.indexOfFirst { currentRoute.matchesRoute(it.screen.route) }
             val safeIndex = if (selectedIndex in destinations.indices) selectedIndex else 0
             val pillWidthPx = with(LocalDensity.current) { CREATE_PILL_WIDTH.toPx() }
 
@@ -671,7 +700,7 @@ private fun VividBottomBar(
 
             Row(Modifier.fillMaxWidth().focusGroup()) {
                 destinations.forEachIndexed { index, dest ->
-                    val isSelected = currentRoute == dest.screen.route
+                    val isSelected = currentRoute.matchesRoute(dest.screen.route)
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -826,7 +855,7 @@ private fun VividNavigationRail(
     ) {
         destinations.forEach { dest ->
             if (dest.screen == Screen.Create) return@forEach
-            val isSelected = currentRoute == dest.screen.route
+            val isSelected = currentRoute.matchesRoute(dest.screen.route)
             WideNavigationRailItem(
                 railExpanded = expanded,
                 selected = isSelected,
