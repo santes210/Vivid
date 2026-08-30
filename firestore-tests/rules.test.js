@@ -261,8 +261,9 @@ describe("posts: audiencia por publicación", () => {
     await seedPost("p1", { visibility: "public" });
     await seedPost("p2", { visibility: "friends" });
     const carol = env.authenticatedContext("carol").firestore();
+    // where() (SDK cliente), no whereEqualTo() (eso es de firebase-admin).
     await assertSucceeds(
-      carol.collection("posts").whereEqualTo("isPrivate", false).get()
+      carol.collection("posts").where("isPrivate", "==", false).get()
     );
   });
 
