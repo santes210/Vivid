@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -46,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,6 +79,7 @@ import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.ui.components.VividAsyncImage
 import com.vivid.app.ui.components.VividErrorState
+import com.vivid.app.ui.components.VividOfflineBanner
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.ui.components.VividSearchBar
 import com.vivid.app.ui.components.VividSkeletonGrid
@@ -91,14 +94,23 @@ private const val TABLET_MIN_WIDTH_DP = 600
 fun ExploreScreen(
     onPostClick: (String) -> Unit = {},
     onProfileClick: (String) -> Unit = {},
+    /** Tag preseleccionado al llegar desde un hashtag tocado en un post. */
+    initialTag: String = "",
     exploreViewModel: ExploreViewModel = hiltViewModel(),
     searchViewModel: SearchViewModel = hiltViewModel(),
     blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
 ) {
     val blockedUsersState by blockedUsersViewModel.state.collectAsState()
     val selectedTag by exploreViewModel.selectedTag.collectAsState()
+    val exploreTags by exploreViewModel.tags.collectAsState()
+    val cachedTagPosts by exploreViewModel.cachedPosts.collectAsState()
     val searchQuery by searchViewModel.query.collectAsState()
     val history by searchViewModel.history.collectAsState()
+
+    // Navegar desde un #tag (feed/detalle) preselecciona el filtro.
+    LaunchedEffect(initialTag) {
+        if (initialTag.isNotBlank()) exploreViewModel.selectTag(initialTag)
+    }
 
     LaunchedEffect(blockedUsersState.userIds, blockedUsersState.isLoaded) {
         if (blockedUsersState.isLoaded) {
@@ -176,6 +188,8 @@ fun ExploreScreen(
             if (!searchExpanded || isTablet) {
                 ExploreBrowseContent(
                     selectedTag = selectedTag,
+                    tags = exploreTags,
+                    cachedPosts = cachedTagPosts,
                     posts = posts,
                     onSelectTag = { tag ->
                         if (tag != selectedTag) haptics.tick()
@@ -379,6 +393,8 @@ private fun ColumnScope.ExploreSearchPanel(
 @Composable
 private fun ExploreBrowseContent(
     selectedTag: String,
+    tags: List<ExploreTag>,
+    cachedPosts: List<PostData>,
     posts: LazyPagingItems<PostData>,
     onSelectTag: (String) -> Unit,
     onPostClick: (String) -> Unit
@@ -397,16 +413,31 @@ private fun ExploreBrowseContent(
     //
     // Se conservan las mejoras que sí aportaban: háptico al
     // cambiar de filtro y formas expresivas según la selección.
+    // El tag activo siempre tiene chip: puede ser uno recién descubierto o
+    // uno llegado por navegación (#tag en un post) que aún no está en el
+    // catálogo; sin esto el filtro se aplicaría "a ciegas".
+    val chipTags = remember(tags, selectedTag) {
+        if (tags.any { it.tag == selectedTag }) tags
+        else listOf(ExploreTag(selectedTag, 0)) + tags
+    }
+
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = VividSpace.s, vertical = VividSpace.xs),
         horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
     ) {
-        items(ExplorePaging.TAGS, key = { it }) { tag ->
-            val isSelected = selectedTag == tag
+        items(chipTags, key = { it.tag }) { tagItem ->
+            val isSelected = selectedTag == tagItem.tag
             FilterChip(
                 selected = isSelected,
-                onClick = { onSelectTag(tag) },
-                label = { Text("#$tag") },
+                onClick = { onSelectTag(tagItem.tag) },
+                label = {
+                    // El conteo es el número de posts recientes que usan el
+                    // tag: popularidad real, no decoración.
+                    Text(
+                        if (tagItem.count > 0) "#${tagItem.tag} · ${tagItem.count}"
+                        else "#${tagItem.tag}"
+                    )
+                },
                 shape = if (isSelected) {
                     VividExpressiveShapes.ChipSelected
                 } else {
@@ -434,11 +465,33 @@ private fun ExploreBrowseContent(
             }
         }
         posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {
-            val err = posts.loadState.refresh as LoadState.Error
-            VividErrorState(
-                message = err.error.localizedMessage ?: stringResource(R.string.explore_error),
-                onRetry = { posts.retry() }
-            )
+            if (cachedPosts.isNotEmpty()) {
+                // Sin conexión pero con cache: el mismo mosaico servido desde
+                // Room (posts que el feed/Explorar ya guardaron). Firestore
+                // deja de ser requisito para abrir Explorar.
+                VividOfflineBanner(message = stringResource(R.string.explore_offline_cached))
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(VividSpace.xxs),
+                    horizontalArrangement = Arrangement.spacedBy(VividSpace.xxs),
+                    verticalItemSpacing = VividSpace.xxs
+                ) {
+                    itemsIndexed(cachedPosts, key = { _, post -> post.id }) { index, post ->
+                        ExplorePostCard(
+                            post = post,
+                            aspect = exploreCellAspectRatio(index),
+                            onClick = { onPostClick(post.id) }
+                        )
+                    }
+                }
+            } else {
+                val err = posts.loadState.refresh as LoadState.Error
+                VividErrorState(
+                    message = err.error.localizedMessage ?: stringResource(R.string.explore_error),
+                    onRetry = { posts.retry() }
+                )
+            }
         }
         posts.itemCount == 0 -> {
             Column(
@@ -488,32 +541,11 @@ private fun ExploreBrowseContent(
                     key = posts.itemKey { it.id }
                 ) { index ->
                     val post = posts[index] ?: return@items
-                    val postCd = stringResource(R.string.cd_post_by, post.username)
-                    Card(
-                        modifier = Modifier
-                            .aspectRatio(exploreCellAspectRatio(index))
-                            .semantics { contentDescription = postCd }
-                            .clickable { onPostClick(post.id) },
-                        shape = MaterialTheme.shapes.extraLarge
-                    ) {
-                        if (post.imageUrl.isNotBlank()) {
-                            VividAsyncImage(
-                                model = post.imageUrl,
-                                contentDescription = postCd,
-                                modifier = Modifier.fillMaxSize(),
-                                // La miniatura ES la del detalle: misma clave
-                                // compartida que PostDetailScreen.
-                                sharedKey = VividSharedKeys.postImage(post.id)
-                            )
-                        } else {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "#${post.caption.take(10)}",
-                                    fontSize = MaterialTheme.typography.bodySmall.fontSize
-                                )
-                            }
-                        }
-                    }
+                    ExplorePostCard(
+                        post = post,
+                        aspect = exploreCellAspectRatio(index),
+                        onClick = { onPostClick(post.id) }
+                    )
                 }
                 if (posts.loadState.append is LoadState.Loading) {
                     items(3) {
@@ -528,6 +560,40 @@ private fun ExploreBrowseContent(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Celda del mosaico de Explorar, compartida por el grid en vivo y el
+ * fallback offline (mismo aspecto, misma transición compartida).
+ */
+@Composable
+private fun ExplorePostCard(post: PostData, aspect: Float, onClick: () -> Unit) {
+    val postCd = stringResource(R.string.cd_post_by, post.username)
+    Card(
+        modifier = Modifier
+            .aspectRatio(aspect)
+            .semantics { contentDescription = postCd }
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        if (post.imageUrl.isNotBlank()) {
+            VividAsyncImage(
+                model = post.imageUrl,
+                contentDescription = postCd,
+                modifier = Modifier.fillMaxSize(),
+                // La miniatura ES la del detalle: misma clave compartida que
+                // PostDetailScreen.
+                sharedKey = VividSharedKeys.postImage(post.id)
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "#${post.caption.take(10)}",
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize
+                )
             }
         }
     }

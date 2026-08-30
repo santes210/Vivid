@@ -1,13 +1,39 @@
 package com.vivid.app.domain.repository
 
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.vivid.app.domain.model.PostVisibility
+import com.vivid.app.util.Hashtags
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 
-const val CONTENT_PRIVACY_VERSION = 1L
+const val CONTENT_PRIVACY_VERSION = 2L
+
+/**
+ * Actualizaciones de privacidad por documento.
+ *
+ * v2: además de `isPrivate`, rellena los campos nuevos que las consultas
+ * asumen —`visibility` ("public") y, en posts sin el campo, los `hashtags`
+ * recalculados del caption— para que el contenido creado ANTES de estos
+ * features no quede invisible en Explorar. Solo se escriben campos AUSENTES:
+ * un post "friends" ya guardado nunca se resetea a público.
+ */
+internal fun contentPrivacyUpdates(collection: String, doc: DocumentSnapshot, isPrivate: Boolean): Map<String, Any> {
+    val updates = LinkedHashMap<String, Any>()
+    updates["isPrivate"] = isPrivate
+    if (collection == "posts") {
+        if (!doc.contains("visibility")) updates["visibility"] = PostVisibility.PUBLIC.value
+        if (!doc.contains("hashtags")) {
+            val caption = doc.getString("caption").orEmpty()
+            val tags = Hashtags.extract(caption)
+            if (tags.isNotEmpty()) updates["hashtags"] = tags
+        }
+    }
+    return updates
+}
 
 /**
  * Sincroniza la privacidad del perfil y la copia usada por las consultas.
@@ -25,6 +51,7 @@ suspend fun setAccountContentPrivacy(
     if (userId.isBlank()) return
 
     val collections = listOf("posts", "reels", "stories")
+    // (colección, documento): el backfill v2 solo aplica a posts.
     val documents = coroutineScope {
         collections.map { collection ->
             async {
@@ -32,7 +59,7 @@ suspend fun setAccountContentPrivacy(
                     .whereEqualTo("userId", userId)
                     .get()
                     .await()
-                    .documents
+                    .documents.map { collection to it }
             }
         }.awaitAll().flatten()
     }
@@ -41,10 +68,12 @@ suspend fun setAccountContentPrivacy(
     val firstChunk = documents.take(449) // + perfil = máximo 450 operaciones
     val remainingChunks = documents.drop(449).chunked(450)
 
-    suspend fun updateChunk(chunk: List<com.google.firebase.firestore.DocumentSnapshot>) {
+    suspend fun updateChunk(chunk: List<Pair<String, DocumentSnapshot>>) {
         if (chunk.isEmpty()) return
         val batch = firestore.batch()
-        chunk.forEach { batch.update(it.reference, "isPrivate", isPrivate) }
+        chunk.forEach { (collection, doc) ->
+            batch.update(doc.reference, contentPrivacyUpdates(collection, doc, isPrivate))
+        }
         batch.commit().await()
     }
 
@@ -61,7 +90,9 @@ suspend fun setAccountContentPrivacy(
         ),
         SetOptions.merge()
     )
-    firstChunk.forEach { transitionBatch.update(it.reference, "isPrivate", isPrivate) }
+    firstChunk.forEach { (collection, doc) ->
+        transitionBatch.update(doc.reference, contentPrivacyUpdates(collection, doc, isPrivate))
+    }
     transitionBatch.commit().await()
 
     // Hacer público solo puede aplicarse después de que el perfil ya sea público.

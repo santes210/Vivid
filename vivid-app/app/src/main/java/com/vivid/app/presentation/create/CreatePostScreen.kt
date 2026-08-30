@@ -10,7 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.*
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +29,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil3.compose.AsyncImage
 import com.vivid.app.R
+import com.vivid.app.domain.model.PostVisibility
 import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
@@ -60,6 +66,8 @@ fun CreatePostScreen(
 
     // Música
     var selectedTrack by remember { mutableStateOf<MusicTrack?>(null) }
+    // Audiencia de la publicación: Público o Solo amigos (seguidores).
+    var audience by rememberSaveable { mutableStateOf(PostVisibility.PUBLIC) }
     var selectedMusicUri by remember { mutableStateOf<Uri?>(null) }
     var showMusicSheet by remember { mutableStateOf(false) }
 
@@ -431,6 +439,42 @@ fun CreatePostScreen(
 
             Spacer(Modifier.height(20.dp))
 
+            // ── Audiencia — Material You: segmented buttons ──
+            // "¿Quién puede ver esto?" resuelto con el componente canónico de
+            // selección única de M3, en vez de un switch o un menú escondido.
+            Text(
+                stringResource(R.string.audience_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            )
+            Spacer(Modifier.height(VividSpace.xs))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = audience == PostVisibility.PUBLIC,
+                    onClick = { audience = PostVisibility.PUBLIC },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    icon = { Icon(Icons.Outlined.Public, contentDescription = null) },
+                    label = { Text(stringResource(R.string.audience_public)) }
+                )
+                SegmentedButton(
+                    selected = audience == PostVisibility.FRIENDS,
+                    onClick = { audience = PostVisibility.FRIENDS },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    icon = { Icon(Icons.Outlined.Group, contentDescription = null) },
+                    label = { Text(stringResource(R.string.audience_friends)) }
+                )
+            }
+            Text(
+                stringResource(
+                    if (audience == PostVisibility.PUBLIC) R.string.audience_public_hint
+                    else R.string.audience_friends_hint
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = VividSpace.xxs)
+            )
+
+            Spacer(Modifier.height(20.dp))
+
             // Caption con Material You 3
             OutlinedTextField(
                 value = caption,
@@ -460,7 +504,8 @@ fun CreatePostScreen(
                             imageUri = selectedImageUri!!,
                             caption = caption,
                             musicTrack = selectedTrack,
-                            musicUri = selectedMusicUri
+                            musicUri = selectedMusicUri,
+                            visibility = audience
                         )
                     }
                 },

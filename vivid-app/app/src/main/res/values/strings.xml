@@ -270,4 +270,17 @@
     <string name="create_caption_placeholder">Simplemente escribe…</string>
     <string name="create_music_pick">Elegir</string>
     <string name="create_music_change">Cambiar</string>
+
+    <!-- ========== Explorar: hashtags y offline ========== -->
+    <string name="explore_offline_cached">Sin conexión · Mostrando lo guardado en tu dispositivo</string>
+
+    <!-- ========== Publicación no disponible (solo amigos / borrada) ========== -->
+    <string name="post_not_available">Esta publicación no está disponible</string>
+
+    <!-- ========== Audiencia de la publicación (Material You) ========== -->
+    <string name="audience_title">¿Quién puede ver tu publicación?</string>
+    <string name="audience_public">Público</string>
+    <string name="audience_friends">Solo amigos</string>
+    <string name="audience_public_hint">Todos pueden verla, también en Explorar</string>
+    <string name="audience_friends_hint">Solo las personas que te siguen pueden verla</string>
 </resources>

@@ -71,6 +71,8 @@ fun PostDetailScreen(
     postId: String,
     onBack: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
+    /** Tocar un #hashtag del caption abre Explorar filtrado por ese tag. */
+    onOpenHashtag: (tag: String) -> Unit = {},
     feedViewModel: FeedViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -88,9 +90,22 @@ fun PostDetailScreen(
         post = runCatching {
             val doc = db.collection("posts").document(postId).get().await()
             if (!doc.exists()) return@runCatching null
+            val authorId = doc.getString("userId").orEmpty()
+            val visibility = doc.getString("visibility") ?: "public"
+            // "Solo amigos" llegado por deep link / notificación: solo el
+            // autor y sus seguidores. Las reglas de Firestore lo bloquean a
+            // nivel documento; aquí se traduce a estado de UI (no a crash).
+            if (visibility == "friends" && currentUserId != authorId) {
+                val isFollower = currentUserId.isNotBlank() && runCatching {
+                    db.collection("users").document(authorId)
+                        .collection("followers").document(currentUserId)
+                        .get().await().exists()
+                }.getOrDefault(false)
+                if (!isFollower) return@runCatching null
+            }
             PostData(
                 id = postId,
-                userId = doc.getString("userId").orEmpty(),
+                userId = authorId,
                 username = doc.getString("username").orEmpty(),
                 userProfilePicture = doc.getString("userProfilePicture").orEmpty(),
                 userProfilePictureBase64 = "",
@@ -103,7 +118,9 @@ fun PostDetailScreen(
                 timestamp = doc.getLong("timestamp") ?: 0L,
                 isLiked = false,
                 isSaved = false,
-                storageKey = doc.getString("storageKey").orEmpty()
+                storageKey = doc.getString("storageKey").orEmpty(),
+                hashtags = (doc.get("hashtags") as? List<*>)?.mapNotNull { it as? String }?.map { it.lowercase() }.orEmpty(),
+                visibility = visibility
             )
         }.getOrNull()
         likesCount = post?.likesCount ?: 0
@@ -146,7 +163,9 @@ fun PostDetailScreen(
                 }
 
                 post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.explore_error))
+                    // Cubre tanto "no existe" como "solo amigos y no sigues al
+                    // autor": al usuario final es lo mismo.
+                    Text(stringResource(R.string.post_not_available))
                 }
 
                 else -> {
@@ -181,10 +200,10 @@ fun PostDetailScreen(
                                 )
                             )
                             if (loaded.caption.isNotBlank()) {
-                                Text(
-                                    loaded.caption,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.padding(top = VividSpace.xs)
+                                com.vivid.app.ui.components.VividHashtagCaption(
+                                    caption = loaded.caption,
+                                    modifier = Modifier.padding(top = VividSpace.xs),
+                                    onHashtagClick = onOpenHashtag
                                 )
                             }
                             if (likesCount > 0) {

@@ -11,6 +11,7 @@ import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.util.PushSender
+import com.vivid.app.util.Hashtags
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -203,7 +204,15 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 firestore.collection("posts").document(postId)
-                    .update("caption", newCaption.trim())
+                    .update(
+                        mapOf(
+                            "caption" to newCaption.trim(),
+                            // El caption editado puede ganar o perder hashtags;
+                            // si no se recalculan, el post quedaría en Explorar
+                            // con tags que ya no están en el texto.
+                            "hashtags" to Hashtags.extract(newCaption)
+                        )
+                    )
             }
         }
     }
@@ -335,6 +344,7 @@ class FeedViewModel @Inject constructor(
                 musicAssetFile = post.musicAssetFile,
                 musicUrl = preferResignedUrl(post.musicUrl, existing?.musicUrl),
                 musicStorageKey = post.musicStorageKey,
+                hashtags = Hashtags.joinForCache(post.hashtags),
                 cachedAt = now
             )
         })
@@ -396,7 +406,8 @@ class FeedViewModel @Inject constructor(
                 musicArtist = entity.musicArtist,
                 musicAssetFile = entity.musicAssetFile,
                 musicUrl = entity.musicUrl,
-                musicStorageKey = entity.musicStorageKey
+                musicStorageKey = entity.musicStorageKey,
+                hashtags = Hashtags.splitFromCache(entity.hashtags)
             )
         }
 

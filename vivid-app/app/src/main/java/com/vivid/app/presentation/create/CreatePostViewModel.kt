@@ -9,6 +9,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.data.storage.StorageProvider
+import com.vivid.app.domain.model.PostVisibility
+import com.vivid.app.util.Hashtags
 import com.vivid.app.util.ImageCompressor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,16 +51,13 @@ class CreatePostViewModel @Inject constructor(
     val state: StateFlow<CreatePostUiState> = _state.asStateFlow()
 
 
-private fun extractHashtags(text: String): List<String> {
-    val regex = Regex("#(\\w+)")
-    return regex.findAll(text).map { it.groupValues[1].lowercase() }.distinct().toList()
-}
     fun publishPost(
         context: Context,
         imageUri: Uri,
         caption: String,
         musicTrack: com.vivid.app.presentation.create.MusicTrack? = null,
-        musicUri: Uri? = null
+        musicUri: Uri? = null,
+        visibility: PostVisibility = PostVisibility.PUBLIC
     ) {
         viewModelScope.launch {
             try {
@@ -180,7 +179,7 @@ private fun extractHashtags(text: String): List<String> {
                     ?: "usuario"
                 val isPrivate = userDoc.getBoolean("isPrivate") ?: false
 
-                val hashtags = extractHashtags(caption)
+                val hashtags = Hashtags.extract(caption)
                 val baseMusicMap = mutableMapOf<String, Any>().apply {
                     if (musicTitle.isNotBlank()) put("musicTitle", musicTitle)
                     if (musicArtist.isNotBlank()) put("musicArtist", musicArtist)
@@ -202,7 +201,8 @@ private fun extractHashtags(text: String): List<String> {
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
                         "timestamp" to System.currentTimeMillis(),
-                        "hashtags" to hashtags
+                        "hashtags" to hashtags,
+                        "visibility" to visibility.value
                     )
                     postData.putAll(baseMusicMap)
                     try {
@@ -229,7 +229,8 @@ private fun extractHashtags(text: String): List<String> {
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
                         "timestamp" to System.currentTimeMillis(),
-                        "hashtags" to hashtags
+                        "hashtags" to hashtags,
+                        "visibility" to visibility.value
                     )
                     postData.putAll(baseMusicMap)
                     firestore.collection("posts").document(postId).set(postData).await()

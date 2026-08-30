@@ -5,12 +5,14 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.vivid.app.data.local.dao.ChatDao
+import com.vivid.app.data.local.dao.HashtagDao
 import com.vivid.app.data.local.dao.MessageDao
 import com.vivid.app.data.local.dao.PostDao
 import com.vivid.app.data.local.dao.ReelDao
 import com.vivid.app.data.local.dao.StoryDao
 import com.vivid.app.data.local.dao.UserDao
 import com.vivid.app.data.local.entity.ChatEntity
+import com.vivid.app.data.local.entity.HashtagEntity
 import com.vivid.app.data.local.entity.MessageEntity
 import com.vivid.app.data.local.entity.PostEntity
 import com.vivid.app.data.local.entity.ReelEntity
@@ -24,9 +26,10 @@ import com.vivid.app.data.local.entity.UserEntity
         ChatEntity::class,
         MessageEntity::class,
         StoryEntity::class,
-        ReelEntity::class
+        ReelEntity::class,
+        HashtagEntity::class
     ],
-    version = 7,
+    version = 8,
     // Exportar el esquema JSON en cada build (app/schemas/) permite validar
     // migraciones con MigrationTestHelper y detectar cambios accidentales
     // de esquema ANTES de que un usuario con datos viejos sufra un crash.
@@ -39,9 +42,10 @@ abstract class VividDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun storyDao(): StoryDao
     abstract fun reelDao(): ReelDao
+    abstract fun hashtagDao(): HashtagDao
 
     companion object {
-        const val VERSION = 7
+        const val VERSION = 8
         const val NAME = "vivid_database"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -146,6 +150,28 @@ abstract class VividDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 → v8: hashtags.
+         * - posts: columna hashtags (tags serializados ",tag1,tag2," para el
+         *   fallback offline de Explorar).
+         * - hashtags: catálogo de tags descubiertos en posts públicos con su
+         *   count y última vez visto (chips de Explorar offline).
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE posts ADD COLUMN hashtags TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS hashtags (
+                        tag TEXT NOT NULL PRIMARY KEY,
+                        count INTEGER NOT NULL,
+                        lastSeenAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         /** Contiguous 1 → VERSION chain. Used by Hilt and by migration tests. */
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
@@ -153,7 +179,8 @@ abstract class VividDatabase : RoomDatabase() {
             MIGRATION_3_4,
             MIGRATION_4_5,
             MIGRATION_5_6,
-            MIGRATION_6_7
+            MIGRATION_6_7,
+            MIGRATION_7_8
         )
     }
 }

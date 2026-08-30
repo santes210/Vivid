@@ -5,6 +5,7 @@ import androidx.paging.PagingState
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.vivid.app.domain.model.PostVisibility
 import com.vivid.app.presentation.feed.PostData
 import kotlinx.coroutines.tasks.await
 
@@ -38,7 +39,9 @@ class ExplorePostsPagingSource(
     private val firestore: FirebaseFirestore,
     private val tag: String,
     private val blockedUserIds: Set<String>,
-    private val pageSize: Int = ExplorePaging.POST_PAGE_SIZE
+    private val pageSize: Int = ExplorePaging.POST_PAGE_SIZE,
+    /** Cada página cargada se reporta aquí para alimentar el cache Room. */
+    private val onPostsLoaded: (suspend (List<PostData>) -> Unit)? = null
 ) : PagingSource<DocumentSnapshot, PostData>() {
 
     override fun getRefreshKey(state: PagingState<DocumentSnapshot, PostData>): DocumentSnapshot? {
@@ -60,6 +63,7 @@ class ExplorePostsPagingSource(
                 mapExplorePost(doc, blockedUserIds)
             }
             val last = snapshot.documents.lastOrNull()
+            if (data.isNotEmpty()) onPostsLoaded?.invoke(data)
             LoadResult.Page(
                 data = data,
                 prevKey = null,
@@ -75,6 +79,11 @@ internal fun mapExplorePost(doc: DocumentSnapshot, blockedUserIds: Set<String>):
     val id = doc.id
     val userId = doc.getString("userId") ?: ""
     if (userId.isBlank() || userId in blockedUserIds) return null
+    // "Solo amigos" nunca entra en Explorar: es contenido para seguidores,
+    // no descubrimiento público. La query no puede filtrarlo (los posts
+    // legacy no tienen el campo) así que se descarta aquí, por página.
+    val visibility = doc.getString("visibility") ?: PostVisibility.PUBLIC.value
+    if (visibility == PostVisibility.FRIENDS.value) return null
     return PostData(
         id = id,
         userId = userId,
@@ -90,6 +99,8 @@ internal fun mapExplorePost(doc: DocumentSnapshot, blockedUserIds: Set<String>):
         timestamp = doc.getLong("timestamp") ?: 0L,
         isLiked = false,
         isSaved = false,
-        storageKey = doc.getString("storageKey") ?: ""
+        storageKey = doc.getString("storageKey") ?: "",
+        hashtags = (doc.get("hashtags") as? List<*>)?.mapNotNull { it as? String }?.map { it.lowercase() }.orEmpty(),
+        visibility = visibility
     )
 }
