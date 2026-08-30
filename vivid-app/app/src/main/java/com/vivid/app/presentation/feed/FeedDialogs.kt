@@ -20,6 +20,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.vivid.app.ui.components.HashtagCaption
 import com.vivid.app.ui.components.UserAvatar
 import com.vivid.app.util.rememberPooledExoPlayer
 import com.google.firebase.firestore.FirebaseFirestore
@@ -62,7 +63,13 @@ internal fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismis
                         else -> PostImage(post.imageBase64, post.imageUrl, post.username, useDefaultHeight = false)
                     }
                 }
-                if (post.caption.isNotBlank()) Text(post.caption, modifier = Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)
+                if (post.caption.isNotBlank()) {
+                    HashtagCaption(
+                        text = post.caption,
+                        modifier = Modifier.padding(20.dp),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
     }

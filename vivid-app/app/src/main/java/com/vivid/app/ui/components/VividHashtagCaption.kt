@@ -1,82 +1,111 @@
 package com.vivid.app.ui.components
 
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
 import com.vivid.app.util.Hashtags
 import com.vivid.app.util.SettingsManager
 
 /**
- * Caption con hashtags tocables: cada `#tag` del texto se pinta con el color
- * primario y abre Explorar filtrado por ese tag ([onHashtagClick]).
+ * Caption con `#tags` pintados con el color primary del esquema activo
+ * (Material You) y, si hay [onHashtagClick], navegables.
  *
- * Los hashtags se detectan con la MISMA regex que los extrae para Firestore
- * y para el cache de Room ([Hashtags.REGEX]), así lo que se ve clickeable es
- * exactamente lo que se indexa.
+ * Los hashtags se detectan con la MISMA lógica que los extrae para
+ * Firestore y para el cache de Room ([Hashtags.spans]), así lo que se
+ * ve clickeable es exactamente lo que se indexa.
  *
- * `ClickableText` está depreciado en favor de `Text` + `LinkAnnotation` en
- * BOMs recientes, pero es la API estable en toda la matriz que soporta Vivid
- * y no tiene costo de runtime; cuando el min BOM suba, migrar es mecánico.
+ * El filtro de palabras ofensivas se aplica *antes* de buscar los rangos
+ * para que un tag censurado no quede clicable a medias.
  */
 @Composable
 fun VividHashtagCaption(
     caption: String,
     modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = Color.Unspecified,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
-    onHashtagClick: (String) -> Unit = {}
+    onHashtagClick: ((String) -> Unit)? = null
 ) {
-    // Se respeta el filtro de lenguaje ofensivo del feed sobre el texto plano;
-    // los tokens #tag quedan intactos (el filtro trabaja palabras, no símbolos).
-    val filtered = SettingsManager.filterOffensiveWords(caption)
+    val filtered = remember(caption) { SettingsManager.filterOffensiveWords(caption) }
     val linkColor = MaterialTheme.colorScheme.primary
-    val textColor = MaterialTheme.colorScheme.onSurface
-
-    val annotated = remember(filtered, linkColor) {
-        buildAnnotatedString {
-            var cursor = 0
-            Hashtags.REGEX.findAll(filtered).forEach { match ->
-                if (match.range.first > cursor) append(filtered.substring(cursor, match.range.first))
-                val tag = match.value.removePrefix("#").lowercase()
-                withStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold)) {
-                    append(match.value)
-                }
-                // La búsqueda en el click usa el rango de caracteres del tag.
-                addStringAnnotation(
-                    tag = HASHTAG_ANNOTATION,
-                    annotation = tag,
-                    start = match.range.first,
-                    end = match.range.last
-                )
-                cursor = match.range.last + 1
-            }
-            if (cursor < filtered.length) append(filtered.substring(cursor))
-        }
+    val annotated = remember(filtered, linkColor, onHashtagClick) {
+        buildHashtagAnnotatedString(filtered, linkColor, onHashtagClick)
     }
-
-    ClickableText(
+    Text(
         text = annotated,
         modifier = modifier,
-        style = MaterialTheme.typography.bodyMedium.copy(color = textColor),
+        style = style,
+        color = color,
         maxLines = maxLines,
-        overflow = overflow,
-        onClick = { charOffset ->
-            // ClickableText entrega el offset del carácter tocado: las
-            // anotaciones que lo contienen son exactamente los hashtags.
-            annotated
-                .getStringAnnotations(HASHTAG_ANNOTATION, charOffset, charOffset)
-                .firstOrNull()
-                ?.item
-                ?.let(onHashtagClick)
-        }
+        overflow = overflow
     )
 }
 
-private const val HASHTAG_ANNOTATION = "hashtag"
+/**
+ * Alias usado en el visor y en previews. Misma implementación.
+ */
+@Composable
+fun HashtagCaption(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = Color.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    onHashtagClick: ((String) -> Unit)? = null
+) = VividHashtagCaption(
+    caption = text,
+    modifier = modifier,
+    style = style,
+    color = color,
+    maxLines = maxLines,
+    overflow = overflow,
+    onHashtagClick = onHashtagClick
+)
+
+internal fun buildHashtagAnnotatedString(
+    text: String,
+    linkColor: Color,
+    onHashtagClick: ((String) -> Unit)?
+) = buildAnnotatedString {
+    val spans = Hashtags.spans(text)
+    if (spans.isEmpty()) {
+        append(text)
+        return@buildAnnotatedString
+    }
+    val linkStyle = SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold)
+    var cursor = 0
+    spans.forEach { span ->
+        if (span.start > cursor) append(text.substring(cursor, span.start))
+        val raw = text.substring(span.start, span.endExclusive)
+        if (onHashtagClick != null) {
+            withLink(
+                LinkAnnotation.Clickable(
+                    tag = "hashtag:${span.tag}",
+                    styles = TextLinkStyles(style = linkStyle),
+                    linkInteractionListener = { onHashtagClick(span.tag) }
+                )
+            ) {
+                append(raw)
+            }
+        } else {
+            val start = length
+            append(raw)
+            addStyle(linkStyle, start, length)
+        }
+        cursor = span.endExclusive
+    }
+    if (cursor < text.length) append(text.substring(cursor))
+}

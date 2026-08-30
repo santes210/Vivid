@@ -33,6 +33,9 @@ object VividChangelog {
                 "Respuesta háptica en likes, seguir, enviar y cambio de pestaña (se puede apagar en Ajustes → Apariencia).",
                 "Indicadores de carga y filtros de Explorar renovados con los componentes nuevos de Material 3 Expressive.",
                 "Explorar ahora abre una SearchBar de Material 3, con historial, sugerencias y panel anclado en tableta.",
+                "Los #tags del pie de foto se pueden tocar para abrir ese tema en Explorar.",
+                "Explorar entiende cualquier #tag (no solo los 8 temas), con chips que cambian de forma y un grid con fotos destacadas.",
+                "Al publicar, puedes añadir temas sugeridos y las tildes (#música) se encuentran igual que sin ellas.",
                 "Avisos y diálogos unificados: misma forma de 28 dp, color de superficie y un icono de celebración al publicar.",
                 "En tabletas, el menú lateral se puede expandir para ver las etiquetas."
             )

@@ -81,6 +81,7 @@ package com.vivid.app.theme
  * | `LoadingIndicator` / `ContainedLoadingIndicator` | estados, Explorar, detalle, perfil, feed  |
  * | `ButtonGroup` (+ overflow)                       | pestañas del perfil (Posts/Reels/Guardados)|
  * | `FilterChip` en `LazyRow`                        | filtros por tema de Explorar (ver nota)    |
+ * | Morph `Circle → topicPolygon` en chips de tag    | Explorar: la silueta dice el tema          |
  * | `HorizontalFloatingToolbar`                      | acciones del detalle de publicación       |
  * | `WideNavigationRail`                             | navegación en tabletas                    |
  * | `SearchBar` / `DockedSearchBar`                  | Explorar: historial, sugerencias, tablet  |
@@ -101,6 +102,12 @@ package com.vivid.app.theme
  * revienta en runtime ("ButtonGroup width cannot be unbounded"). Ahí se usa
  * `FilterChip` en `LazyRow` a propósito (ver el comentario en
  * `ExploreScreen.kt`). No lo cambies sin leer ese comentario primero.
+ *
+ * **Hashtags.** La clave que se guarda en Firestore (`posts.hashtags`) sale
+ * de `util/Hashtags.kt`: minúsculas, sin tildes, sin `#`. Así `#Música` y
+ * el chip `musica` pegan en la misma query `array-contains`. El caption se
+ * pinta con `VividHashtagCaption` (enlace primary del esquema You) y tocar
+ * uno abre Explorar (`search?tag=` + `ExploreSession`).
  *
  * ### Las 35 formas
  *

@@ -513,6 +513,8 @@ internal fun PostCard(
                 Spacer(Modifier.width(6.dp))
                 VividHashtagCaption(
                     caption = post.caption,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     onHashtagClick = onHashtagClick

@@ -42,6 +42,8 @@ class SearchHistoryTest {
         val history = listOf("alice", "bob")
         assertEquals(listOf("bob"), SearchHistory.remove(history, "  ALICE "))
         assertEquals(history, SearchHistory.remove(history, "carol"))
+        val withTag = listOf("#musica", "alice")
+        assertEquals(listOf("alice"), SearchHistory.remove(withTag, "#Música"))
     }
 
     @Test
@@ -88,5 +90,21 @@ class SearchHistoryTest {
     fun `hash prefix still matches a tag`() {
         val suggestions = SearchHistory.suggestions("#viv", emptyList())
         assertTrue(suggestions.any { it is SearchSuggestion.Tag && it.tag == "vivid" })
+    }
+
+    @Test
+    fun `record stores hashtag queries with a hash prefix`() {
+        assertTrue(SearchHistory.canRecord("#Arte"))
+        val history = SearchHistory.record(emptyList(), "  #Música  ")
+        assertEquals(listOf("#musica"), history)
+        val again = SearchHistory.record(history, "alice")
+        assertEquals(listOf("alice", "#musica"), again)
+    }
+
+    @Test
+    fun `typed custom hashtag appears as a tag suggestion`() {
+        val suggestions = SearchHistory.suggestions("#atardecer", emptyList())
+        assertTrue(suggestions.any { it is SearchSuggestion.Tag && it.tag == "atardecer" })
+        assertTrue(suggestions.size <= SearchHistory.SUGGESTION_LIMIT)
     }
 }

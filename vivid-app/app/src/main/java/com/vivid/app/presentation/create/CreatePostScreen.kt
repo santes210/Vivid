@@ -6,8 +6,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Group
@@ -30,7 +33,10 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil3.compose.AsyncImage
 import com.vivid.app.R
+import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.domain.model.PostVisibility
+import com.vivid.app.presentation.explore.ExploreTopics
+import com.vivid.app.util.Hashtags
 import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividExpressiveShapes
@@ -51,7 +57,7 @@ private enum class CreateContentType {
  * - Preview grande con Card redondeada
  * - Selector de música estilo Reel
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreatePostScreen(
     navController: NavController,
@@ -490,6 +496,69 @@ fun CreatePostScreen(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
                 )
             )
+
+            val extractedTags = remember(caption) { Hashtags.extract(caption) }
+            if (extractedTags.isNotEmpty()) {
+                Spacer(Modifier.height(VividSpace.s))
+                Text(
+                    stringResource(R.string.create_caption_tags),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(VividSpace.xs))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
+                    verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
+                ) {
+                    extractedTags.forEach { tag ->
+                        InputChip(
+                            selected = true,
+                            onClick = {},
+                            label = { Text(Hashtags.display(tag)) },
+                            leadingIcon = {
+                                Icon(
+                                    ExploreTopics.icon(tag),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            shape = VividExpressiveShapes.ChipSelected
+                        )
+                    }
+                }
+            }
+
+            val suggestedTags = ExplorePaging.TAGS.filter { it !in extractedTags }
+            if (suggestedTags.isNotEmpty()) {
+                Spacer(Modifier.height(VividSpace.s))
+                Text(
+                    stringResource(R.string.create_suggested_tags),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(VividSpace.xs))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
+                    verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
+                ) {
+                    suggestedTags.forEach { tag ->
+                        SuggestionChip(
+                            onClick = { caption = Hashtags.appendToCaption(caption, tag) },
+                            label = { Text(Hashtags.display(tag)) },
+                            icon = {
+                                Icon(
+                                    ExploreTopics.icon(tag),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            shape = VividExpressiveShapes.ChipUnselected
+                        )
+                    }
+                }
+            }
 
             Spacer(Modifier.height(20.dp))
 

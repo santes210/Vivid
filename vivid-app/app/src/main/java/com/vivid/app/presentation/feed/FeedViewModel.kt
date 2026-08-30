@@ -203,14 +203,15 @@ class FeedViewModel @Inject constructor(
     fun editPostCaption(postId: String, newCaption: String) {
         viewModelScope.launch {
             runCatching {
+                val caption = newCaption.trim()
                 firestore.collection("posts").document(postId)
                     .update(
                         mapOf(
-                            "caption" to newCaption.trim(),
+                            "caption" to caption,
                             // El caption editado puede ganar o perder hashtags;
                             // si no se recalculan, el post quedaría en Explorar
                             // con tags que ya no están en el texto.
-                            "hashtags" to Hashtags.extract(newCaption)
+                            "hashtags" to Hashtags.extract(caption)
                         )
                     )
             }

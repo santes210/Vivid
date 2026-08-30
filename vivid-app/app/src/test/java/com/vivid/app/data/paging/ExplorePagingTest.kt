@@ -22,6 +22,13 @@ class ExplorePagingTest {
     }
 
     @Test
+    fun `isValidUserQuery rejects hashtag searches`() {
+        assertFalse(ExplorePaging.isValidUserQuery("#arte"))
+        assertFalse(ExplorePaging.isValidUserQuery("#a"))
+        assertFalse(ExplorePaging.isValidUserQuery("#"))
+    }
+
+    @Test
     fun `usernamePrefixEnd appends firestore range sentinel`() {
         assertEquals("al\uf8ff", ExplorePaging.usernamePrefixEnd("al"))
     }
@@ -37,5 +44,24 @@ class ExplorePagingTest {
     fun `default tags include vivid`() {
         assertTrue("vivid" in ExplorePaging.TAGS)
         assertEquals("vivid", ExplorePaging.TAGS.first())
+    }
+
+    @Test
+    fun `featured index fills rows of three without gaps`() {
+        assertTrue(ExplorePaging.isFeaturedIndex(0))
+        assertFalse(ExplorePaging.isFeaturedIndex(1))
+        assertTrue(ExplorePaging.isFeaturedIndex(5))
+        assertTrue(ExplorePaging.isFeaturedIndex(10))
+        assertFalse(ExplorePaging.isFeaturedIndex(-1))
+    }
+
+    @Test
+    fun `visibleTags prepends a custom selected tag`() {
+        assertEquals(ExplorePaging.TAGS, ExplorePaging.visibleTags("arte"))
+        assertEquals(ExplorePaging.TAGS, ExplorePaging.visibleTags("vivid"))
+        val custom = ExplorePaging.visibleTags("atardecer")
+        assertEquals("atardecer", custom.first())
+        assertEquals(ExplorePaging.TAGS, custom.drop(1))
+        assertEquals(ExplorePaging.TAGS, ExplorePaging.visibleTags(""))
     }
 }
