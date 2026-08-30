@@ -249,22 +249,4 @@ eval "set -- $(
         tr '\n' ' '
     )" '"$@"'
 
-# TEMPORAL (diagnóstico CI): capturar la salida para poder reportar los
-# errores como anotaciones del PR. Se elimina en cuanto el build vuelva a
-# estar verde. POSIX sh: sin pipefail, se usa el código de salida del log.
-VIVID_LOG="${TMPDIR:-/tmp}/vivid_gradle_output.txt"
-"$JAVACMD" "$@" > "$VIVID_LOG" 2>&1
-VIVID_CODE=$?
-cat "$VIVID_LOG"
-if [ "$VIVID_CODE" -ne 0 ]; then
-    VIVID_N=0
-    grep -E '^e: |error: |\* What went wrong|Caused by: |FAILURE: Build failed' "$VIVID_LOG" |
-    sed -e 's|file://[^ ]*/app/src/main/java/|…/src/main/java/|' |
-    while IFS= read -r VIVID_LINE && [ "$VIVID_N" -lt 10 ]; do
-        VIVID_MSG=$(printf '%s' "$VIVID_LINE" | sed 's/%/%25/g' | cut -c1-230)
-        [ -n "$VIVID_MSG" ] || continue
-        printf '::error title=gradle::%s\n' "$VIVID_MSG"
-        VIVID_N=$((VIVID_N + 1))
-    done
-fi
-exit "$VIVID_CODE"
+exec "$JAVACMD" "$@"
