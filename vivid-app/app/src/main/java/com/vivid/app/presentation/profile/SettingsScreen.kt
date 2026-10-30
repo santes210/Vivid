@@ -843,7 +843,47 @@ fun SettingsScreen(
                 }
             }
 
-            // 10. BOTÓN CERRAR SESIÓN
+            // 10. ELIMINAR CUENTA (zona de peligro, junto a cerrar sesión)
+            item {
+                Spacer(Modifier.height(VividSpace.s))
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                    shape = VividExpressiveShapes.MediumCard
+                ) {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                stringResource(R.string.delete_account_title),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                stringResource(R.string.delete_account_subtitle),
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        leadingContent = {
+                            Icon(
+                                Icons.Outlined.PersonRemove,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        },
+                        modifier = Modifier.clickable { showDeleteAccountDialog = true },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
+            }
+
+            // 11. BOTÓN CERRAR SESIÓN
             item {
                 Spacer(Modifier.height(VividSpace.s))
                 ElevatedCard(
