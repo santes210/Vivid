@@ -22,6 +22,8 @@ object VividChangelog {
         VividRelease(
             version = "2.4.0",
             notes = listOf(
+                "Eliminación de cuenta completa en Ajustes → Tu Cuenta: borra tu perfil, publicaciones, reels, historias, comentarios, «me gusta», seguidores y conversaciones, y elimina la cuenta de Firebase con reautenticación segura si hace falta.",
+                "Al eliminar tu cuenta, tus mensajes se borran de las conversaciones y el resto de participantes te verá como «Usuario eliminado».",
                 "Buscador inteligente: una sola búsqueda integrada para personas, #temas y publicaciones, con segmentos Todo/Personas/Temas/Posts y ranking de relevancia.",
                 "La búsqueda ahora encuentra publicaciones por el texto del pie de foto y por hashtag, además de usuarios; tolera tildes (\"musica\" = #música) y pequeños errores tipográficos.",
                 "Nuevo panel de búsqueda con Material 3 Expressive real: pestañas ButtonGroup donde el activo se ensancha, chips con siluetas que se transforman al pulsar, recientes borrables y estados con las formas de Vivid.",

@@ -26,6 +26,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.BuildConfig
 import com.vivid.app.R
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.vivid.app.presentation.stories.deleteExpiredStoriesForCurrentUser
 import com.vivid.app.domain.repository.setAccountContentPrivacy
 import com.vivid.app.util.SettingsManager
@@ -95,6 +96,11 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
     var infoDialog by remember { mutableStateOf<SettingsInfoDialog?>(null) }
+
+    // Eliminación de cuenta (Ajustes → Tu Cuenta)
+    val deleteAccountViewModel: AccountDeletionViewModel = hiltViewModel()
+    val deleteState by deleteAccountViewModel.state.collectAsState()
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(user?.uid) {
         user?.uid?.let { uid ->
@@ -299,6 +305,13 @@ fun SettingsScreen(
                             SettingsManager.set2FA(context, nextVal)
                             scope.launch { snackbarHostState.showSnackbar(if (nextVal) "2FA activada exitosamente" else "2FA desactivada") }
                         }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    SettingsListItem(
+                        title = stringResource(R.string.delete_account_title),
+                        subtitle = stringResource(R.string.delete_account_subtitle),
+                        icon = Icons.Outlined.PersonRemove,
+                        onClick = { showDeleteAccountDialog = true }
                     )
                 }
             }
@@ -917,6 +930,32 @@ fun SettingsScreen(
             },
             onDismiss = { showSignOutDialog = false }
         )
+    }
+
+    if (showDeleteAccountDialog) {
+        DeleteAccountDialog(
+            state = deleteState,
+            username = username,
+            onConfirm = deleteAccountViewModel::startDeletion,
+            onReauthGoogle = deleteAccountViewModel::reauthWithGoogle,
+            onReauthPassword = deleteAccountViewModel::reauthWithPassword,
+            onRetry = deleteAccountViewModel::startDeletion,
+            onDismiss = {
+                if (deleteState !is DeleteAccountState.Working) {
+                    showDeleteAccountDialog = false
+                    deleteAccountViewModel.reset()
+                }
+            }
+        )
+    }
+
+    // Al confirmar la eliminación, Auth queda sin usuario: el listener de
+    // MainActivity navega a la pantalla de inicio de sesión.
+    LaunchedEffect(deleteState) {
+        if (deleteState is DeleteAccountState.Success) {
+            showDeleteAccountDialog = false
+            onBack()
+        }
     }
 }
 

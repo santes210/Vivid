@@ -3,6 +3,8 @@ package com.vivid.app.presentation.profile
 import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.*
@@ -11,8 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.vivid.app.R
+import com.vivid.app.util.AccountPurge
 import com.vivid.app.util.SettingsManager
 import com.vivid.app.util.composeEmail
 import com.vivid.app.theme.VividSpace
@@ -242,4 +246,232 @@ internal fun SignOutDialog(
         tonalElevation = 6.dp,
         tone = VividDialogTone.Destructive
     )
+}
+
+// ── Delete Account Dialog ──
+
+@Composable
+private fun AccountPurgeStageLabel(stage: AccountPurge.Stage): String = when (stage) {
+    AccountPurge.Stage.CONTENT -> stringResource(R.string.delete_stage_content)
+    AccountPurge.Stage.ACTIVITY -> stringResource(R.string.delete_stage_activity)
+    AccountPurge.Stage.GRAPH -> stringResource(R.string.delete_stage_graph)
+    AccountPurge.Stage.CHATS -> stringResource(R.string.delete_stage_chats)
+    AccountPurge.Stage.PROFILE -> stringResource(R.string.delete_stage_profile)
+    AccountPurge.Stage.AUTH -> stringResource(R.string.delete_stage_auth)
+    AccountPurge.Stage.DONE -> stringResource(R.string.delete_stage_done)
+}
+
+/**
+ * Flujo completo de eliminación de cuenta: confirmación con el nombre de
+ * usuario, progreso de la purga, reautenticación si Firebase la exige y
+ * resultado. Se cierra solo cuando el estado no está en curso.
+ */
+@Composable
+internal fun DeleteAccountDialog(
+    state: DeleteAccountState,
+    username: String,
+    onConfirm: () -> Unit,
+    onReauthGoogle: () -> Unit,
+    onReauthPassword: (String) -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    when (state) {
+        is DeleteAccountState.Working -> {
+            // No se puede cerrar mientras se purga.
+            VividAlertDialog(
+                onDismissRequest = {},
+                title = {
+                    Text(
+                        stringResource(R.string.delete_progress_title),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(VividSpace.m)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Text(AccountPurgeStageLabel(state.stage))
+                    }
+                },
+                confirmButton = {},
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                tone = VividDialogTone.Destructive
+            )
+        }
+
+        is DeleteAccountState.ReauthNeeded -> {
+            var password by remember { mutableStateOf("") }
+            VividAlertDialog(
+                onDismissRequest = onDismiss,
+                title = {
+                    Text(
+                        stringResource(R.string.delete_reauth_title),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(VividSpace.s)) {
+                        Text(stringResource(R.string.delete_reauth_body))
+                        if (state.error != null) {
+                            Text(
+                                state.error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (state.usePassword) {
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                label = { Text(stringResource(R.string.delete_reauth_password_label)) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    if (state.usePassword) {
+                        Button(
+                            onClick = { onReauthPassword(password) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(
+                                stringResource(R.string.delete_reauth_password_action),
+                                color = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    } else if (state.useGoogle) {
+                        Button(
+                            onClick = onReauthGoogle,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(
+                                stringResource(R.string.delete_reauth_google),
+                                color = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
+                },
+                dismissButton = {
+                    if (state.usePassword && state.useGoogle) {
+                        TextButton(onClick = onReauthGoogle) {
+                            Text(
+                                stringResource(R.string.delete_reauth_google),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        TextButton(onClick = onDismiss) {
+                            Text(
+                                stringResource(R.string.delete_cancel),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                tone = VividDialogTone.Destructive
+            )
+        }
+
+        is DeleteAccountState.Error -> {
+            VividAlertDialog(
+                onDismissRequest = onDismiss,
+                title = {
+                    Text(
+                        stringResource(R.string.delete_error_title),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = { Text(state.message) },
+                confirmButton = {
+                    Button(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(stringResource(R.string.delete_error_retry), color = MaterialTheme.colorScheme.onError)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            stringResource(R.string.delete_cancel),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                tone = VividDialogTone.Destructive
+            )
+        }
+
+        else -> {
+            // Idle: confirmación con el nombre de usuario.
+            var confirmText by remember { mutableStateOf("") }
+            val matches = confirmText.isNotBlank() && confirmText.trim()
+                .removePrefix("@")
+                .equals(username.removePrefix("@"), ignoreCase = true)
+            VividAlertDialog(
+                onDismissRequest = onDismiss,
+                title = {
+                    Text(
+                        stringResource(R.string.delete_confirm_title),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(VividSpace.s)
+                    ) {
+                        Text(stringResource(R.string.delete_confirm_body))
+                        OutlinedTextField(
+                            value = confirmText,
+                            onValueChange = { confirmText = it },
+                            label = { Text(stringResource(R.string.delete_confirm_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = onConfirm,
+                        enabled = matches,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Text(
+                            stringResource(R.string.delete_confirm_action),
+                            color = MaterialTheme.colorScheme.onError
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            stringResource(R.string.delete_cancel),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                tone = VividDialogTone.Destructive
+            )
+        }
+    }
 }

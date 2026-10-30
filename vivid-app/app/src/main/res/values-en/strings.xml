@@ -291,4 +291,28 @@
     <string name="audience_friends">Friends only</string>
     <string name="audience_public_hint">Anyone can see it, including Explore</string>
     <string name="audience_friends_hint">Only people who follow you can see it</string>
+
+    <!-- Delete account -->
+    <string name="delete_account_title">Delete account</string>
+    <string name="delete_account_subtitle">Permanently delete your profile, content and data</string>
+    <string name="delete_confirm_title">Delete your account?</string>
+    <string name="delete_confirm_body">The following will be permanently deleted:\n\n• Your profile, username and email\n• Your posts, reels and stories\n• Your comments and likes across Vivid\n• Your followers, requests and saved items\n• Your chat messages (you\'ll appear as \"Deleted user\" to others)\n• Your local data\n\nThis action cannot be undone.</string>
+    <string name="delete_confirm_hint">Type your username to confirm</string>
+    <string name="delete_confirm_action">Delete permanently</string>
+    <string name="delete_cancel">Cancel</string>
+    <string name="delete_progress_title">Deleting your account…</string>
+    <string name="delete_stage_content">Deleting your content…</string>
+    <string name="delete_stage_activity">Deleting your activity…</string>
+    <string name="delete_stage_graph">Deleting your connections…</string>
+    <string name="delete_stage_chats">Deleting your conversations…</string>
+    <string name="delete_stage_profile">Deleting your profile…</string>
+    <string name="delete_stage_auth">Closing your account…</string>
+    <string name="delete_stage_done">Account deleted</string>
+    <string name="delete_reauth_title">Confirm it\'s you</string>
+    <string name="delete_reauth_body">For security, sign in again to finish deleting your account.</string>
+    <string name="delete_reauth_google">Continue with Google</string>
+    <string name="delete_reauth_password_label">Password</string>
+    <string name="delete_reauth_password_action">Verify and delete</string>
+    <string name="delete_error_title">Couldn\'t delete the account</string>
+    <string name="delete_error_retry">Retry</string>
 </resources>

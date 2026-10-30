@@ -116,6 +116,20 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────
+    //  Comentarios (collection group) — borrado de cuenta
+    // ─────────────────────────────────────────────────
+    // Para eliminar la cuenta hay que localizar MIS comentarios y respuestas
+    // dispersos por todo Vivid con UNA query de
+    // collectionGroup("comments").whereEqualTo("userId", uid) (igual que los
+    // likes de arriba, Firestore exige un match de grupo).
+    // La regla es estrecha a propósito: cada quien solo puede LECTURAR sus
+    // propios documentos (resource.data.userId == request.auth.uid), de modo
+    // que no se exponen comentarios ajenos de contenido privado.
+    match /{path=**}/comments/{commentId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─────────────────────────────────────────────────
     //  Usuarios
     // ─────────────────────────────────────────────────
     match /users/{userId} {
