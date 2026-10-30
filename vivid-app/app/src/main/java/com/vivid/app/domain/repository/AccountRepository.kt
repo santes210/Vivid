@@ -10,7 +10,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.vivid.app.util.AccountPurge
-import com.vivid.app.util.StorageProvider
+import com.vivid.app.data.storage.StorageProvider
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
