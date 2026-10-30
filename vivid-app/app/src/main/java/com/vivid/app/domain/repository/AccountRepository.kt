@@ -279,7 +279,7 @@ class AccountRepository @Inject constructor(
         var last: DocumentSnapshot? = null
         while (true) {
             val base: Query = if (last == null) query else query.startAfter(last)
-            val page = base.limit(PAGE_SIZE).get().await()
+            val page = base.limit(PAGE_SIZE.toLong()).get().await()
             if (page.isEmpty) break
             out += page.documents
             last = page.documents.last()
@@ -334,6 +334,6 @@ class AccountRepository @Inject constructor(
     }
 
     private companion object {
-        const val PAGE_SIZE = 300L
+        const val PAGE_SIZE = 300
     }
 }

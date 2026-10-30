@@ -103,17 +103,32 @@ class AccountDeletionViewModel @Inject constructor(
             when (outcome) {
                 is GoogleSignInOutcome.Success -> {
                     val credential = GoogleAuthProvider.getCredential(outcome.idToken, null)
+                    // OJO: signInWithCredential (no reauthenticateWithCredential, que
+                    // no resuelve en este SDK) cuenta como login reciente y permite
+                    // borrar Auth. La guarda de uid evita borrar OTRA cuenta si el
+                    // selector de Google devuelve una cuenta distinta.
+                    val expectedUid = FirebaseAuth.getInstance().currentUser?.uid
                     val reauthed = runCatching {
-                        FirebaseAuth.getInstance().currentUser
-                            ?.reauthenticateWithCredential(credential)?.await()
+                        FirebaseAuth.getInstance().signInWithCredential(credential).await()
                     }
-                    if (reauthed.isSuccess) {
-                        startDeletion()
-                    } else {
-                        _state.value = reauthNeeded(
-                            error = reauthed.exceptionOrNull()?.localizedMessage
-                                ?: "No se pudo verificar tu identidad"
-                        )
+                    val nowUid = FirebaseAuth.getInstance().currentUser?.uid
+                    when {
+                        reauthed.isSuccess && nowUid != null && nowUid == expectedUid -> {
+                            startDeletion()
+                        }
+                        nowUid != null && nowUid != expectedUid -> {
+                            runCatching { FirebaseAuth.getInstance().signOut() }
+                            _state.value = DeleteAccountState.Error(
+                                "Se seleccionó una cuenta distinta y no se borró nada. " +
+                                    "Vuelve a iniciar sesión con la cuenta correcta."
+                            )
+                        }
+                        else -> {
+                            _state.value = reauthNeeded(
+                                error = reauthed.exceptionOrNull()?.localizedMessage
+                                    ?: "No se pudo verificar tu identidad"
+                            )
+                        }
                     }
                 }
                 is GoogleSignInOutcome.Cancelled -> {
@@ -137,8 +152,15 @@ class AccountDeletionViewModel @Inject constructor(
                 return@launch
             }
             val credential = EmailAuthProvider.getCredential(email, password)
-            val reauthed = runCatching { user.reauthenticateWithCredential(credential).await() }
-            if (reauthed.isSuccess) {
+            // signInWithCredential cuenta como login reciente (ver reauthWithGoogle).
+            // Con credencial de email no hay riesgo de cambiar de cuenta, pero se
+            // verifica el uid igualmente.
+            val expectedUid = user.uid
+            val reauthed = runCatching {
+                FirebaseAuth.getInstance().signInWithCredential(credential).await()
+            }
+            val nowUid = FirebaseAuth.getInstance().currentUser?.uid
+            if (reauthed.isSuccess && nowUid == expectedUid) {
                 startDeletion()
             } else {
                 _state.value = reauthNeeded(
