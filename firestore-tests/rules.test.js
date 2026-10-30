@@ -533,3 +533,114 @@ describe("chats", () => {
     }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Borrado de cuenta (purge completo de datos)
+// ---------------------------------------------------------------------------
+// Reglas que ejerce AccountRepository.deleteAccount: localizar mis datos
+// dispersos, borrar mi contenido con sus subcolecciones, retirar mis likes y
+// comentarios de contenido ajeno con el contador de a 1, y sanear el chat.
+
+describe("borrado de cuenta", () => {
+  test("collectionGroup de comentarios: cada quien consulta solo los suyos", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("posts/p1/comments/c1").set({ userId: "alice", text: "hola" });
+      await ctx.firestore().doc("posts/p2/comments/c2").set({ userId: "bob", text: "hey" });
+    });
+    const alice = env.authenticatedContext("alice").firestore();
+
+    const snap = await assertSucceeds(
+      alice.collectionGroup("comments").where("userId", "==", "alice").get()
+    );
+    assert.equal(snap.size, 1);
+
+    // Apuntar la misma query a comentarios ajenos queda denegada: la regla de
+    // grupo solo prueba resource.data.userId == request.auth.uid.
+    await assertFails(
+      alice.collectionGroup("comments").where("userId", "==", "bob").get()
+    );
+    await assertFails(
+      env.unauthenticatedContext().firestore()
+        .collectionGroup("comments").where("userId", "==", "alice").get()
+    );
+  });
+
+  test("el autor del post borra comentarios ajenos en su post, no en posts ajenos", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    await seedPost("p1", { userId: "alice" });
+    await seedPost("p2", { userId: "bob" });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("posts/p1/comments/c1").set({ userId: "bob", text: "hola", likesCount: 0 });
+      await ctx.firestore().doc("posts/p2/comments/c2").set({ userId: "bob", text: "hey", likesCount: 0 });
+    });
+    const alice = env.authenticatedContext("alice").firestore();
+
+    // En su post puede purgar el árbol completo de comentarios.
+    await assertSucceeds(alice.doc("posts/p1/comments/c1").delete());
+    // En el post de bob no toca comentarios ajenos.
+    await assertFails(alice.doc("posts/p2/comments/c2").delete());
+  });
+
+  test("cada quien borra su like junto al contador de a 1, no los ajenos", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    await seedPost("p1", { userId: "alice", likesCount: 1 });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("posts/p1/likes/bob").set({ userId: "bob", timestamp: 1 });
+    });
+
+    // Misma forma que AccountRepository: delete del like + decremento de a 1
+    // en el mismo batch (likesCount 1 → 0 es un cambio de -1).
+    const bob = env.authenticatedContext("bob").firestore();
+    const batch = bob.batch();
+    batch.delete(bob.doc("posts/p1/likes/bob"));
+    batch.update(bob.doc("posts/p1"), { likesCount: 0 });
+    await assertSucceeds(batch.commit());
+
+    // El like ajeno no se puede borrar (solo su autor).
+    const alice = env.authenticatedContext("alice").firestore();
+    await assertFails(alice.doc("posts/p1/likes/bob").delete());
+  });
+
+  test("el usuario borra su doc y sus subcolecciones, no los de otros", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("users/alice/savedPosts/p1").set({ savedAt: 1 });
+      await ctx.firestore().doc("users/alice/fcmTokens/t1").set({ token: "x" });
+    });
+    const alice = env.authenticatedContext("alice").firestore();
+
+    await assertSucceeds(alice.doc("users/alice/savedPosts/p1").delete());
+    await assertSucceeds(alice.doc("users/alice/fcmTokens/t1").delete());
+    await assertSucceeds(alice.doc("users/alice").delete());
+    await assertFails(alice.doc("users/bob").delete());
+  });
+
+  test("scrub del chat al eliminar cuenta: identidad y preview sí, participants no", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("chats/ab").set({
+        participants: ["alice", "bob"],
+        participantNames: { alice: "Ana", bob: "Beto" },
+        unreadCounts: { alice: 1, bob: 2 },
+        lastMessage: "hola",
+        lastMessageSenderId: "alice"
+      });
+    });
+    const alice = env.authenticatedContext("alice").firestore();
+
+    // Misma forma que AccountPurge.scrubChatFields: identidad sustituida,
+    // estado propio borrado y preview limpio, sin tocar participants.
+    await assertSucceeds(alice.doc("chats/ab").update({
+      participantNames: { alice: "Usuario eliminado", bob: "Beto" },
+      unreadCounts: { bob: 2 },
+      lastMessage: "",
+      lastMessageSenderId: "",
+      lastMessageType: ""
+    }));
+
+    // Cambiar participants sigue prohibido.
+    await assertFails(alice.doc("chats/ab").update({ participants: ["bob"] }));
+  });
+});

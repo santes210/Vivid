@@ -307,4 +307,28 @@
     <string name="audience_friends">Solo amigos</string>
     <string name="audience_public_hint">Todos pueden verla, también en Explorar</string>
     <string name="audience_friends_hint">Solo las personas que te siguen pueden verla</string>
+
+    <!-- Eliminación de cuenta -->
+    <string name="delete_account_title">Eliminar cuenta</string>
+    <string name="delete_account_subtitle">Borra tu perfil, tu contenido y tus datos de forma permanente</string>
+    <string name="delete_confirm_title">¿Eliminar tu cuenta?</string>
+    <string name="delete_confirm_body">Se eliminará de forma permanente:\n\n• Tu perfil, usuario y correo\n• Tus publicaciones, reels e historias\n• Tus comentarios y «me gusta» en todo Vivid\n• Tus seguidores, solicitudes y guardados\n• Tus mensajes de chat (aparecerás como «Usuario eliminado»)\n• Tus datos locales\n\nEsta acción no se puede deshacer.</string>
+    <string name="delete_confirm_hint">Escribe tu usuario para confirmar</string>
+    <string name="delete_confirm_action">Eliminar definitivamente</string>
+    <string name="delete_cancel">Cancelar</string>
+    <string name="delete_progress_title">Eliminando tu cuenta…</string>
+    <string name="delete_stage_content">Eliminando tu contenido…</string>
+    <string name="delete_stage_activity">Eliminando tu actividad…</string>
+    <string name="delete_stage_graph">Eliminando tus conexiones…</string>
+    <string name="delete_stage_chats">Eliminando tus conversaciones…</string>
+    <string name="delete_stage_profile">Eliminando tu perfil…</string>
+    <string name="delete_stage_auth">Cerrando tu cuenta…</string>
+    <string name="delete_stage_done">Cuenta eliminada</string>
+    <string name="delete_reauth_title">Confirma que eres tú</string>
+    <string name="delete_reauth_body">Por seguridad, vuelve a iniciar sesión para completar la eliminación de tu cuenta.</string>
+    <string name="delete_reauth_google">Continuar con Google</string>
+    <string name="delete_reauth_password_label">Contraseña</string>
+    <string name="delete_reauth_password_action">Verificar y eliminar</string>
+    <string name="delete_error_title">No se pudo eliminar la cuenta</string>
+    <string name="delete_error_retry">Reintentar</string>
 </resources>
