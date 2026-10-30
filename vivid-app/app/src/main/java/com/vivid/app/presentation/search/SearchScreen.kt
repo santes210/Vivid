@@ -1,7 +1,6 @@
 package com.vivid.app.presentation.search
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,12 +10,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,17 +32,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.paging.LoadState
-import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.vivid.app.R
-import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel
+import com.vivid.app.presentation.explore.ExploreViewModel
 import com.vivid.app.ui.components.UserAvatar
-import com.vivid.app.ui.components.VividErrorState
 import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.theme.VividSpace
-import com.vivid.app.theme.VividMaterialShapes
 
 @Immutable
 data class SearchUser(
@@ -57,18 +49,28 @@ data class SearchUser(
     val isFollowing: Boolean = false
 )
 
+/**
+ * Pantalla suelta de búsqueda (fuera del tab Explorar).
+ *
+ * Usa el MISMO buscador inteligente que Explorar — [SmartSearchPanel] con
+ * segmentos Todo/Personas/Temas/Posts — para que buscar desde aquí y desde
+ * el tab sean la experiencia integrada, no dos búsquedas distintas.
+ */
 @Composable
 fun SearchScreen(
     onUserClick: (SearchUser) -> Unit,
     onMessageClick: (SearchUser) -> Unit,
+    onTagClick: (String) -> Unit = {},
+    onPostClick: (String) -> Unit = {},
     searchViewModel: SearchViewModel = hiltViewModel(),
-    blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
+    blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel(),
+    exploreViewModel: ExploreViewModel = hiltViewModel()
 ) {
     val query by searchViewModel.query.collectAsState()
+    val state by searchViewModel.uiState.collectAsState()
+    val history by searchViewModel.history.collectAsState()
+    val exploreTags by exploreViewModel.tags.collectAsState()
     val blockedUsersState by blockedUsersViewModel.state.collectAsState()
-    val users = searchViewModel.users.collectAsLazyPagingItems()
-    val normalized = ExplorePaging.normalizeQuery(query)
-    val searching = ExplorePaging.isValidUserQuery(normalized)
 
     LaunchedEffect(blockedUsersState.userIds, blockedUsersState.isLoaded) {
         if (blockedUsersState.isLoaded) {
@@ -92,67 +94,26 @@ fun SearchScreen(
             singleLine = true
         )
 
-        when {
-            !searching -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(VividSpace.l),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        stringResource(R.string.search_min_chars),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LoadingIndicator(polygons = VividMaterialShapes.LoadingSequence)
-                }
-            }
-            users.loadState.refresh is LoadState.Error && users.itemCount == 0 -> {
-                val err = users.loadState.refresh as LoadState.Error
-                VividErrorState(
-                    message = err.error.localizedMessage ?: stringResource(R.string.search_error),
-                    onRetry = { users.retry() }
-                )
-            }
-            users.itemCount == 0 -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(VividSpace.l),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        stringResource(R.string.search_no_results),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            else -> {
-                LazyColumn {
-                    items(
-                        count = users.itemCount,
-                        key = users.itemKey { it.uid }
-                    ) { index ->
-                        val user = users[index] ?: return@items
-                        UserSearchItem(
-                            user = user,
-                            onClick = { onUserClick(user) },
-                            onMessageClick = { onMessageClick(user) }
-                        )
-                    }
-                    if (users.loadState.append is LoadState.Loading) {
-                        item {
-                            Box(
-                                Modifier.fillMaxWidth().padding(VividSpace.m),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LoadingIndicator(Modifier.size(24.dp), polygons = VividMaterialShapes.LoadingSequence)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        SmartSearchPanel(
+            state = state,
+            history = history,
+            trending = exploreTags.map { SearchTagResult(it.tag, it.count) },
+            onTabChange = searchViewModel::setTab,
+            onRecentClick = { raw ->
+                searchViewModel.setQuery(raw)
+                searchViewModel.recordSearch(raw)
+            },
+            onRecentRemove = searchViewModel::removeHistory,
+            onClearHistory = searchViewModel::clearHistory,
+            onTagClick = onTagClick,
+            onUserClick = { user ->
+                searchViewModel.recordSearch(query)
+                onUserClick(user)
+            },
+            onUserMessage = onMessageClick,
+            onPostClick = onPostClick,
+            onRetry = searchViewModel::retry
+        )
     }
 }
 

@@ -12,6 +12,7 @@ import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.domain.model.PostVisibility
 import com.vivid.app.util.Hashtags
 import com.vivid.app.util.ImageCompressor
+import com.vivid.app.util.TextFold
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -198,6 +199,7 @@ class CreatePostViewModel @Inject constructor(
                         "storageKey" to storageKey,
                         "provider" to "backblaze-direct",
                         "caption" to caption.trim(),
+                        "captionFold" to TextFold.fold(caption),
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
                         "timestamp" to System.currentTimeMillis(),
@@ -226,6 +228,7 @@ class CreatePostViewModel @Inject constructor(
                         "isPrivate" to isPrivate,
                         "imageBase64" to compressedBase64,
                         "caption" to caption.trim(),
+                        "captionFold" to TextFold.fold(caption),
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
                         "timestamp" to System.currentTimeMillis(),

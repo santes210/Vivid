@@ -72,6 +72,7 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.R
 import com.vivid.app.theme.LocalVividAnimationsEnabled
+import com.vivid.app.util.TextFold
 import com.vivid.app.theme.SoraFamily
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividMaterialShapes
@@ -198,8 +199,12 @@ class AuthViewModel @Inject constructor(
                 "uid" to user.uid,
                 "username" to (existing["username"] as? String ?: username),
                 "usernameLower" to (existing["usernameLower"] as? String ?: username.lowercase()),
+                // Campos plegados (sin tildes) del buscador inteligente: se
+                // recalculan siempre para que un cambio de nombre se refleje.
+                "usernameFold" to TextFold.fold(existing["username"] as? String ?: username),
                 "displayName" to (existing["displayName"] as? String ?: username),
                 "displayNameLower" to (existing["displayNameLower"] as? String ?: username.lowercase()),
+                "displayNameFold" to TextFold.fold(existing["displayName"] as? String ?: username),
                 "email" to (user.email ?: ""),
                 "avatarUrl" to (existing["avatarUrl"] as? String ?: user.photoUrl?.toString().orEmpty()),
                 "bio" to (existing["bio"] as? String ?: ""),

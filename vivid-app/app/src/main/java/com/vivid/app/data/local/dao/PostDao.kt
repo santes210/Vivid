@@ -18,6 +18,14 @@ interface PostDao {
     @Query("SELECT * FROM posts WHERE id = :postId LIMIT 1")
     suspend fun getPostById(postId: String): PostEntity?
 
+    /**
+     * Ventana reciente del cache para el fallback de búsqueda de captions:
+     * encuentra posts legados (sin `captionFold` en Firestore) y funciona
+     * offline. El filtrado fino (texto, privacidad) es en memoria.
+     */
+    @Query("SELECT * FROM posts ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentPosts(limit: Int): List<PostEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPosts(posts: List<PostEntity>)
 

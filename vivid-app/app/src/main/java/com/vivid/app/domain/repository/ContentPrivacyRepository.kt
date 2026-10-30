@@ -5,12 +5,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.vivid.app.domain.model.PostVisibility
 import com.vivid.app.util.Hashtags
+import com.vivid.app.util.TextFold
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 
-const val CONTENT_PRIVACY_VERSION = 2L
+const val CONTENT_PRIVACY_VERSION = 3L
 
 /**
  * Actualizaciones de privacidad por documento.
@@ -20,6 +21,9 @@ const val CONTENT_PRIVACY_VERSION = 2L
  * recalculados del caption— para que el contenido creado ANTES de estos
  * features no quede invisible en Explorar. Solo se escriben campos AUSENTES:
  * un post "friends" ya guardado nunca se resetea a público.
+ *
+ * v3: añade `captionFold` (caption plegado, sin tildes) para que los posts
+ * legados aparezcan en la búsqueda inteligente de publicaciones.
  */
 internal fun contentPrivacyUpdates(collection: String, doc: DocumentSnapshot, isPrivate: Boolean): Map<String, Any> {
     val updates = LinkedHashMap<String, Any>()
@@ -30,6 +34,9 @@ internal fun contentPrivacyUpdates(collection: String, doc: DocumentSnapshot, is
             val caption = doc.getString("caption").orEmpty()
             val tags = Hashtags.extract(caption)
             if (tags.isNotEmpty()) updates["hashtags"] = tags
+        }
+        if (!doc.contains("captionFold")) {
+            updates["captionFold"] = TextFold.fold(doc.getString("caption").orEmpty())
         }
     }
     return updates

@@ -21,7 +21,7 @@ class ContentPrivacyRepositoryTest {
     }
 
     @Test
-    fun `CONTENT_PRIVACY_VERSION equals 2`() {
-        assertEquals(2L, CONTENT_PRIVACY_VERSION)
+    fun `CONTENT_PRIVACY_VERSION equals 3`() {
+        assertEquals(3L, CONTENT_PRIVACY_VERSION)
     }
 }

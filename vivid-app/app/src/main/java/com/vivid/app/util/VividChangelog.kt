@@ -22,6 +22,9 @@ object VividChangelog {
         VividRelease(
             version = "2.4.0",
             notes = listOf(
+                "Buscador inteligente: una sola búsqueda integrada para personas, #temas y publicaciones, con segmentos Todo/Personas/Temas/Posts y ranking de relevancia.",
+                "La búsqueda ahora encuentra publicaciones por el texto del pie de foto y por hashtag, además de usuarios; tolera tildes (\"musica\" = #música) y pequeños errores tipográficos.",
+                "Nuevo panel de búsqueda con Material 3 Expressive: segmentos animados, recientes en chips borrables, temas en tendencia y estados con las formas de Vivid.",
                 "Modo negro puro (AMOLED) en Ajustes → Apariencia: fondo #000000 para pantallas OLED.",
                 "Cinco paletas de color para elegir cuando no usas color dinámico: Vivid Sunset, Océano, Bosque, Lavanda y Mono.",
                 "El corazón del like conserva su rojo aunque tu fondo de pantalla sea verde.",

@@ -135,6 +135,20 @@
       ]
     },
     {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPrivate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "captionFold",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "reels",
       "queryScope": "COLLECTION",
       "fields": [
