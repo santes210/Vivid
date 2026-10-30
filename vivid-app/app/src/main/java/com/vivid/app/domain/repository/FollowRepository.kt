@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.vivid.app.util.PushSender
+import com.vivid.app.util.TextFold
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -507,8 +508,10 @@ class FollowRepository @Inject constructor(
                 "uid" to userId,
                 "username" to fallbackUsername,
                 "usernameLower" to fallbackUsername.lowercase(),
+                "usernameFold" to TextFold.fold(fallbackUsername),
                 "displayName" to fallbackUsername,
                 "displayNameLower" to fallbackUsername.lowercase(),
+                "displayNameFold" to TextFold.fold(fallbackUsername),
                 "email" to (authUser?.email ?: ""),
                 "avatarUrl" to (authUser?.photoUrl?.toString() ?: ""),
                 "bio" to "",

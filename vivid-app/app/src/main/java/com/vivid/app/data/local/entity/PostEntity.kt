@@ -35,6 +35,13 @@ data class PostEntity(
     val musicUrl: String = "",
     val musicStorageKey: String = "",
     val hashtags: String = "",
+    /**
+     * Audiencia del post ("public" | "friends", ver [com.vivid.app.domain.model.PostVisibility]).
+     * Copiada del cache para que la BÚSQUEDA offline no descubra contenido
+     * "solo amigos" (mismo criterio que Explorar). Los posts cacheados antes
+     * de la migración 8→9 quedan como "public" hasta que el feed los refresque.
+     */
+    val visibility: String = "public",
     val cachedAt: Long = System.currentTimeMillis()
 )
 
@@ -60,7 +67,8 @@ fun PostEntity.toPostData() = com.vivid.app.presentation.feed.PostData(
     musicAssetFile = musicAssetFile,
     musicUrl = musicUrl,
     musicStorageKey = musicStorageKey,
-    hashtags = Hashtags.splitFromCache(hashtags)
+    hashtags = Hashtags.splitFromCache(hashtags),
+    visibility = visibility
 )
 
 /** Modelo de UI → entity de cache (posts traídos por Explorar). */
@@ -86,5 +94,6 @@ fun com.vivid.app.presentation.feed.PostData.toCachedEntity(cachedAt: Long = Sys
     musicUrl = musicUrl,
     musicStorageKey = musicStorageKey,
     hashtags = Hashtags.joinForCache(hashtags),
+    visibility = visibility,
     cachedAt = cachedAt
 )

@@ -80,9 +80,16 @@ class VividDatabaseMigrationsTest {
     }
 
     @Test
+    fun `MIGRATION_8_9 covers version 8 to 9`() {
+        val migration = VividDatabase.MIGRATION_8_9
+        assertEquals(8, migration.startVersion)
+        assertEquals(9, migration.endVersion)
+    }
+
+    @Test
     fun `ALL_MIGRATIONS covers every step up to VERSION`() {
         assertEquals(VividDatabase.VERSION - 1, VividDatabase.ALL_MIGRATIONS.size)
-        assertEquals(8, VividDatabase.VERSION)
+        assertEquals(9, VividDatabase.VERSION)
     }
 
     // ── Entity default values match DDL defaults ──
@@ -124,6 +131,8 @@ class VividDatabaseMigrationsTest {
         assertEquals("", post.musicAssetFile)
         assertEquals("", post.musicUrl)
         assertEquals("", post.musicStorageKey)
+        // Field added in MIGRATION_8_9 (audiencia para la búsqueda offline)
+        assertEquals("public", post.visibility)
     }
 
     @Test

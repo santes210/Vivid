@@ -24,6 +24,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.vivid.app.util.ImageCompressor
+import com.vivid.app.util.TextFold
 import kotlinx.coroutines.launch
 import com.vivid.app.theme.VividSpace
 import com.vivid.app.theme.VividMaterialShapes
@@ -253,9 +254,12 @@ private suspend fun saveProfile(
         "uid" to user.uid,
         "displayName" to displayName,
         "displayNameLower" to displayName.lowercase(),
+        // Campos plegados (sin tildes) del buscador inteligente.
+        "displayNameFold" to TextFold.fold(displayName),
         "bio" to bio,
         "username" to username,
         "usernameLower" to username.lowercase(),
+        "usernameFold" to TextFold.fold(username),
         "email" to (user.email ?: ""),
         "updatedAt" to System.currentTimeMillis()
     )

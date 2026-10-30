@@ -403,7 +403,10 @@ fun VividNavigation(
                 ExploreScreen(
                     initialTag = initialTag,
                     onPostClick = { postId -> navController.navigate("post/$postId") },
-                    onProfileClick = { userId -> navController.navigate("profile/$userId") }
+                    onProfileClick = { userId -> navController.navigate("profile/$userId") },
+                    // El botón Mensaje de una fila del buscador abre el chat
+                    // directo con esa persona (mismo helper que los deep links).
+                    onMessageUser = { user -> navController.openChatWithUser(user) }
                 )
             }
             composable(Screen.Create.route) {

@@ -29,7 +29,7 @@ import com.vivid.app.data.local.entity.UserEntity
         ReelEntity::class,
         HashtagEntity::class
     ],
-    version = 8,
+    version = 9,
     // Exportar el esquema JSON en cada build (app/schemas/) permite validar
     // migraciones con MigrationTestHelper y detectar cambios accidentales
     // de esquema ANTES de que un usuario con datos viejos sufra un crash.
@@ -45,7 +45,7 @@ abstract class VividDatabase : RoomDatabase() {
     abstract fun hashtagDao(): HashtagDao
 
     companion object {
-        const val VERSION = 8
+        const val VERSION = 9
         const val NAME = "vivid_database"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -172,6 +172,20 @@ abstract class VividDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8 → v9: audiencia cacheada por post.
+         * - posts: columna visibility ("public" | "friends") para que el
+         *   fallback offline del buscador inteligente no descubra contenido
+         *   "solo amigos" (mismo criterio que Explorar). Las filas cacheadas
+         *   antes de esta migración quedan como "public"; el feed las
+         *   refresca con el valor real en la siguiente carga.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'")
+            }
+        }
+
         /** Contiguous 1 → VERSION chain. Used by Hilt and by migration tests. */
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
@@ -180,7 +194,8 @@ abstract class VividDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
-            MIGRATION_7_8
+            MIGRATION_7_8,
+            MIGRATION_8_9
         )
     }
 }

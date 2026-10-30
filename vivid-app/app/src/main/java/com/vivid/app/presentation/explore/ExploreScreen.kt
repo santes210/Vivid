@@ -28,27 +28,19 @@ import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -78,10 +70,10 @@ import com.vivid.app.data.paging.ExplorePaging
 import com.vivid.app.presentation.common.BlockedUsersViewModel
 import com.vivid.app.presentation.feed.PostData
 import com.vivid.app.presentation.search.SearchHistory
-import com.vivid.app.presentation.search.SearchSuggestion
+import com.vivid.app.presentation.search.SearchTagResult
 import com.vivid.app.presentation.search.SearchUser
 import com.vivid.app.presentation.search.SearchViewModel
-import com.vivid.app.presentation.search.UserSearchItem
+import com.vivid.app.presentation.search.SmartSearchPanel
 import com.vivid.app.theme.VividExpressiveShapes
 import com.vivid.app.theme.VividMaterialShapes
 import com.vivid.app.theme.VividMotion
@@ -93,7 +85,6 @@ import com.vivid.app.ui.components.VividOfflineBannerHost
 import com.vivid.app.ui.components.VividPullToRefreshBox
 import com.vivid.app.ui.components.VividSearchBar
 import com.vivid.app.ui.components.VividSkeletonGrid
-import com.vivid.app.ui.components.VividSkeletonListItem
 import com.vivid.app.ui.components.rememberVividMorph
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
@@ -106,6 +97,8 @@ private const val TABLET_MIN_WIDTH_DP = 600
 fun ExploreScreen(
     onPostClick: (String) -> Unit = {},
     onProfileClick: (String) -> Unit = {},
+    /** Abrir chat con la persona encontrada (botón Mensaje de la fila). */
+    onMessageUser: (SearchUser) -> Unit = {},
     /** Tag preseleccionado al llegar desde un hashtag tocado en un post. */
     initialTag: String = "",
     exploreViewModel: ExploreViewModel = hiltViewModel(),
@@ -118,6 +111,7 @@ fun ExploreScreen(
     val cachedTagPosts by exploreViewModel.cachedPosts.collectAsState()
     val searchQuery by searchViewModel.query.collectAsState()
     val history by searchViewModel.history.collectAsState()
+    val searchState by searchViewModel.uiState.collectAsState()
 
     LaunchedEffect(initialTag) {
         if (initialTag.isNotBlank()) exploreViewModel.selectTag(initialTag)
@@ -136,14 +130,9 @@ fun ExploreScreen(
 
     val haptics = rememberVividHaptics()
     val posts = exploreViewModel.posts.collectAsLazyPagingItems()
-    val users = searchViewModel.users.collectAsLazyPagingItems()
-    val normalizedQuery = ExplorePaging.normalizeQuery(searchQuery)
     val tagQuery = Hashtags.parseQuery(searchQuery)
-    val searching = ExplorePaging.isValidUserQuery(normalizedQuery)
     val isTablet = LocalConfiguration.current.screenWidthDp >= TABLET_MIN_WIDTH_DP
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
-
-    val suggestions = SearchHistory.suggestions(searchQuery, history)
 
     fun collapseSearch() {
         searchExpanded = false
@@ -198,22 +187,33 @@ fun ExploreScreen(
                 docked = isTablet,
                 placeholder = stringResource(R.string.search_people_or_tags)
             ) {
-                ExploreSearchPanel(
-                    searching = searching,
-                    suggestions = suggestions,
+                SmartSearchPanel(
+                    state = searchState,
                     history = history,
-                    users = users,
-                    onRecentClick = { query ->
+                    trending = exploreTags.map { SearchTagResult(it.tag, it.count) },
+                    onTabChange = searchViewModel::setTab,
+                    onRecentClick = { raw ->
                         haptics.tick()
-                        applyQuery(query)
+                        applyQuery(raw)
                     },
                     onRecentRemove = searchViewModel::removeHistory,
                     onClearHistory = searchViewModel::clearHistory,
                     onTagClick = ::applyTag,
                     onUserClick = { user ->
+                        haptics.tick()
                         searchViewModel.recordSearch(searchQuery)
                         onProfileClick(user.uid)
-                    }
+                    },
+                    onUserMessage = { user ->
+                        haptics.tick()
+                        onMessageUser(user)
+                    },
+                    onPostClick = { postId ->
+                        haptics.tick()
+                        searchViewModel.recordSearch(searchQuery)
+                        onPostClick(postId)
+                    },
+                    onRetry = searchViewModel::retry
                 )
             }
 
@@ -232,226 +232,6 @@ fun ExploreScreen(
                         onPostClick(postId)
                     }
                 )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ColumnScope.ExploreSearchPanel(
-    searching: Boolean,
-    suggestions: List<SearchSuggestion>,
-    history: List<String>,
-    users: LazyPagingItems<SearchUser>,
-    onRecentClick: (String) -> Unit,
-    onRecentRemove: (String) -> Unit,
-    onClearHistory: () -> Unit,
-    onTagClick: (String) -> Unit,
-    onUserClick: (SearchUser) -> Unit
-) {
-    if (!searching) {
-        val recents = suggestions.filterIsInstance<SearchSuggestion.Recent>()
-        val tags = suggestions.filterIsInstance<SearchSuggestion.Tag>()
-        LazyColumn(modifier = Modifier.fillMaxWidth()) {
-            if (recents.isNotEmpty()) {
-                item(key = "history_header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            stringResource(R.string.search_recent),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (history.isNotEmpty()) {
-                            TextButton(onClick = onClearHistory) {
-                                Text(stringResource(R.string.search_clear_history))
-                            }
-                        }
-                    }
-                }
-                items(recents, key = { "recent_${it.query}" }) { recent ->
-                    val isTag = Hashtags.parseQuery(recent.query) != null
-                    ListItem(
-                        headlineContent = { Text(recent.query) },
-                        leadingContent = {
-                            Icon(
-                                if (isTag) ExploreTopics.icon(
-                                    Hashtags.parseQuery(recent.query).orEmpty()
-                                ) else Icons.Default.History,
-                                contentDescription = null
-                            )
-                        },
-                        trailingContent = {
-                            IconButton(onClick = { onRecentRemove(recent.query) }) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = stringResource(R.string.search_remove_recent)
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable { onRecentClick(recent.query) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                }
-            }
-            if (tags.isNotEmpty()) {
-                item(key = "tags_header") {
-                    Text(
-                        stringResource(R.string.search_suggested_tags),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s)
-                    )
-                }
-                item(key = "tags_flow") {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
-                        horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
-                        verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
-                    ) {
-                        tags.forEach { suggestion ->
-                            SuggestionChip(
-                                onClick = { onTagClick(suggestion.tag) },
-                                label = { Text(Hashtags.display(suggestion.tag)) },
-                                icon = {
-                                    Icon(
-                                        ExploreTopics.icon(suggestion.tag),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                shape = VividExpressiveShapes.ChipUnselected
-                            )
-                        }
-                    }
-                }
-            }
-            if (recents.isEmpty() && tags.isEmpty()) {
-                item(key = "min_chars") {
-                    Text(
-                        stringResource(R.string.search_min_chars),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(VividSpace.l),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        }
-        return
-    }
-
-    when {
-        users.loadState.refresh is LoadState.Loading && users.itemCount == 0 -> {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                repeat(5) { VividSkeletonListItem() }
-            }
-        }
-        users.loadState.refresh is LoadState.Error && users.itemCount == 0 -> {
-            val err = users.loadState.refresh as LoadState.Error
-            VividErrorState(
-                message = err.error.localizedMessage ?: stringResource(R.string.search_error),
-                onRetry = { users.retry() }
-            )
-        }
-        users.itemCount == 0 -> {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(VividSpace.l),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    shape = VividMaterialShapes.EmptyStateContainer,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.size(104.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.PersonSearch,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(44.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(VividSpace.m))
-                Text(
-                    stringResource(R.string.search_no_results),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-        else -> {
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                val matchingTags = suggestions.filterIsInstance<SearchSuggestion.Tag>()
-                if (matchingTags.isNotEmpty()) {
-                    item(key = "inline_tags") {
-                        Text(
-                            stringResource(R.string.search_suggested_tags),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.s)
-                        )
-                    }
-                    item(key = "inline_tags_flow") {
-                        FlowRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
-                            horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
-                            verticalArrangement = Arrangement.spacedBy(VividSpace.xs)
-                        ) {
-                            matchingTags.forEach { suggestion ->
-                                SuggestionChip(
-                                    onClick = { onTagClick(suggestion.tag) },
-                                    label = { Text(Hashtags.display(suggestion.tag)) },
-                                    icon = {
-                                        Icon(
-                                            ExploreTopics.icon(suggestion.tag),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    },
-                                    shape = VividExpressiveShapes.ChipUnselected
-                                )
-                            }
-                        }
-                    }
-                    item(key = "people_divider") {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = VividSpace.m, vertical = VividSpace.xs),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
-                    }
-                }
-                items(
-                    count = users.itemCount,
-                    key = users.itemKey { it.uid }
-                ) { index ->
-                    val user = users[index] ?: return@items
-                    UserSearchItem(
-                        user = user,
-                        onClick = { onUserClick(user) },
-                        onMessageClick = { onUserClick(user) }
-                    )
-                }
-                if (users.loadState.append is LoadState.Loading) {
-                    item {
-                        Box(
-                            Modifier.fillMaxWidth().padding(VividSpace.m),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator(
-                                Modifier.size(32.dp),
-                                polygons = VividMaterialShapes.LoadingSequence
-                            )
-                        }
-                    }
-                }
             }
         }
     }

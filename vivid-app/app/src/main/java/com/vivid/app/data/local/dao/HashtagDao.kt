@@ -13,6 +13,10 @@ interface HashtagDao {
     @Query("SELECT * FROM hashtags ORDER BY count DESC, tag ASC")
     fun observeAll(): Flow<List<HashtagEntity>>
 
+    /** Búsqueda por subcadena sobre el catálogo (buscador inteligente). */
+    @Query("SELECT * FROM hashtags WHERE tag LIKE '%' || :query || '%' ORDER BY count DESC, tag ASC LIMIT :limit")
+    suspend fun search(query: String, limit: Int): List<HashtagEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(tags: List<HashtagEntity>)
 

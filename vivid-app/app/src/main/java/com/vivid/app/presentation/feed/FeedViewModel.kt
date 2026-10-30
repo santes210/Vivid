@@ -12,6 +12,7 @@ import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRepository
 import com.vivid.app.util.PushSender
 import com.vivid.app.util.Hashtags
+import com.vivid.app.util.TextFold
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -208,6 +209,8 @@ class FeedViewModel @Inject constructor(
                     .update(
                         mapOf(
                             "caption" to caption,
+                            // Caption plegado para el buscador inteligente.
+                            "captionFold" to TextFold.fold(caption),
                             // El caption editado puede ganar o perder hashtags;
                             // si no se recalculan, el post quedaría en Explorar
                             // con tags que ya no están en el texto.
