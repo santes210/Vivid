@@ -89,7 +89,7 @@ class VividDatabaseMigrationsTest {
     @Test
     fun `ALL_MIGRATIONS covers every step up to VERSION`() {
         assertEquals(VividDatabase.VERSION - 1, VividDatabase.ALL_MIGRATIONS.size)
-        assertEquals(8, VividDatabase.VERSION)
+        assertEquals(9, VividDatabase.VERSION)
     }
 
     // ── Entity default values match DDL defaults ──
