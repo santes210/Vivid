@@ -200,10 +200,14 @@ fun ExploreScreen(
                     onClearHistory = searchViewModel::clearHistory,
                     onTagClick = ::applyTag,
                     onUserClick = { user ->
+                        haptics.tick()
                         searchViewModel.recordSearch(searchQuery)
                         onProfileClick(user.uid)
                     },
-                    onUserMessage = onMessageUser,
+                    onUserMessage = { user ->
+                        haptics.tick()
+                        onMessageUser(user)
+                    },
                     onPostClick = { postId ->
                         haptics.tick()
                         searchViewModel.recordSearch(searchQuery)
