@@ -24,4 +24,5 @@
 -->
 <full-backup-content>
     <include domain="sharedpref" path="."/>
+        <exclude domain="sharedpref" path="chat_drafts.xml"/>
 </full-backup-content>

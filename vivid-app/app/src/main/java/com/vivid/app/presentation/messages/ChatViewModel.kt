@@ -40,7 +40,8 @@ data class ImageUpload(
     val phase: Phase = Phase.COMPRESSING,
     val progress: Int = 0,
     val error: String? = null,
-    val uri: Uri? = null
+    val uri: Uri? = null,
+    val uploadedUrl: String = ""
 ) {
     enum class Phase {
         COMPRESSING,
@@ -56,7 +57,8 @@ data class VoiceUpload(
     val progress: Int = 0,
     val error: String? = null,
     val durationMs: Long = 0L,
-    val localFilePath: String? = null
+    val localFilePath: String? = null,
+    val uploadedUrl: String = ""
 )
 
 @HiltViewModel
@@ -387,23 +389,46 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private val drafts = ChatDraftStore(context.getSharedPreferences("chat_drafts", Context.MODE_PRIVATE))
+    private val _textSendPhase = MutableStateFlow(TextSendPhase.IDLE)
+    val textSendPhase = _textSendPhase.asStateFlow()
+
+    fun draftText(chatId: String): String = drafts.text(currentUserId, chatId)
+
+    fun saveDraft(chatId: String, text: String) {
+        if (currentUserId.isNotBlank()) drafts.save(currentUserId, chatId, text)
+        if (_textSendPhase.value != TextSendPhase.SENDING) _textSendPhase.value = TextSendPhase.IDLE
+    }
+
     fun sendMessage(
         chatId: String,
         text: String,
-        receiverId: String
+        receiverId: String,
+        onSent: () -> Unit = {}
     ) {
+        if (_textSendPhase.value == TextSendPhase.SENDING || text.isBlank()) return
+        val sender = currentUserId
+        if (sender.isBlank() || receiverId.isBlank()) {
+            showError("Vuelve a iniciar sesión para enviar el mensaje")
+            return
+        }
+        val operationId = drafts.save(sender, chatId, text)
+        _textSendPhase.value = TextSendPhase.SENDING
         viewModelScope.launch {
             try {
-                chatRepository.sendMessage(chatId, text, receiverId)
+                check(currentUserId == sender) { "La sesión cambió" }
+                chatRepository.sendMessage(chatId, text.trim(), receiverId, messageId = operationId)
+                drafts.clearIfAcknowledged(sender, chatId, operationId)
+                _textSendPhase.value = TextSendPhase.SENT
+                onSent()
                 setTyping(chatId, false)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                _textSendPhase.value = TextSendPhase.IDLE
+                throw cancelled
             } catch (error: Exception) {
+                _textSendPhase.value = TextSendPhase.FAILED
                 Log.e(TAG, "No se pudo enviar mensaje en $chatId", error)
-                showError(
-                    readableError(
-                        error,
-                        "No se pudo enviar el mensaje"
-                    )
-                )
+                showError(readableError(error, "No se pudo enviar el mensaje. Puedes reintentar"))
             }
         }
     }
@@ -488,7 +513,7 @@ class ChatViewModel @Inject constructor(
             it.localId == localId
         } ?: return
 
-        if (current.uri == null) return
+        if (current.uri == null || current.phase != ImageUpload.Phase.FAILED) return
 
         val retry = current.copy(
             phase = ImageUpload.Phase.COMPRESSING,
@@ -518,9 +543,16 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             var tempFile: File? = null
-            var uploadedKey: String? = null
 
             try {
+                if (upload.uploadedUrl.isNotBlank()) {
+                    chatRepository.sendImageMessage(chatId, receiverId, upload.uploadedUrl,
+                        "chat_images/$chatId/${upload.localId}.jpg", messageId = upload.localId)
+                    updateUpload(upload.localId) { it.copy(phase = ImageUpload.Phase.DONE, progress = 100) }
+                    delay(1500)
+                    dismissImageUpload(upload.localId)
+                    return@launch
+                }
                 val processedFile = withContext(Dispatchers.IO) {
                     val destination = File(
                         context.cacheDir,
@@ -567,13 +599,14 @@ class ChatViewModel @Inject constructor(
                     "El servidor no devolvió la imagen"
                 }
 
-                uploadedKey = key
+                updateUpload(upload.localId) { it.copy(uploadedUrl = imageUrl) }
 
                 chatRepository.sendImageMessage(
                     chatId,
                     receiverId,
                     imageUrl,
-                    key
+                    key,
+                    messageId = upload.localId
                 )
 
                 updateUpload(upload.localId) {
@@ -589,14 +622,13 @@ class ChatViewModel @Inject constructor(
 
                 delay(1500)
                 dismissImageUpload(upload.localId)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 Log.e(TAG, "No se pudo enviar imagen en $chatId", error)
 
-                uploadedKey?.let { key ->
-                    runCatching {
-                        storage.deleteFile(key)
-                    }
-                }
+                // Keep uploaded media: a lost acknowledgement does not prove
+                // that the message was rejected. Retrying reuses the message ID.
 
                 withContext(Dispatchers.IO) {
                     tempFile?.delete()
@@ -715,11 +747,21 @@ class ChatViewModel @Inject constructor(
         val file = upload.localFilePath?.let(::File) ?: return
 
         viewModelScope.launch {
-            var uploadedKey: String? = null
 
             try {
-                check(file.exists() && file.length() > 0L) {
-                    "La grabación ya no está disponible"
+                if (upload.uploadedUrl.isNotBlank()) {
+                    chatRepository.sendVoiceMessage(chatId, receiverId, upload.uploadedUrl,
+                        "chat_voice/$chatId/${upload.localId}.m4a", upload.durationMs,
+                        messageId = upload.localId)
+                    _voiceUploads.value = _voiceUploads.value.map {
+                        if (it.localId == upload.localId) it.copy(phase = ImageUpload.Phase.DONE, progress = 100) else it
+                    }
+                    delay(1200)
+                    dismissVoiceUpload(upload.localId)
+                    return@launch
+                }
+                if (!file.exists() || file.length() == 0L) {
+                    throw java.io.FileNotFoundException("La grabación ya no está disponible")
                 }
 
                 val key = "chat_voice/$chatId/${upload.localId}.m4a"
@@ -744,14 +786,17 @@ class ChatViewModel @Inject constructor(
                     "El servidor no devolvió el audio"
                 }
 
-                uploadedKey = key
+                _voiceUploads.value = _voiceUploads.value.map {
+                    if (it.localId == upload.localId) it.copy(uploadedUrl = voiceUrl) else it
+                }
 
                 chatRepository.sendVoiceMessage(
                     chatId,
                     receiverId,
                     voiceUrl,
                     key,
-                    upload.durationMs
+                    upload.durationMs,
+                    messageId = upload.localId
                 )
 
                 _voiceUploads.value = _voiceUploads.value.map {
@@ -775,14 +820,13 @@ class ChatViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     file.delete()
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 Log.e(TAG, "No se pudo enviar nota de voz en $chatId", error)
 
-                uploadedKey?.let { key ->
-                    runCatching {
-                        storage.deleteFile(key)
-                    }
-                }
+                // Keep uploaded media: a lost acknowledgement does not prove
+                // that the message was rejected. Retrying reuses the message ID.
 
                 val message = readableError(
                     error,
@@ -814,9 +858,10 @@ class ChatViewModel @Inject constructor(
             it.localId == localId
         } ?: return
 
+        if (failed.phase != ImageUpload.Phase.FAILED) return
         val path = failed.localFilePath ?: return
 
-        if (!File(path).exists()) {
+        if (!File(path).exists() && failed.uploadedUrl.isBlank()) {
             dismissVoiceUpload(localId)
             showError("La grabación ya no está disponible")
             return
@@ -1047,6 +1092,8 @@ class ChatViewModel @Inject constructor(
         fallback: String
     ): String {
         return when {
+            error is java.io.FileNotFoundException -> "$fallback: el archivo ya no está disponible; selecciónalo de nuevo"
+            error is java.io.IOException -> "$fallback: revisa tu conexión y vuelve a intentarlo"
             error is FirebaseFirestoreException &&
                 error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ->
                 "$fallback: permisos de la conversación rechazados"

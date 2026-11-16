@@ -90,6 +90,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="vivid" android:host="post" />
+                <data android:scheme="vivid" android:host="reel" />
             </intent-filter>
 
             <!-- Atajos estáticos del launcher (long-press). No es un

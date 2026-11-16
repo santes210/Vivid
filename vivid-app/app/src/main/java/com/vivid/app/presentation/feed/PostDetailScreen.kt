@@ -1,6 +1,5 @@
 package com.vivid.app.presentation.feed
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
@@ -84,6 +84,13 @@ fun PostDetailScreen(
     var loading by remember { mutableStateOf(true) }
     var isLiked by remember { mutableStateOf(false) }
     var likesCount by remember { mutableIntStateOf(0) }
+    var showShare by remember(postId) { mutableStateOf(false) }
+    var showVideo by remember(postId) { mutableStateOf(false) }
+    if (showShare) post?.let { PostShareSheet(it, onDismiss = { showShare = false }) }
+    if (showVideo) {
+        com.vivid.app.presentation.messages.ChatReelViewer(postId, onClose = { showVideo = false }, collection = "posts")
+    }
+
 
     LaunchedEffect(postId, currentUserId) {
         loading = true
@@ -176,7 +183,11 @@ fun PostDetailScreen(
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
                     ) {
-                        if (loaded.imageUrl.isNotBlank()) {
+                        if (loaded.isVideo) {
+                            FilledTonalButton(onClick = { showVideo = true }, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                                Text(stringResource(R.string.content_video_open))
+                            }
+                        } else if (loaded.imageUrl.isNotBlank()) {
                             VividAsyncImage(
                                 model = loaded.imageUrl,
                                 contentDescription = stringResource(R.string.cd_post_detail_image),
@@ -262,16 +273,7 @@ fun PostDetailScreen(
                         FilledIconButton(
                             onClick = {
                                 haptics.confirm()
-                                val share = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "vivid://post/${loaded.id}"
-                                    )
-                                }
-                                context.startActivity(
-                                    Intent.createChooser(share, null)
-                                )
+                                showShare = true
                             }
                         ) {
                             Icon(

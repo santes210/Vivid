@@ -67,6 +67,11 @@ fun ReelsScreen(
     initialReelId: String? = null,
     viewModel: ReelsViewModel = hiltViewModel()
 ) {
+    var browseFeed by remember(initialReelId) { mutableStateOf(false) }
+    if (initialReelId != null && !browseFeed) {
+        SharedReelContent(initialReelId, viewModel, onClose = { browseFeed = true })
+        return
+    }
     val reels by viewModel.reels.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
@@ -123,7 +128,7 @@ fun ReelsScreen(
                     val reel = reels[page]
                     ReelPage(
                         reel = reel,
-                        isPlaying = page == pagerState.currentPage && policy.autoplayAllowed
+                        isPlaying = page == pagerState.currentPage
                     )
                 }
             }

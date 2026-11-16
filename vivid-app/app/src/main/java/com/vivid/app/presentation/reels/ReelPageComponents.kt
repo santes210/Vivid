@@ -1,6 +1,5 @@
 package com.vivid.app.presentation.reels
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -105,17 +104,45 @@ internal fun ReelPage(
     val scope = rememberCoroutineScope()
     val followRepository = remember { FollowRepository(firestore, FirebaseAuth.getInstance()) }
 
+    var showShare by remember(reel.id) { mutableStateOf(false) }
+    var playbackSpeed by remember(reel.id) { mutableFloatStateOf(1f) }
+    val playbackPolicy = com.vivid.app.util.rememberPlaybackPolicy()
     var isPausedByUser by remember(reel.id) { mutableStateOf(false) }
+    var manuallyStarted by remember(reel.id) { mutableStateOf(false) }
+    LaunchedEffect(isPlaying) { if (!isPlaying) manuallyStarted = false }
+    val wantsPlayback = com.vivid.app.util.PlaybackPolicy.shouldPlayVideo(
+        isPlaying, isPausedByUser, manuallyStarted, playbackPolicy
+    )
     var isMuted by remember(reel.id) { mutableStateOf(false) }
+    var repeatVideo by remember(reel.id) { mutableStateOf(true) }
 
     // Pooled ExoPlayer + local video cache. VerticalPager keeps ~3 pages
     // composed; the pool recycles decoders instead of leaking one per reel.
     val exoPlayer = rememberPooledExoPlayer(
         mediaUrl = reel.videoUrl,
-        playWhenReady = isPlaying && !isPausedByUser && SettingsManager.autoplayReels,
-        repeatMode = ExoPlayer.REPEAT_MODE_ALL,
+        playWhenReady = wantsPlayback && !showShare,
+        prepareMedia = com.vivid.app.util.PlaybackPolicy.shouldPrepareVideo(
+            isPlaying, manuallyStarted, playbackPolicy
+        ),
+        repeatMode = if (repeatVideo) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF,
         volume = if (isMuted) 0f else 1f
     )
+
+    LaunchedEffect(exoPlayer, playbackSpeed) { exoPlayer.setPlaybackSpeed(playbackSpeed) }
+    if (showShare) {
+        ContentShareSheet(
+            ShareContent(ReelLinks.create(reel.id), reel.caption), playbackSpeed, onSpeed = { playbackSpeed = it },
+            muted = isMuted, onMuted = { isMuted = it },
+            repeat = repeatVideo, onRepeat = { repeatVideo = it },
+            onRestart = {
+                exoPlayer.seekTo(0)
+                manuallyStarted = true
+                isPausedByUser = false
+                showShare = false
+            },
+            onDismiss = { showShare = false }
+        )
+    }
 
     // URL firmada vencida → error de reproducción → pedir una firma nueva.
     // refreshReelUrl cambia reel.videoUrl, el remember() recrea el player y
@@ -212,7 +239,12 @@ internal fun ReelPage(
                         showHeartAnimation = true
                     }
                 } else {
-                    isPausedByUser = !isPausedByUser
+                    if (!wantsPlayback) {
+                        manuallyStarted = true
+                        isPausedByUser = false
+                    } else {
+                        isPausedByUser = true
+                    }
                 }
                 lastTapTime = now
             }
@@ -271,7 +303,7 @@ internal fun ReelPage(
 
         // Indicador de pausa — compacto y centrado (sin saturar la pantalla)
         AnimatedVisibility(
-            visible = isPausedByUser,
+            visible = !wantsPlayback,
             enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
             exit = if (animationsEnabled) fadeOut() else ExitTransition.None,
             modifier = Modifier.align(Alignment.Center)
@@ -339,9 +371,9 @@ internal fun ReelPage(
             )
         }
 
-        // Acciones derecha (like, comment, share, mute) — contenedores negros translúcidos consistentes
+        // Keep sharing and playback settings reachable even when the reel is paused.
         AnimatedVisibility(
-            visible = !isPausedByUser,
+            visible = true,
             enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
             exit = if (animationsEnabled) fadeOut() else ExitTransition.None,
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -388,7 +420,7 @@ internal fun ReelPage(
                     tint = Color.White,
                     onClick = {
                         haptics.confirm()
-                        shareReel(context = context, reel = reel)
+                        showShare = true
                     }
                 )
                 ReelActionButton(
@@ -785,17 +817,4 @@ internal suspend fun setReelLike(reelId: String, currentUserId: String, shouldLi
         }
     }.await()
     if (created) PushSender.reelLike(reelId)
-}
-
-internal fun shareReel(context: android.content.Context, reel: Reel) {
-    val text = buildString {
-        append("Mira este reel de @${reel.username} en Vivid")
-        if (reel.caption.isNotBlank()) append("\n\n${reel.caption}")
-        if (reel.videoUrl.isNotBlank()) append("\n\n${reel.videoUrl}")
-    }
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(intent, "Compartir reel"))
 }

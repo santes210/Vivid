@@ -141,7 +141,21 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
         }
     }
 
+    val musicLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(musicLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE ||
+                event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                player?.pause()
+                isPlaying = false
+            }
+        }
+        musicLifecycle.lifecycle.addObserver(observer)
+        onDispose { musicLifecycle.lifecycle.removeObserver(observer) }
+    }
+
     DisposableEffect(musicUriString, isPlaying) {
+        var musicListener: Player.Listener? = null
         val shouldPlay = isPlaying
         val uri = musicUriString
         if (shouldPlay && uri != null) {
@@ -158,7 +172,7 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
                     volume = 1.0f
                     repeatMode = ExoPlayer.REPEAT_MODE_OFF
                 }
-                p.addListener(object : Player.Listener {
+                val listener = object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
                         Log.e("PostMusicChip", "Error playing ${post.musicTitle}: ${error.message}", error)
                         if (post.musicStorageKey.isNotBlank()) {
@@ -169,7 +183,9 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_ENDED) isPlaying = false
                     }
-                })
+                }
+                musicListener = listener
+                p.addListener(listener)
                 player = p
             } catch (e: Exception) {
                 Log.e("PostMusicChip", "Could not create player for ${post.musicTitle}: ${e.message}", e)
@@ -181,7 +197,10 @@ internal fun PostMusicChip(post: PostData, onMusicUrlExpired: () -> Unit = {}) {
             player = null
         }
         onDispose {
-            player?.let { ExoPlayerPool.release(it) }
+            player?.let { p ->
+                musicListener?.let { p.removeListener(it) }
+                ExoPlayerPool.release(p)
+            }
             player = null
         }
     }

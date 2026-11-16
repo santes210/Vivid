@@ -1,7 +1,7 @@
 package com.vivid.app.util
 
 import android.content.Context
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -39,16 +39,19 @@ object ExoPlayerPool {
 
     @Synchronized
     fun release(player: ExoPlayer) {
-        if (!inUse.remove(player)) {
-            runCatching { player.release() }
-            return
-        }
+        // A duplicate release must not destroy an instance already in the pool.
+        if (!inUse.remove(player)) return
         reset(player)
         if (available.size < DEFAULT_MAX_SIZE) {
             available.addLast(player)
         } else {
             runCatching { player.release() }
         }
+    }
+
+    @Synchronized
+    fun pauseAll() {
+        inUse.forEach { it.pause() }
     }
 
     @Synchronized
@@ -71,6 +74,7 @@ object ExoPlayerPool {
             player.stop()
             player.clearMediaItems()
             player.volume = 1f
+            player.setPlaybackSpeed(1f)
             player.repeatMode = Player.REPEAT_MODE_OFF
         }
     }
@@ -85,24 +89,39 @@ fun rememberPooledExoPlayer(
     mediaUrl: String,
     playWhenReady: Boolean = false,
     repeatMode: Int = Player.REPEAT_MODE_OFF,
-    volume: Float = 1f
+    volume: Float = 1f,
+    prepareMedia: Boolean = true
 ): ExoPlayer {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val player = remember { ExoPlayerPool.acquire(context) }
+    var resumed by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
     val latestPlayWhenReady = rememberUpdatedState(playWhenReady)
+    val shouldPrepare = prepareMedia && resumed
+    var boundUrl by remember { mutableStateOf("") }
+    var resumePosition by remember { mutableLongStateOf(0L) }
+    RememberPlaybackMetrics(player, playWhenReady && resumed)
 
-    LaunchedEffect(mediaUrl) {
+    LaunchedEffect(mediaUrl, shouldPrepare) {
+        if (boundUrl != mediaUrl) {
+            resumePosition = 0L
+            boundUrl = mediaUrl
+        } else if (player.mediaItemCount > 0) {
+            resumePosition = player.currentPosition.coerceAtLeast(0L)
+        }
         player.stop()
         player.clearMediaItems()
-        if (mediaUrl.isBlank()) return@LaunchedEffect
+        if (mediaUrl.isBlank() || !shouldPrepare) return@LaunchedEffect
         if (VideoCacheManager.isCacheable(mediaUrl)) {
             player.setMediaSource(VideoCacheManager.buildCachedMediaSource(context, mediaUrl))
         } else {
             player.setMediaItem(MediaItem.fromUri(mediaUrl))
         }
+        player.seekTo(resumePosition)
         player.prepare()
-        player.playWhenReady = latestPlayWhenReady.value
+        player.playWhenReady = latestPlayWhenReady.value && resumed
     }
 
     LaunchedEffect(repeatMode) {
@@ -113,32 +132,26 @@ fun rememberPooledExoPlayer(
         player.volume = volume
     }
 
-    LaunchedEffect(playWhenReady) {
-        player.playWhenReady = playWhenReady
-        if (playWhenReady) player.play() else player.pause()
+    LaunchedEffect(playWhenReady, resumed) {
+        val allowed = playWhenReady && resumed
+        player.playWhenReady = allowed
+        if (allowed) player.play() else player.pause()
     }
 
     DisposableEffect(lifecycleOwner, player) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> {
-                    if (latestPlayWhenReady.value) {
-                        player.playWhenReady = true
-                        player.play()
-                    }
-                }
-                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                    player.playWhenReady = false
-                    player.pause()
-                }
-                else -> Unit
+        val observer = LifecycleEventObserver { _, _ ->
+            resumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            // Pause immediately; do not wait for the next recomposition.
+            if (!resumed) {
+                player.playWhenReady = false
+                player.pause()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            ExoPlayerPool.release(player)
-        }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    DisposableEffect(player) {
+        onDispose { ExoPlayerPool.release(player) }
     }
     return player
 }

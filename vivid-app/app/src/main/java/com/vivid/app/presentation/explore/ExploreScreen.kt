@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -143,7 +145,7 @@ fun ExploreScreen(
         if (tag != null) {
             haptics.tick()
             searchViewModel.setQuery("")
-            searchViewModel.recordSearch(Hashtags.display(tag))
+            if (tag != ExplorePaging.ALL_TAG) searchViewModel.recordSearch(Hashtags.display(tag))
             exploreViewModel.selectTag(tag)
             collapseSearch()
             return
@@ -156,7 +158,7 @@ fun ExploreScreen(
     fun applyTag(tag: String) {
         haptics.tick()
         searchViewModel.setQuery("")
-        searchViewModel.recordSearch(Hashtags.display(tag))
+        if (tag != ExplorePaging.ALL_TAG) searchViewModel.recordSearch(Hashtags.display(tag))
         exploreViewModel.selectTag(tag)
         collapseSearch()
     }
@@ -190,7 +192,7 @@ fun ExploreScreen(
                 SmartSearchPanel(
                     state = searchState,
                     history = history,
-                    trending = exploreTags.map { SearchTagResult(it.tag, it.count) },
+                    trending = exploreTags.filter { it.tag != ExplorePaging.ALL_TAG }.map { SearchTagResult(it.tag, it.count) },
                     onTabChange = searchViewModel::setTab,
                     onRecentClick = { raw ->
                         haptics.tick()
@@ -382,8 +384,9 @@ internal fun ExploreTagChip(
         progress = morphProgress
     )
     val pair = ExploreTopics.containerPair(tag)
-    val chipCd = stringResource(R.string.cd_explore_tag, Hashtags.display(tag))
-    val label = if (count > 0) "${Hashtags.display(tag)} · $count" else Hashtags.display(tag)
+    val tagLabel = if (tag == ExplorePaging.ALL_TAG) stringResource(R.string.explore_all) else Hashtags.display(tag)
+    val chipCd = stringResource(R.string.cd_explore_tag, tagLabel)
+    val label = if (count > 0) "$tagLabel · $count" else tagLabel
     FilterChip(
         selected = selected,
         onClick = onClick,
@@ -459,7 +462,7 @@ internal fun ExploreTopicHeader(tag: String, modifier: Modifier = Modifier) {
             Spacer(Modifier.size(VividSpace.s))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    Hashtags.display(tag),
+                    if (tag == ExplorePaging.ALL_TAG) stringResource(R.string.explore_all) else Hashtags.display(tag),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -503,7 +506,8 @@ private fun ExploreEmptyTagState(
         }
         Spacer(Modifier.height(VividSpace.m))
         Text(
-            stringResource(R.string.explore_empty, selectedTag),
+            if (selectedTag == ExplorePaging.ALL_TAG) stringResource(R.string.explore_all_empty)
+                else stringResource(R.string.explore_empty, selectedTag),
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             textAlign = TextAlign.Center
@@ -516,7 +520,7 @@ private fun ExploreEmptyTagState(
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(VividSpace.m))
-        val others = ExplorePaging.TAGS.filter { it != selectedTag }.take(6)
+        val others = (listOf(ExplorePaging.ALL_TAG) + ExplorePaging.TAGS).filter { it != selectedTag }.take(6)
         if (others.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(VividSpace.xs),
@@ -525,7 +529,7 @@ private fun ExploreEmptyTagState(
                 others.forEach { tag ->
                     SuggestionChip(
                         onClick = { onSelectTag(tag) },
-                        label = { Text(Hashtags.display(tag)) },
+                        label = { Text(if (tag == ExplorePaging.ALL_TAG) stringResource(R.string.explore_all) else Hashtags.display(tag)) },
                         icon = {
                             Icon(
                                 ExploreTopics.icon(tag),
@@ -552,13 +556,19 @@ internal fun ExplorePostCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showShare by remember(post.id) { mutableStateOf(false) }
+    var showVideo by remember(post.id) { mutableStateOf(false) }
+    if (showShare) com.vivid.app.presentation.feed.PostShareSheet(post, onDismiss = { showShare = false })
+    if (showVideo) com.vivid.app.presentation.messages.ChatReelViewer(
+        post.id, onClose = { showVideo = false }, collection = "posts"
+    )
     val postCd = stringResource(R.string.cd_post_by, post.username)
     val imageModel = post.imageUrl.ifBlank { post.thumbnailUrl }
     Card(
         modifier = modifier
             .aspectRatio(aspect)
             .semantics { contentDescription = postCd }
-            .clickable(onClick = onClick),
+            .clickable { if (post.isVideo) showVideo = true else onClick() },
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -583,6 +593,10 @@ internal fun ExplorePostCard(
                     )
                 }
             }
+            FilledTonalIconButton(
+                onClick = { showShare = true },
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(48.dp)
+            ) { Icon(Icons.Default.Share, stringResource(R.string.content_share_title)) }
             if (post.isVideo) {
                 Surface(
                     shape = CircleShape,

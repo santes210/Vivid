@@ -64,6 +64,19 @@ object PlaybackPolicy {
         }
     }
 
+    fun shouldPlayVideo(
+        isCurrent: Boolean,
+        pausedByUser: Boolean,
+        manuallyStarted: Boolean,
+        decision: Decision
+    ): Boolean = isCurrent && !pausedByUser && (decision.autoplayAllowed || manuallyStarted)
+
+    fun shouldPrepareVideo(
+        isCurrent: Boolean,
+        manuallyStarted: Boolean,
+        decision: Decision
+    ): Boolean = (isCurrent && (decision.autoplayAllowed || manuallyStarted)) || decision.prefetchNextMedia
+
     fun current(
         dataSaver: Boolean = SettingsManager.dataSaverMode,
         autoplaySetting: Boolean = SettingsManager.autoplayReels

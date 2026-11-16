@@ -8,6 +8,13 @@ import org.junit.Test
 class ExplorePagingTest {
 
     @Test
+    fun `all feed does not require the vivid hashtag`() {
+        assertFalse(ExplorePaging.filtersByHashtag(ExplorePaging.ALL_TAG))
+        assertTrue(ExplorePaging.filtersByHashtag("vivid"))
+        assertTrue(ExplorePaging.filtersByHashtag("arte"))
+    }
+
+    @Test
     fun `normalizeQuery trims and lowercases`() {
         assertEquals("alice", ExplorePaging.normalizeQuery("  Alice  "))
         assertEquals("vivid", ExplorePaging.normalizeQuery("VIVID"))
