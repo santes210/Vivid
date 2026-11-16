@@ -8,7 +8,7 @@ import com.vivid.app.presentation.reels.ReelLinks
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
-data class ChatReelVideo(val id: String, val url: String, val username: String, val caption: String, val collection: String = "reels", val isVideo: Boolean = true, val imageBase64: String = "")
+data class ChatReelVideo(val id: String, val url: String, val username: String, val caption: String, val collection: String = "reels", val isVideo: Boolean = true, val imageBase64: String = "", val altText: String = "")
 
 class ChatReelRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
@@ -29,6 +29,6 @@ class ChatReelRepository @Inject constructor(
         val imageBase64 = if (!isVideo && url.isBlank()) document.getString("imageBase64").orEmpty() else ""
         require(url.startsWith("https://") || (!isVideo && imageBase64.isNotBlank())) { "Invalid media URL" }
         check(auth.currentUser?.uid == uid) { "Session changed" }
-        return ChatReelVideo(id, url, document.getString("username").orEmpty(), document.getString("caption").orEmpty(), collection, isVideo, imageBase64)
+        return ChatReelVideo(id, url, document.getString("username").orEmpty(), document.getString("caption").orEmpty(), collection, isVideo, imageBase64, document.getString("altText").orEmpty())
     }
 }

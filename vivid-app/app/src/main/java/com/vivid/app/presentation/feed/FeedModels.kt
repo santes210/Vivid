@@ -29,6 +29,7 @@ data class PostData(
     val hashtags: List<String> = emptyList(),
     // Audiencia: "public" | "friends" (ver PostVisibility). Los posts legacy
     // sin el campo se tratan como públicos.
+    val altText: String = "",
     val visibility: String = "public"
 )
 

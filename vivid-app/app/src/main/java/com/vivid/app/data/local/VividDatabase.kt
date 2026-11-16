@@ -29,7 +29,7 @@ import com.vivid.app.data.local.entity.UserEntity
         ReelEntity::class,
         HashtagEntity::class
     ],
-    version = 9,
+    version = 10,
     // Exportar el esquema JSON en cada build (app/schemas/) permite validar
     // migraciones con MigrationTestHelper y detectar cambios accidentales
     // de esquema ANTES de que un usuario con datos viejos sufra un crash.
@@ -45,7 +45,7 @@ abstract class VividDatabase : RoomDatabase() {
     abstract fun hashtagDao(): HashtagDao
 
     companion object {
-        const val VERSION = 9
+        const val VERSION = 10
         const val NAME = "vivid_database"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -186,6 +186,12 @@ abstract class VividDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE posts ADD COLUMN altText TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         /** Contiguous 1 → VERSION chain. Used by Hilt and by migration tests. */
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
@@ -195,7 +201,8 @@ abstract class VividDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
-            MIGRATION_8_9
+            MIGRATION_8_9,
+            MIGRATION_9_10
         )
     }
 }

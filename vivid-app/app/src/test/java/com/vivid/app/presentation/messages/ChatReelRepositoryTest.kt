@@ -34,6 +34,7 @@ class ChatReelRepositoryTest {
         every { doc.getString("storageKey") } returns "reels/author/video.mp4"
         every { doc.getString("username") } returns "author"
         every { doc.getString("caption") } returns "Caption"
+        every { doc.getString("altText") } returns "Image description"
         coEvery { storage.signDownloadUrl(any(), any()) } returns "https://media.example/video.mp4"
     }
 
@@ -76,7 +77,9 @@ class ChatReelRepositoryTest {
     @Test fun `image post has no video controls`() = runTest {
         every { firestore.collection("posts") } returns collection
         every { doc.getBoolean("isVideo") } returns false
-        assertFalse(repository.load("r1", "posts").isVideo)
+        val result = repository.load("r1", "posts")
+        assertFalse(result.isVideo)
+        assertEquals("Image description", result.altText)
     }
 
     @Test fun `arbitrary collections are rejected`() = runTest {

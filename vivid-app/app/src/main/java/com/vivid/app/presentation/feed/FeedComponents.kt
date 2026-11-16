@@ -227,7 +227,8 @@ fun PostImage(
     modifier: Modifier = Modifier,
     useDefaultHeight: Boolean = true,
     storageKey: String = "",
-    onUrlExpired: () -> Unit = {}
+    onUrlExpired: () -> Unit = {},
+    altText: String = ""
 ) {
     val containerModifier = if (useDefaultHeight) modifier.fillMaxWidth().heightIn(max = 500.dp) else modifier.fillMaxSize()
 
@@ -273,7 +274,7 @@ fun PostImage(
                     )
                     else -> Image(
                         bitmap = bitmap!!.asImageBitmap(),
-                        contentDescription = "Post de $username",
+                        contentDescription = altText.ifBlank { "Post de $username" },
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
                     )
@@ -286,7 +287,7 @@ fun PostImage(
 
                 SubcomposeAsyncImage(
                     model = imageUrl,
-                    contentDescription = "Post de $username",
+                    contentDescription = altText.ifBlank { "Post de $username" },
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit,
                     loading = {
@@ -454,6 +455,7 @@ internal fun PostCard(
                     imageBase64 = post.imageBase64,
                     imageUrl = post.imageUrl,
                     username = post.username,
+                    altText = post.altText,
                     storageKey = post.storageKey,
                     onUrlExpired = { onImageUrlExpired(post) }
                 )

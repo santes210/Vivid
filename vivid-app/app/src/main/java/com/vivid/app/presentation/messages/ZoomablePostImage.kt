@@ -73,7 +73,7 @@ internal fun ZoomablePostImage(content: ChatReelVideo, onRetry: () -> Unit) {
             if (content.imageBase64.isBlank() || imageBytes != null) {
                 coil3.compose.AsyncImage(
                     model = if (content.imageBase64.isNotBlank()) imageBytes else content.url,
-                    contentDescription = content.caption.ifBlank { stringResource(R.string.image_description) },
+                    contentDescription = content.altText.ifBlank { content.caption }.ifBlank { stringResource(R.string.image_description) },
                     contentScale = if (fill) ContentScale.Crop else ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().graphicsLayer {
                         scaleX = zoom.scale; scaleY = zoom.scale

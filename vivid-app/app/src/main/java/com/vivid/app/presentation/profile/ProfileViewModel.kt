@@ -11,6 +11,7 @@ import com.vivid.app.domain.repository.FollowRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,6 +22,69 @@ class ProfileViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: StorageProvider
 ) : ViewModel() {
+
+    private val _pinBusy = MutableStateFlow(false)
+    val pinBusy: StateFlow<Boolean> = _pinBusy
+
+    fun togglePinned(post: ProfilePost, onResult: (String?) -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        if (_pinBusy.value) return
+        _pinBusy.value = true
+        viewModelScope.launch {
+            try {
+                require(post.collection == "posts" || post.collection == "reels")
+                val userRef = firestore.collection("users").document(uid)
+                val contentRef = firestore.collection(post.collection).document(post.id)
+                firestore.runTransaction { txn ->
+                    val user = txn.get(userRef)
+                    val existing = (user.get("pinnedContent") as? List<*>)?.filterIsInstance<String>().orEmpty()
+                    // Allow unpinning even if the original content was deleted.
+                    if (post.contentKey() !in existing) {
+                        check(txn.get(contentRef).getString("userId") == uid) { "not_owner" }
+                    }
+                    txn.update(userRef, "pinnedContent", updatedProfilePins(existing, post.contentKey()))
+                    null
+                }.await()
+                onResult(null)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                onResult(if (error.message?.contains("pin_limit") == true) "limit" else "error")
+            } finally { _pinBusy.value = false }
+        }
+    }
+
+    fun removePinned(key: String, onResult: (Boolean) -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        if (_pinBusy.value) return
+        _pinBusy.value = true
+        viewModelScope.launch {
+            try {
+                firestore.collection("users").document(uid)
+                    .update("pinnedContent", com.google.firebase.firestore.FieldValue.arrayRemove(key)).await()
+                onResult(true)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { onResult(false) }
+            finally { _pinBusy.value = false }
+        }
+    }
+
+    fun organizeSaved(postId: String, name: String, onResult: (Boolean) -> Unit) {
+        val uid = auth.currentUser?.uid ?: return onResult(false)
+        viewModelScope.launch {
+            try {
+                val normalized = normalizedSavedCollection(name)
+                // update, not set: never resurrect a post that was unsaved elsewhere.
+                kotlinx.coroutines.withTimeout(15_000) {
+                    firestore.collection("users").document(uid).collection("savedPosts").document(postId)
+                    .update("collectionName", normalized).await()
+                }
+                onResult(true)
+            } catch (_: kotlinx.coroutines.TimeoutCancellationException) { onResult(false) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { onResult(false) }
+        }
+    }
 
     private val _relationshipState = MutableStateFlow(FollowRelationshipState())
     val relationshipState: StateFlow<FollowRelationshipState> = _relationshipState

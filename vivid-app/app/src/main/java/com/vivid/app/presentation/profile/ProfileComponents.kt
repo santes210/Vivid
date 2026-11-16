@@ -158,6 +158,29 @@ internal fun ProfileHeader(
             )
         }
 
+        val website = validProfileWebsite(profile.website).orEmpty()
+        if (website.isNotBlank()) {
+            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+            var showWebsite by remember(website) { mutableStateOf(false) }
+            var failedWebsite by remember { mutableStateOf(false) }
+            TextButton(onClick = { showWebsite = true }) {
+                Icon(Icons.Default.Link, null)
+                Text(website, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (showWebsite) AlertDialog(onDismissRequest = { showWebsite = false },
+                title = { Text(androidx.compose.ui.res.stringResource(com.vivid.app.R.string.profile_open_website)) },
+                text = { Text(website) },
+                confirmButton = { TextButton(onClick = {
+                    failedWebsite = runCatching { uriHandler.openUri(website) }.isFailure
+                    showWebsite = false
+                }) { Text(androidx.compose.ui.res.stringResource(com.vivid.app.R.string.profile_open_website)) } },
+                dismissButton = { TextButton(onClick = { showWebsite = false }) {
+                    Text(androidx.compose.ui.res.stringResource(com.vivid.app.R.string.action_cancel))
+                } })
+            if (failedWebsite) Text(androidx.compose.ui.res.stringResource(com.vivid.app.R.string.profile_website_failed),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+
         // ── Cuenta privada ──
         // AssistChip con candado: un label diminuto de 10sp no comunicaba que
         // el contenido está restringido; el chip es un elemento reconocible y
@@ -505,7 +528,8 @@ internal fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64:
 }
 
 @Composable
-internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
+internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit,
+    pinned: Boolean = false, pinEnabled: Boolean = true, onTogglePin: (() -> Unit)? = null, onOrganize: (() -> Unit)? = null) {
     val previewUrl = if (post.isVideo) post.thumbnailUrl else post.imageUrl
     var bitmap by remember(post.imageBase64) { mutableStateOf<Bitmap?>(null) }
     val haptics = rememberVividHaptics()
@@ -528,10 +552,10 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
     ) {
         var imageFailed by remember(previewUrl) { mutableStateOf(false) }
         when {
-            bitmap != null -> Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            bitmap != null -> Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = post.altText.ifBlank { post.caption }.ifBlank { post.username }, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             previewUrl.isNotBlank() && !imageFailed -> AsyncImage(
                 model = previewUrl,
-                contentDescription = null,
+                contentDescription = post.altText.ifBlank { post.caption }.ifBlank { post.username },
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
                 // Mismo color que el fondo del Box: la celda no parpadea.
@@ -540,6 +564,29 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
                 onError = { imageFailed = true }
             )
             else -> Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+        }
+        if (onOrganize != null) {
+            FilledTonalIconButton(onClick = onOrganize, modifier = Modifier.align(Alignment.TopStart).size(48.dp)) {
+                Icon(Icons.Default.Folder, androidx.compose.ui.res.stringResource(com.vivid.app.R.string.saved_organize))
+            }
+        }
+        if (onTogglePin != null) {
+            FilledTonalIconButton(onClick = onTogglePin, enabled = pinEnabled,
+                modifier = Modifier.align(Alignment.TopEnd).size(48.dp)) {
+                Icon(if (pinned) Icons.Default.PushPin else Icons.Default.Add,
+                    androidx.compose.ui.res.stringResource(if (pinned) com.vivid.app.R.string.profile_unpin else com.vivid.app.R.string.profile_pin))
+            }
+        } else if (pinned) {
+            Surface(Modifier.align(Alignment.TopEnd).padding(4.dp), shape = CircleShape) {
+                Icon(Icons.Default.PushPin, androidx.compose.ui.res.stringResource(com.vivid.app.R.string.profile_pinned), Modifier.padding(6.dp).size(18.dp))
+            }
+        }
+        if (post.isVideo && post.durationMs > 0) {
+            Surface(Modifier.align(Alignment.BottomEnd).padding(4.dp), color = Color.Black.copy(alpha = 0.7f), shape = VividShapes.extraSmall) {
+                Text(com.vivid.app.presentation.messages.VideoControlMath.timeLabel(post.durationMs),
+                    Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color.White,
+                    style = MaterialTheme.typography.labelSmall)
+            }
         }
         if (post.isVideo) {
             Surface(color = Color.Black.copy(alpha = 0.5f), shape = CircleShape, modifier = Modifier.align(Alignment.Center)) {
