@@ -307,4 +307,22 @@
     <string name="audience_friends">Solo amigos</string>
     <string name="audience_public_hint">Todos pueden verla, también en Explorar</string>
     <string name="audience_friends_hint">Solo las personas que te siguen pueden verla</string>
+
+    <!-- Manual account-deletion request; no automatic purge. -->
+    <string name="account_deletion_group">Gestión de la cuenta</string>
+    <string name="account_deletion_title">Eliminar cuenta</string>
+    <string name="account_deletion_subtitle">Solicitar eliminación por correo · revisión manual</string>
+    <string name="account_deletion_request_title">Solicitar eliminación de cuenta</string>
+    <string name="account_deletion_explanation">El borrado automático todavía no está disponible. Puedes solicitar una revisión manual a soporte. Abrir el correo no envía la solicitud: debes enviarla desde tu aplicación de correo. Tu cuenta y tus datos no se borrarán al pulsar este botón. Soporte deberá verificar tu identidad antes de realizar cambios.</string>
+    <string name="account_deletion_contact">Correo de soporte: %1$s</string>
+    <string name="account_deletion_sign_in">Inicia sesión para incluir los datos de tu cuenta en la solicitud.</string>
+    <string name="account_deletion_no_email">No se pudo abrir una aplicación de correo. Copia la solicitud y envíala a la dirección indicada desde tu correo web.</string>
+    <string name="account_deletion_copy">Copiar solicitud</string>
+    <string name="account_deletion_open_email">Abrir correo</string>
+    <string name="account_deletion_cancel">Cancelar</string>
+    <string name="account_deletion_subject">Solicitud de eliminación de cuenta de Vivid</string>
+    <string name="account_deletion_body">Solicito la eliminación de mi cuenta de Vivid y la revisión de los datos asociados.\n\nUID: %1$s\n\nPor favor, indiquen los pasos para verificar mi identidad y confirmen cuando termine el proceso. No incluyo contraseñas ni códigos de acceso.</string>
+    <string name="account_deletion_copied">Solicitud copiada. Envíala a soporte desde tu correo; aún no se ha enviado.</string>
+    <string name="account_deletion_opened">Completa el envío desde tu correo. La cuenta no se ha eliminado.</string>
+    <string name="account_settings_summary">Contraseña, datos personales y solicitud de eliminación</string>
 </resources>
