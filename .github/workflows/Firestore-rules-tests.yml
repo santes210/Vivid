@@ -1,10 +1,5 @@
 name: Firestore Rules Tests
 
-# Ejecuta firestore-tests/rules.test.js contra el emulador de Firestore en
-# cada PR y en cada push a main que toque las reglas. Así nadie puede relajar
-# una regla de seguridad (privacidad, contadores, chats) sin que el test lo
-# detecte antes del merge.
-
 on:
   pull_request:
     paths:
@@ -12,6 +7,10 @@ on:
       - 'firestore-tests/**'
       - 'firebase.json'
       - '.firebaserc'
+      - '.github/workflows/Firestore-rules-tests.yml'
+      - 'vivid-app/app/src/main/java/com/vivid/app/domain/repository/**'
+      - 'vivid-app/app/src/main/java/com/vivid/app/presentation/**'
+      - 'vivid-app/iosApp/iosApp/Services/Firestore/**'
   push:
     branches: [main]
     paths:
@@ -19,6 +18,10 @@ on:
       - 'firestore-tests/**'
       - 'firebase.json'
       - '.firebaserc'
+      - '.github/workflows/Firestore-rules-tests.yml'
+      - 'vivid-app/app/src/main/java/com/vivid/app/domain/repository/**'
+      - 'vivid-app/app/src/main/java/com/vivid/app/presentation/**'
+      - 'vivid-app/iosApp/iosApp/Services/Firestore/**'
   workflow_dispatch:
 
 permissions:
