@@ -1,6 +1,5 @@
 package com.vivid.app.presentation.feed
 
-import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -92,6 +91,11 @@ fun FeedScreen(
     var lastCacheWriteAt by remember { mutableLongStateOf(0L) }
 
     val listState = rememberLazyListState()
+    val postIds = remember(posts) { posts.mapTo(hashSetOf()) { it.id } }
+    val firstPostVisible by remember(postIds, listState) {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key in postIds } }
+    }
+    com.vivid.app.util.MeasureFirstFeedPost(firstPostVisible)
 
     var followRequestsCount by remember { mutableIntStateOf(0) }
     var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
@@ -209,16 +213,12 @@ fun FeedScreen(
             }
         }
     }
-    val onSharePost = remember {
-        { post: PostData ->
-            val deepLink = "vivid://post/${post.id}"
-            shareText(context, context.getString(R.string.feed_share_title), buildString {
-                append(context.getString(R.string.feed_share_body, post.username))
-                if (post.caption.isNotBlank()) append("\n\n${post.caption}")
-                append("\n\n$deepLink")
-            })
-        }
+    var sharedPost by remember { mutableStateOf<PostData?>(null) }
+    val onSharePost: (PostData) -> Unit = {
+        com.vivid.app.util.ExoPlayerPool.pauseAll()
+        sharedPost = it
     }
+    sharedPost?.let { post -> PostShareSheet(post, onDismiss = { sharedPost = null }) }
 
     // ── Initial load: single likes query + real-time listener for posts ──
     LaunchedEffect(currentUserId) {
@@ -729,12 +729,4 @@ private suspend fun mapPostDoc(
         musicUrl = data["musicUrl"] as? String ?: "",
         musicStorageKey = data["musicStorageKey"] as? String ?: ""
     )
-}
-
-private fun shareText(context: android.content.Context, title: String, text: String) {
-    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(shareIntent, title))
 }

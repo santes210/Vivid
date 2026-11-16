@@ -46,7 +46,7 @@ class ExploreViewModel @Inject constructor(
     private val exploreSession: ExploreSession
 ) : ViewModel() {
 
-    private val _selectedTag = MutableStateFlow(ExplorePaging.TAGS.first())
+    private val _selectedTag = MutableStateFlow(ExplorePaging.ALL_TAG)
     val selectedTag: StateFlow<String> = _selectedTag.asStateFlow()
 
     private val blockedUserIds = MutableStateFlow<Set<String>>(emptySet())
@@ -66,7 +66,7 @@ class ExploreViewModel @Inject constructor(
                 .map { ExploreTag(it.tag, it.count) }
             val seen = real.mapTo(mutableSetOf()) { it.tag }
             val defaults = ExplorePaging.TAGS.filter { it !in seen }.map { ExploreTag(it, 0) }
-            real + defaults
+            listOf(ExploreTag(ExplorePaging.ALL_TAG, 0)) + real + defaults
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -119,8 +119,8 @@ class ExploreViewModel @Inject constructor(
     val cachedPosts: StateFlow<List<PostData>> = _cachedPosts.asStateFlow()
 
     fun selectTag(tag: String) {
-        val normalized = Hashtags.normalize(tag)
-        if (normalized.isEmpty() || normalized == _selectedTag.value) return
+        val normalized = if (tag == ExplorePaging.ALL_TAG) tag else Hashtags.normalize(tag)
+        if ((tag != ExplorePaging.ALL_TAG && normalized.isEmpty()) || normalized == _selectedTag.value) return
         _selectedTag.value = normalized
     }
 
@@ -131,10 +131,12 @@ class ExploreViewModel @Inject constructor(
 
     /** Carga del cache Room el grid del tag (usado cuando Firestore falla). */
     fun loadCachedPosts(tag: String) {
+        _cachedPosts.value = emptyList()
+        // The mixed feed cache does not prove that posts are still public.
+        if (tag == ExplorePaging.ALL_TAG) return
         viewModelScope.launch {
-            _cachedPosts.value = runCatching {
-                hashtagRepository.cachedPostsForTag(tag)
-            }.getOrDefault(emptyList())
+            val cached = runCatching { hashtagRepository.cachedPostsForTag(tag) }.getOrDefault(emptyList())
+            if (_selectedTag.value == tag) _cachedPosts.value = cached
         }
     }
 }

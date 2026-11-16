@@ -337,6 +337,17 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
+    suspend fun fetchSharedReel(id: String): Reel {
+        require(ReelLinks.parse(ReelLinks.create(id)) == id)
+        // Always check the current viewer's access on the server, not a cached signed URL.
+        return withNetworkTimeout("reels.shared") {
+            val document = firestore.collection("reels").document(id)
+                .get(com.google.firebase.firestore.Source.SERVER).await()
+            check(document.exists()) { "Reel unavailable" }
+            mapDocs(listOf(document)).firstOrNull() ?: error("Reel unavailable")
+        }
+    }
+
     fun refresh() {
         loadInitial()
     }

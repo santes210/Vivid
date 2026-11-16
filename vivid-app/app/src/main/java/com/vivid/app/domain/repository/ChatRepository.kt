@@ -255,18 +255,14 @@ class ChatRepository @Inject constructor(
         chatId: String,
         text: String,
         receiverId: String,
-        replyToStoryId: String = ""
+        replyToStoryId: String = "",
+        messageId: String = java.util.UUID.randomUUID().toString()
     ) {
         val senderId = currentUserId
-        if (senderId.isBlank() || receiverId.isBlank() || text.isBlank()) return
+        require(senderId.isNotBlank() && receiverId.isNotBlank() && text.isNotBlank()) { "Sesión o mensaje no válido" }
 
         val now = System.currentTimeMillis()
 
-        val messageId = firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document()
-            .id
 
         val type = if (replyToStoryId.isNotBlank()) "story_reply" else "text"
 
@@ -297,7 +293,7 @@ class ChatRepository @Inject constructor(
             text
         }
 
-        persistOutgoingMessage(
+        val created = persistOutgoingMessage(
             chatId = chatId,
             receiverId = receiverId,
             messageId = messageId,
@@ -307,7 +303,7 @@ class ChatRepository @Inject constructor(
             now = now
         )
 
-        repositoryScope.launch {
+        if (created) repositoryScope.launch {
             messageDao.insertMessage(message)
         }
     }
@@ -316,24 +312,16 @@ class ChatRepository @Inject constructor(
         chatId: String,
         receiverId: String,
         imageUrl: String,
-        imageKey: String
+        imageKey: String,
+        messageId: String = java.util.UUID.randomUUID().toString()
     ) {
         val senderId = currentUserId
 
-        if (
-            senderId.isBlank() ||
-            receiverId.isBlank() ||
-            imageUrl.isBlank() ||
-            imageKey.isBlank()
-        ) return
+        require(senderId.isNotBlank() && receiverId.isNotBlank() &&
+            imageUrl.isNotBlank() && imageKey.isNotBlank()) { "Sesión o imagen no válida" }
 
         val now = System.currentTimeMillis()
 
-        val messageId = firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document()
-            .id
 
         val message = MessageEntity(
             id = messageId,
@@ -358,7 +346,7 @@ class ChatRepository @Inject constructor(
             "imageKey" to imageKey
         )
 
-        persistOutgoingMessage(
+        val created = persistOutgoingMessage(
             chatId = chatId,
             receiverId = receiverId,
             messageId = messageId,
@@ -368,7 +356,7 @@ class ChatRepository @Inject constructor(
             now = now
         )
 
-        repositoryScope.launch {
+        if (created) repositoryScope.launch {
             messageDao.insertMessage(message)
         }
     }
@@ -378,24 +366,16 @@ class ChatRepository @Inject constructor(
         receiverId: String,
         voiceUrl: String,
         voiceKey: String,
-        durationMs: Long
+        durationMs: Long,
+        messageId: String = java.util.UUID.randomUUID().toString()
     ) {
         val senderId = currentUserId
 
-        if (
-            senderId.isBlank() ||
-            receiverId.isBlank() ||
-            voiceUrl.isBlank() ||
-            voiceKey.isBlank()
-        ) return
+        require(senderId.isNotBlank() && receiverId.isNotBlank() &&
+            voiceUrl.isNotBlank() && voiceKey.isNotBlank()) { "Sesión o audio no válido" }
 
         val now = System.currentTimeMillis()
 
-        val messageId = firestore.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document()
-            .id
 
         val message = MessageEntity(
             id = messageId,
@@ -422,7 +402,7 @@ class ChatRepository @Inject constructor(
             "voiceDurationMs" to durationMs
         )
 
-        persistOutgoingMessage(
+        val created = persistOutgoingMessage(
             chatId = chatId,
             receiverId = receiverId,
             messageId = messageId,
@@ -432,7 +412,7 @@ class ChatRepository @Inject constructor(
             now = now
         )
 
-        repositoryScope.launch {
+        if (created) repositoryScope.launch {
             messageDao.insertMessage(message)
         }
     }
@@ -450,7 +430,7 @@ class ChatRepository @Inject constructor(
         lastMessage: String,
         lastMessageType: String,
         now: Long
-    ) {
+    ): Boolean {
         val senderId = currentUserId
 
         require(senderId.isNotBlank() && receiverId.isNotBlank()) {
@@ -464,8 +444,17 @@ class ChatRepository @Inject constructor(
         val chatRef = firestore.collection("chats").document(chatId)
         val messageRef = chatRef.collection("messages").document(messageId)
 
-        firestore.runTransaction { transaction ->
+        val created = firestore.runTransaction { transaction ->
             val chatSnapshot = transaction.get(chatRef)
+            // A retry uses the same document ID. Do not bump unread counts,
+            // overwrite receipts, or move the chat preview a second time.
+            if (chatSnapshot.exists()) {
+                val existing = transaction.get(messageRef)
+                if (existing.exists()) {
+                    check(existing.getString("senderId") == senderId) { "Mensaje ajeno" }
+                    return@runTransaction false
+                }
+            }
 
             if (chatSnapshot.exists()) {
                 val participants = chatSnapshot.get("participants") as? List<*>
@@ -517,10 +506,11 @@ class ChatRepository @Inject constructor(
             }
 
             transaction.set(messageRef, messageData)
-            null
+            true
         }.await()
 
-        PushSender.message(chatId, messageId)
+        runCatching { PushSender.message(chatId, messageId) }
+        return created
     }
 
     /**

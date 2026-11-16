@@ -165,8 +165,15 @@ fun MessageBubble(
     onDoubleTap: () -> Unit = {},
     onImageClick: (String) -> Unit = {},
     onResignImage: (Message) -> Unit = {},
-    onResignVoice: (Message) -> Unit = {}
+    onResignVoice: (Message) -> Unit = {},
+    onOpenReel: (String) -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
+    pauseMedia: Boolean = false
 ) {
+    val sharedReelId = remember(message.text) {
+        com.vivid.app.presentation.reels.ReelLinks.fromMessage(message.text)
+    }
+    val sharedPostId = remember(message.text) { com.vivid.app.presentation.reels.ReelLinks.postFromMessage(message.text) }
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     // La esquina inferior junto al autor funciona como una cola sutil: el resto
     // conserva 20dp. Es la silueta asimétrica característica de un chat M3 moderno.
@@ -186,10 +193,25 @@ fun MessageBubble(
                     Box(modifier = Modifier.padding(horizontal = if (message.type == "image") 4.dp else 14.dp, vertical = if (message.type == "image" || message.type == "voice") 8.dp else 9.dp)) {
                         when (message.type) {
                             "image" -> ImageMessageContent(message = message, isMine = isMine, onImageClick = onImageClick, onResignImage = onResignImage, onLongPress = onLongPress, onDoubleTap = onDoubleTap)
-                            "voice" -> VoiceMessageContent(message = message, isMine = isMine, onResignVoice = onResignVoice)
+                            "voice" -> VoiceMessageContent(message = message, isMine = isMine, onResignVoice = onResignVoice, playbackAllowed = !pauseMedia)
                             "story_reply" -> StoryReplyContent(message = message, isMine = isMine)
                             else -> Column {
-                                Text(text = com.vivid.app.util.SettingsManager.filterOffensiveWords(message.text), color = contentColor, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 20.sp))
+                                if (sharedReelId != null) {
+                                    FilledTonalButton(onClick = { onOpenReel(sharedReelId) }, shape = VividExpressiveShapes.MediumCard) {
+                                        Icon(Icons.Default.PlayCircle, null, modifier = Modifier.size(36.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Column {
+                                            Text(stringResource(R.string.chat_reel_card), fontWeight = FontWeight.Bold)
+                                            Text(stringResource(R.string.chat_reel_watch), style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                } else if (sharedPostId != null) {
+                                    FilledTonalButton(onClick = { onOpenPost(sharedPostId) }, shape = VividExpressiveShapes.MediumCard) {
+                                        Text(stringResource(R.string.content_post_card))
+                                    }
+                                } else {
+                                    Text(text = com.vivid.app.util.SettingsManager.filterOffensiveWords(message.text), color = contentColor, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 20.sp))
+                                }
                                 Spacer(Modifier.height(3.dp))
                                 MessageMetaRow(message = message, isMine = isMine)
                             }
@@ -226,7 +248,7 @@ internal fun ImageMessageContent(message: Message, isMine: Boolean, onImageClick
 }
 
 @Composable
-internal fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoice: (Message) -> Unit) {
+internal fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoice: (Message) -> Unit, playbackAllowed: Boolean = true) {
     var isPlaying by remember(message.id) { mutableStateOf(false) }
     var progress by remember(message.id) { mutableFloatStateOf(0f) }
     var showError by remember { mutableStateOf(false) }
@@ -243,6 +265,9 @@ internal fun VoiceMessageContent(message: Message, isMine: Boolean, onResignVoic
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
+    LaunchedEffect(playbackAllowed) {
+        if (!playbackAllowed) { isPlaying = false; player.pause() }
+    }
 
     val totalMs = message.voiceDurationMs.coerceAtLeast(1L)
     LaunchedEffect(isPlaying, message.id) {

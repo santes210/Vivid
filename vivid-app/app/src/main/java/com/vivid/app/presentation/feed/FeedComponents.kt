@@ -460,6 +460,12 @@ internal fun PostCard(
             }
         }
 
+        if (post.isVideo) {
+            TextButton(onClick = { onOpenPost(post) }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.content_video_open))
+            }
+        }
+
         // ── Optional music (Material You 3) ──
         if (post.musicTitle.isNotBlank() || post.musicUrl.isNotBlank() || post.musicAssetFile.isNotBlank()) {
             PostMusicChip(post = post, onMusicUrlExpired = { onMusicUrlExpired(post) })

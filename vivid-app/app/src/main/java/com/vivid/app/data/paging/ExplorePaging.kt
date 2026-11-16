@@ -15,6 +15,9 @@ import kotlinx.coroutines.tasks.await
  * Viven fuera de Compose para poder testearlos sin Android.
  */
 object ExplorePaging {
+    const val ALL_TAG = ""
+    fun filtersByHashtag(tag: String): Boolean = tag != ALL_TAG
+
     const val POST_PAGE_SIZE = 18
     const val USER_PAGE_SIZE = 20
     const val MIN_QUERY_LENGTH = 2
@@ -81,9 +84,9 @@ class ExplorePostsPagingSource(
     override suspend fun load(params: LoadParams<DocumentSnapshot>): LoadResult<DocumentSnapshot, PostData> {
         return try {
             var query: Query = firestore.collection("posts")
-                .whereArrayContains("hashtags", tag)
                 .whereEqualTo("isPrivate", false)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
+            if (ExplorePaging.filtersByHashtag(tag)) query = query.whereArrayContains("hashtags", tag)
             val cursor = params.key
             if (cursor != null) query = query.startAfter(cursor)
             val snapshot = query.limit(pageSize.toLong()).get().await()
@@ -97,6 +100,8 @@ class ExplorePostsPagingSource(
                 prevKey = null,
                 nextKey = if (snapshot.documents.size < pageSize) null else last
             )
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             LoadResult.Error(e)
         }

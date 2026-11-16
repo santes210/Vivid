@@ -134,7 +134,8 @@ fun VividNavigation(
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
     deepLinkPostId: String? = null,
-    deepLinkShortcut: com.vivid.app.MainActivity.ShortcutRequest? = null
+    deepLinkShortcut: com.vivid.app.MainActivity.ShortcutRequest? = null,
+    deepLinkReelSequence: Long = 0L
 ) {
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
@@ -195,7 +196,7 @@ fun VividNavigation(
             }
         }
     }
-    LaunchedEffect(deepLinkReelId) {
+    LaunchedEffect(deepLinkReelId, deepLinkReelSequence) {
         if (!deepLinkReelId.isNullOrBlank()) {
             navController.navigate(Screen.Reels.route) {
                 popUpTo(Screen.Feed.route)

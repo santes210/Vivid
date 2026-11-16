@@ -97,7 +97,8 @@ fun ChatScreen(
     val userMessage: String? = viewModel.userMessage.collectAsState().value
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var messageText by remember { mutableStateOf("") }
+    val textSendPhase by viewModel.textSendPhase.collectAsState()
+    var messageText by remember(currentUserId, chatId) { mutableStateOf(viewModel.draftText(chatId)) }
     var showMenu by remember { mutableStateOf(false) }
     var showAttachMenu by remember { mutableStateOf(false) }
     var activeReactionMessageId by remember { mutableStateOf<String?>(null) }
@@ -108,6 +109,8 @@ fun ChatScreen(
     val imageUploads: List<ImageUpload> = viewModel.imageUploads.collectAsState(initial = emptyList()).value
     val voiceUploads: List<VoiceUpload> = viewModel.voiceUploads.collectAsState(initial = emptyList()).value
     var viewerImageUrl by remember { mutableStateOf<String?>(null) }
+    var viewerReelId by remember(chatId) { mutableStateOf<String?>(null) }
+    var viewerCollection by remember(chatId) { mutableStateOf("reels") }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -254,6 +257,18 @@ fun ChatScreen(
                 .padding(padding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                if (textSendPhase != TextSendPhase.IDLE) {
+                    Text(
+                        text = stringResource(when (textSendPhase) {
+                            TextSendPhase.SENDING -> R.string.chat_sending
+                            TextSendPhase.SENT -> R.string.chat_sent
+                            else -> R.string.chat_send_failed
+                        }),
+                        modifier = Modifier.padding(horizontal = VividSpace.m),
+                        color = if (textSendPhase == TextSendPhase.FAILED) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 when {
                     !canMessage -> {
                         Box(
@@ -354,6 +369,18 @@ fun ChatScreen(
                                                 },
                                                 onDoubleTap = { viewModel.reactToMessage(chatId, message.id, "❤️") },
                                                 onImageClick = { url -> viewerImageUrl = url },
+                                                onOpenReel = { id ->
+                                                    if (isRecording) {
+                                                        android.widget.Toast.makeText(context,
+                                                            context.getString(R.string.chat_reel_finish_recording),
+                                                            android.widget.Toast.LENGTH_SHORT).show()
+                                                    } else { viewerCollection = "reels"; viewerReelId = id }
+                                                },
+                                                onOpenPost = { id ->
+                                                    if (!isRecording) { viewerCollection = "posts"; viewerReelId = id }
+                                                    else android.widget.Toast.makeText(context, context.getString(R.string.chat_reel_finish_recording), android.widget.Toast.LENGTH_SHORT).show()
+                                                },
+                                                pauseMedia = viewerReelId != null,
                                                 onResignImage = { msg -> viewModel.refreshImageUrl(msg.id, msg.imageKey) },
                                                 onResignVoice = { msg -> viewModel.refreshVoiceUrl(msg.id, msg.voiceKey) }
                                             )
@@ -407,8 +434,10 @@ fun ChatScreen(
                                 Spacer(Modifier.width(VividSpace.xs))
                                 OutlinedTextField(
                                     value = messageText,
+                                    enabled = textSendPhase != TextSendPhase.SENDING,
                                     onValueChange = {
                                         messageText = it
+                                        viewModel.saveDraft(chatId, it)
                                         viewModel.onTextChanged(chatId, it)
                                     },
                                     modifier = Modifier.weight(1f),
@@ -425,12 +454,13 @@ fun ChatScreen(
                                 Spacer(modifier = Modifier.width(VividSpace.xs))
                                 if (messageText.isNotBlank()) {
                                     FilledIconButton(
-                                        enabled = receiverId.isNotBlank(),
+                                        enabled = receiverId.isNotBlank() && textSendPhase != TextSendPhase.SENDING,
                                         onClick = {
-                                            val text = messageText.trim()
+                                            val text = messageText
                                             if (text.isNotBlank()) {
-                                                viewModel.sendMessage(chatId, text, receiverId)
-                                                messageText = ""
+                                                viewModel.sendMessage(chatId, text, receiverId) {
+                                                    if (messageText == text) messageText = ""
+                                                }
                                             }
                                         },
                                         modifier = Modifier.size(48.dp),
@@ -697,6 +727,10 @@ fun ChatScreen(
                 )
             }
         }
+    }
+
+    viewerReelId?.let { id ->
+        ChatReelViewer(reelId = id, onClose = { viewerReelId = null }, collection = viewerCollection)
     }
 
     viewerImageUrl?.let { url ->

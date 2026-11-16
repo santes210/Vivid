@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
 
     private var pendingChatId: String? by mutableStateOf(null)
     private var pendingReelId: String? by mutableStateOf(null)
+    private var pendingReelSequence by mutableStateOf(0L)
     private var pendingProfileUserId: String? by mutableStateOf(null)
     private var pendingPostId: String? by mutableStateOf(null)
     private var pendingShortcutRequest: ShortcutRequest? by mutableStateOf(null)
@@ -143,6 +144,7 @@ class MainActivity : ComponentActivity() {
                         VividApp(
                             deepLinkChatId = deepLinkChatId,
                             deepLinkReelId = deepLinkReelId,
+                            deepLinkReelSequence = pendingReelSequence,
                             deepLinkProfileUserId = deepLinkProfileUserId,
                             deepLinkPostId = deepLinkPostId,
                             deepLinkShortcut = deepLinkShortcut
@@ -183,6 +185,10 @@ class MainActivity : ComponentActivity() {
         // Deep links Material You 3: vivid://post/xxx
         if (intent.action == android.content.Intent.ACTION_VIEW) {
             val data = intent.data
+            com.vivid.app.presentation.reels.ReelLinks.parse(data?.toString().orEmpty())?.let {
+                pendingReelId = it
+                pendingReelSequence += 1
+            }
             if (data != null && data.scheme == "vivid" && data.host == "post") {
                 val path = data.path ?: ""
                 val postId = path.removePrefix("/")
@@ -194,6 +200,7 @@ class MainActivity : ComponentActivity() {
         }
         if (intent.getBooleanExtra("openReel", false)) {
             pendingReelId = intent.getStringExtra("reelId")
+            pendingReelSequence += 1
         }
         if (intent.getBooleanExtra("openProfile", false)) {
             pendingProfileUserId = intent.getStringExtra("profileUserId")
@@ -221,13 +228,15 @@ fun VividApp(
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
     deepLinkPostId: String? = null,
-    deepLinkShortcut: MainActivity.ShortcutRequest? = null
+    deepLinkShortcut: MainActivity.ShortcutRequest? = null,
+    deepLinkReelSequence: Long = 0L
 ) {
     val navController = rememberNavController()
     VividNavigation(
         navController = navController,
         deepLinkChatId = deepLinkChatId,
         deepLinkReelId = deepLinkReelId,
+        deepLinkReelSequence = deepLinkReelSequence,
         deepLinkProfileUserId = deepLinkProfileUserId,
         deepLinkPostId = deepLinkPostId,
         deepLinkShortcut = deepLinkShortcut

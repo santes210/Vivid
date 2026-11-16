@@ -39,6 +39,10 @@ import com.vivid.app.ui.components.VividAlertDialog
 internal fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss: () -> Unit) {
     if (initialIndex !in posts.indices) { onDismiss(); return }
     val post = posts[initialIndex]
+    if (post.isVideo) {
+        com.vivid.app.presentation.messages.ChatReelViewer(post.id, onClose = onDismiss, collection = "posts")
+        return
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = VividExpressiveShapes.MediumCard) {
             Column(Modifier.fillMaxSize()) {

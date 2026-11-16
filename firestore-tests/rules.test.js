@@ -628,3 +628,33 @@ describe("atomic reel comments", () => {
     assert.equal((await db.doc("reels/r1").get()).data().comments, 0);
   });
 });
+
+// Mirrors the Android stable-ID retry transaction, including a brand-new chat.
+describe("chat idempotent retries", () => {
+  for (const type of ["text", "image", "voice"]) {
+    test(`${type}: concurrent retries create one message and one unread increment`, async () => {
+      await seedUser("alice");
+      await seedUser("bob");
+      const db = env.authenticatedContext("alice").firestore();
+      const chat = db.doc("chats/alice_bob");
+      const message = chat.collection("messages").doc("stable-operation-id");
+      const send = () => db.runTransaction(async (tx) => {
+        const existingChat = await tx.get(chat);
+        if (existingChat.exists && (await tx.get(message)).exists) return;
+        if (existingChat.exists) {
+          tx.update(chat, { "unreadCounts.bob": increment(1) });
+        } else {
+          tx.set(chat, { participants: ["alice", "bob"], unreadCounts: { alice: 0, bob: 1 } });
+        }
+        tx.set(message, {
+          senderId: "alice", receiverId: "bob", type, text: "hola",
+          timestamp: 1, isRead: false, isDelivered: false
+        });
+      });
+      await assertSucceeds(Promise.all([send(), send()]));
+      await assertSucceeds(send());
+      assert.equal((await chat.get()).data().unreadCounts.bob, 1);
+      assert.equal((await chat.collection("messages").get()).size, 1);
+    });
+  }
+});

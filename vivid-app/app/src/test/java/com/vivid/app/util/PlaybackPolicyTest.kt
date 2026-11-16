@@ -8,6 +8,25 @@ import org.junit.Test
 class PlaybackPolicyTest {
 
     @Test
+    fun `data saver prepares only after manual play and stops offscreen`() {
+        val decision = PlaybackPolicy.decide(true, NetworkTransport.Wifi, false, true)
+        assertFalse(PlaybackPolicy.shouldPrepareVideo(true, false, decision))
+        assertFalse(PlaybackPolicy.shouldPlayVideo(true, false, false, decision))
+        assertTrue(PlaybackPolicy.shouldPrepareVideo(true, true, decision))
+        assertTrue(PlaybackPolicy.shouldPlayVideo(true, false, true, decision))
+        assertFalse(PlaybackPolicy.shouldPlayVideo(true, true, true, decision))
+        assertFalse(PlaybackPolicy.shouldPrepareVideo(false, true, decision))
+        assertFalse(PlaybackPolicy.shouldPlayVideo(false, false, true, decision))
+    }
+
+    @Test
+    fun `wifi may prepare neighbors but must never play them`() {
+        val decision = PlaybackPolicy.decide(false, NetworkTransport.Wifi, false, true)
+        assertTrue(PlaybackPolicy.shouldPrepareVideo(false, false, decision))
+        assertFalse(PlaybackPolicy.shouldPlayVideo(false, false, false, decision))
+    }
+
+    @Test
     fun `wifi unmetered prefetches next page`() {
         val decision = PlaybackPolicy.decide(
             dataSaver = false,
