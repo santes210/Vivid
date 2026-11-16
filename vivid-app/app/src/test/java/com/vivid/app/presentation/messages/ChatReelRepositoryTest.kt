@@ -88,4 +88,27 @@ class ChatReelRepositoryTest {
         every { auth.currentUser } returnsMany listOf(user, null)
         try { repository.load("r1"); fail("Expected session change") } catch (_: IllegalStateException) { }
     }
+    @Test fun `legacy base64 images still require server authorization`() = runTest {
+        every { firestore.collection("posts") } returns collection
+        every { doc.getBoolean("isVideo") } returns false
+        every { doc.getString("storageKey") } returns ""
+        every { doc.getString("imageUrl") } returns ""
+        every { doc.getString("imageBase64") } returns "aW1hZ2U="
+        val result = repository.load("r1", "posts")
+        assertEquals("aW1hZ2U=", result.imageBase64)
+        assertFalse(result.isVideo)
+        verify(exactly = 1) { ref.get(Source.SERVER) }
+        coVerify(exactly = 0) { storage.signDownloadUrl(any(), any()) }
+    }
+
+    @Test fun `a video cannot use base64 as fallback`() = runTest {
+        every { firestore.collection("posts") } returns collection
+        every { doc.getBoolean("isVideo") } returns true
+        every { doc.getString("storageKey") } returns ""
+        every { doc.getString("videoUrl") } returns ""
+        try { repository.load("r1", "posts"); fail("Expected invalid video") }
+        catch (_: IllegalArgumentException) { }
+        verify(exactly = 0) { doc.getString("imageBase64") }
+    }
+
 }

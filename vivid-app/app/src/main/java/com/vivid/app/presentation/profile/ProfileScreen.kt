@@ -76,30 +76,33 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var profile by remember { mutableStateOf(ProfileUiState(uid = userId, isCurrentUser = isOwnProfile)) }
-    var photoPosts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
-    var reelPosts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
-    var savedPosts by remember { mutableStateOf<List<ProfilePost>>(emptyList()) }
-    var selectedPost by remember { mutableStateOf<ProfilePost?>(null) }
-    var showProfileMenu by remember { mutableStateOf(false) }
-    var selectedTabIndex by remember { mutableIntStateOf(0) } // 0: Posts, 1: Reels, 2: Guardados
+    var profile by remember(userId, currentUserId) { mutableStateOf(ProfileUiState(uid = userId, isCurrentUser = isOwnProfile)) }
+    var photoPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var reelPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var savedPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var selectedPost by remember(userId, currentUserId) { mutableStateOf<ProfilePost?>(null) }
+    var showProfileMenu by remember(userId, currentUserId) { mutableStateOf(false) }
+    var selectedTabIndex by remember(userId, currentUserId) { mutableIntStateOf(0) } // 0: Posts, 1: Reels, 2: Guardados
 
     // Skeleton: solo se muestran placeholders hasta que llega la primera snapshot real
-    var isProfileLoaded by remember { mutableStateOf(false) }
-    var postsLoaded by remember { mutableStateOf(false) }
-    var reelsLoaded by remember { mutableStateOf(false) }
-    var savedLoaded by remember { mutableStateOf(false) }
+    var isProfileLoaded by remember(userId, currentUserId) { mutableStateOf(false) }
+    var postsLoaded by remember(userId, currentUserId) { mutableStateOf(false) }
+    var reelsLoaded by remember(userId, currentUserId) { mutableStateOf(false) }
+    var savedLoaded by remember(userId, currentUserId) { mutableStateOf(false) }
 
     // Error de carga (red / Firestore): muestra un estado con reintento en
     // lugar de un skeleton eterno o un perfil vacío engañoso.
-    var loadFailed by remember { mutableStateOf(false) }
-    var retryKey by remember { mutableIntStateOf(0) }
+    var loadFailed by remember(userId, currentUserId) { mutableStateOf(false) }
+    var retryKey by remember(userId, currentUserId) { mutableIntStateOf(0) }
 
     val relationshipState by viewModel.relationshipState.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
     val followActionMessage by viewModel.followActionMessage.collectAsState()
 
+    var postsFailed by remember(userId, currentUserId) { mutableStateOf(false) }
+    var savedFailed by remember(userId, currentUserId) { mutableStateOf(false) }
+    var reelsFailed by remember(userId, currentUserId) { mutableStateOf(false) }
     val canViewContent = isOwnProfile || !profile.isPrivate || profile.isFollowedByCurrentUser
 
     LaunchedEffect(userId) {
@@ -112,7 +115,14 @@ fun ProfileScreen(
         followActionMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearFollowActionMessage() }
     }
 
-    DisposableEffect(userId, retryKey) {
+    DisposableEffect(userId, currentUserId, retryKey, profile.isPrivate, profile.isFollowedByCurrentUser) {
+        postsLoaded = false
+        reelsLoaded = false
+        postsFailed = false
+        reelsFailed = false
+        var active = true
+        var savedGeneration = 0
+        val mediaJobs = mutableListOf<kotlinx.coroutines.Job>()
         var profileListener: ListenerRegistration? = null
         var followListener: ListenerRegistration? = null
         var postsListener: ListenerRegistration? = null
@@ -123,6 +133,7 @@ fun ProfileScreen(
             // ── Perfil ──
             profileListener = db.collection("users").document(userId)
                 .addSnapshotListener { snapshot, error ->
+                    if (!active) return@addSnapshotListener
                     if (error != null) {
                         CrashReporter.recordNonFatal(TAG, error, "ProfileScreen.profile")
                         isProfileLoaded = true
@@ -138,8 +149,6 @@ fun ProfileScreen(
                         bio = data["bio"] as? String ?: "",
                         avatarUrl = data["avatarUrl"] as? String ?: "",
                         avatarBase64 = data["avatarBase64"] as? String ?: "",
-                        postsCount = (data["postsCount"] as? Long)?.toInt() ?: 0,
-                        reelsCount = (data["reelsCount"] as? Long)?.toInt() ?: 0,
                         followersCount = (data["followersCount"] as? Long)?.toInt() ?: 0,
                         followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0,
                         isPrivate = data["isPrivate"] as? Boolean ?: false,
@@ -154,11 +163,13 @@ fun ProfileScreen(
                 followListener = db.collection("users").document(userId)
                     .collection("followers").document(currentUserId)
                     .addSnapshotListener { snap, _ ->
+                        if (!active) return@addSnapshotListener
                         val followed = snap?.exists() == true
                         profile = profile.copy(isFollowedByCurrentUser = followed)
                         db.collection("users").document(userId)
                             .collection("followRequests").document(currentUserId)
                             .get().addOnSuccessListener { reqSnap ->
+                                if (!active) return@addOnSuccessListener
                                 profile = profile.copy(isFollowRequestPending = reqSnap.exists())
                             }
                     }
@@ -168,26 +179,22 @@ fun ProfileScreen(
             postsListener = db.collection("posts")
                 .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, error ->
+                    if (!active) return@addSnapshotListener
                     if (error != null) {
                         CrashReporter.recordNonFatal(TAG, error, "ProfileScreen.posts")
                         postsLoaded = true
-                        loadFailed = true
+                        postsFailed = true
+                        photoPosts = emptyList()
                         return@addSnapshotListener
                     }
-                    loadFailed = false
-                    photoPosts = snapshot?.documents.orEmpty().mapNotNull { doc ->
-                        // "Solo amigos" en el grid: el autor y quienes lo
-                        // siguen. Un visitante sin seguir no los ve.
-                        // (Nota: si el estado de seguimiento llega después
-                        // que los posts, el grid se corrige en el siguiente
-                        // evento del listener de posts.)
-                        val visibility = doc.getString("visibility") ?: "public"
-                        val audienceFriends = visibility == com.vivid.app.domain.model.PostVisibility.FRIENDS.value
-                        if (audienceFriends && !isOwnProfile && !profile.isFollowedByCurrentUser) {
-                            return@mapNotNull null
-                        }
+                    postsFailed = false
+                    photoPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
                             id = doc.id,
+                            visibility = doc.getString("visibility") ?: "public",
+                            videoUrl = doc.getString("videoUrl").orEmpty(),
+                            thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
+                            isVideo = doc.getBoolean("isVideo") == true,
                             imageUrl = doc.getString("imageUrl").orEmpty(),
                             imageBase64 = doc.getString("imageBase64").orEmpty(),
                             storageKey = doc.getString("storageKey").orEmpty(),
@@ -200,9 +207,10 @@ fun ProfileScreen(
 
                     snapshot?.documents.orEmpty().forEach { doc ->
                         val key = doc.getString("storageKey").orEmpty()
-                        if (key.isNotBlank()) {
-                            scope.launch {
+                        if (key.isNotBlank() && doc.getBoolean("isVideo") != true) {
+                            mediaJobs += scope.launch {
                                 viewModel.refreshSignedUrl(key)?.let { freshUrl ->
+                                    if (!active) return@launch
                                     photoPosts = photoPosts.map {
                                         if (it.id == doc.id && it.imageUrl != freshUrl) it.copy(imageUrl = freshUrl) else it
                                     }
@@ -215,18 +223,21 @@ fun ProfileScreen(
             reelsListener = db.collection("reels")
                 .whereEqualTo("userId", userId)
                 .addSnapshotListener { snapshot, error ->
+                    if (!active) return@addSnapshotListener
                     if (error != null) {
                         CrashReporter.recordNonFatal(TAG, error, "ProfileScreen.reels")
                         reelsLoaded = true
-                        loadFailed = true
+                        reelsFailed = true
+                        reelPosts = emptyList()
                         return@addSnapshotListener
                     }
-                    loadFailed = false
-                    reelPosts = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                    reelsFailed = false
+                    reelPosts = snapshot?.documents.orEmpty().map { doc ->
                         val videoUrl = doc.getString("videoUrl").orEmpty()
-                        if (videoUrl.isBlank()) return@mapNotNull null
                         ProfilePost(
-                            id = "reel_${doc.id}",
+                            id = doc.id,
+                            collection = "reels",
+                            storageKey = doc.getString("storageKey").orEmpty(),
                             imageUrl = doc.getString("thumbnailUrl").orEmpty(),
                             videoUrl = videoUrl,
                             thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
@@ -243,13 +254,23 @@ fun ProfileScreen(
             if (isOwnProfile) {
                 savedListener = db.collection("users").document(userId)
                     .collection("savedPosts")
-                    .addSnapshotListener { snap, _ ->
+                    .addSnapshotListener { snap, error ->
+                        if (!active) return@addSnapshotListener
+                        val generation = ++savedGeneration
+                        if (error != null) {
+                            savedFailed = true
+                            savedLoaded = true
+                            savedPosts = emptyList()
+                            return@addSnapshotListener
+                        }
+                        savedFailed = false
                         val savedIds = snap?.documents.orEmpty().map { it.id }
                         if (savedIds.isEmpty()) {
                             savedPosts = emptyList()
                             savedLoaded = true
                         } else {
-                            scope.launch {
+                            mediaJobs += scope.launch {
+                                var anyFailed = false
                                 val list = mutableListOf<ProfilePost>()
                                 for (savedId in savedIds) {
                                     runCatching {
@@ -271,8 +292,13 @@ fun ProfileScreen(
                                                 )
                                             )
                                         }
+                                    }.onFailure { error ->
+                                        if (error is kotlinx.coroutines.CancellationException) throw error
+                                        anyFailed = true
                                     }
                                 }
+                                if (!active || generation != savedGeneration) return@launch
+                                savedFailed = anyFailed
                                 savedPosts = list.sortedByDescending { it.timestamp }
                                 savedLoaded = true
                             }
@@ -282,6 +308,8 @@ fun ProfileScreen(
         }
 
         onDispose {
+            active = false
+            mediaJobs.forEach { it.cancel() }
             profileListener?.remove()
             followListener?.remove()
             postsListener?.remove()
@@ -290,11 +318,24 @@ fun ProfileScreen(
         }
     }
 
+    val visiblePosts = photoPosts.filter {
+        it.visibility != com.vivid.app.domain.model.PostVisibility.FRIENDS.value ||
+            isOwnProfile || profile.isFollowedByCurrentUser
+    }
+    val countedProfile = profile.copy(
+        postsCount = profileContentCount(visiblePosts, postsLoaded, postsFailed, canViewContent),
+        reelsCount = profileContentCount(reelPosts, reelsLoaded, reelsFailed, canViewContent)
+    )
+    val activeTabFailed = when (selectedTabIndex) {
+        0 -> postsFailed
+        1 -> reelsFailed
+        else -> savedFailed
+    }
     val currentDisplayList = when (selectedTabIndex) {
-        0 -> photoPosts
+        0 -> visiblePosts
         1 -> reelPosts
         2 -> savedPosts
-        else -> photoPosts
+        else -> visiblePosts
     }
 
     val activeTabLoading = when (selectedTabIndex) {
@@ -436,7 +477,7 @@ fun ProfileScreen(
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                 if (isProfileLoaded) {
                     ProfileHeader(
-                        profile = profile, isOwnProfile = isOwnProfile,
+                        profile = countedProfile, isOwnProfile = isOwnProfile,
                         relationshipState = relationshipState,
                         isFollowActionLoading = isFollowActionLoading,
                         isVerified = profile.isVerified,
@@ -497,13 +538,16 @@ fun ProfileScreen(
                         hasPendingRequest = profile.isFollowRequestPending
                     )
                 }
-            } else if (loadFailed && currentDisplayList.isEmpty()) {
+            } else if ((loadFailed || activeTabFailed) && currentDisplayList.isEmpty()) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     VividErrorState(
                         title = "No se pudieron cargar los datos del perfil",
                         onRetry = {
                             loadFailed = false
                             isProfileLoaded = false
+                            postsFailed = false
+                            reelsFailed = false
+                            savedFailed = false
                             postsLoaded = false
                             reelsLoaded = false
                             savedLoaded = false
@@ -522,7 +566,7 @@ fun ProfileScreen(
                     EmptyPostsPlaceholder()
                 }
             } else {
-                items(currentDisplayList, key = { it.id }) { post ->
+                items(currentDisplayList, key = { "${it.collection}/${it.id}" }) { post ->
                     ProfilePostThumbnail(post = post, onClick = { selectedPost = post })
                 }
             }
@@ -533,7 +577,6 @@ fun ProfileScreen(
     selectedPost?.let { post ->
         ProfilePostViewerDialog(
             post = post,
-            currentUserId = currentUserId,
             onUnsave = {
                 scope.launch {
                     runCatching {
@@ -541,6 +584,9 @@ fun ProfileScreen(
                             .collection("savedPosts").document(post.id).delete().await()
                         savedPosts = savedPosts.filter { it.id != post.id }
                         snackbarHostState.showSnackbar("Publicación eliminada de guardados")
+                    }.onFailure { error ->
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        snackbarHostState.showSnackbar("No se pudo eliminar de guardados. Inténtalo de nuevo.")
                     }
                 }
                 selectedPost = null

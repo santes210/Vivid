@@ -35,7 +35,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.vivid.app.theme.LocalVividAccents
@@ -44,9 +43,6 @@ import com.vivid.app.ui.components.pressMorphShape
 import com.vivid.app.ui.haptics.rememberVividHaptics
 import com.vivid.app.ui.motion.VividSharedKeys
 import com.vivid.app.ui.motion.vividSharedElement
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.vivid.app.domain.repository.FollowRelationshipState
 import com.vivid.app.theme.LocalVividAnimationsEnabled
 import com.vivid.app.theme.SoraFamily
@@ -205,8 +201,8 @@ internal fun ProfileHeader(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(VividSpace.xs)
         ) {
-            ProfileStat(profile.postsCount.toString(), "Posts", Modifier.weight(1f))
-            ProfileStat(profile.reelsCount.toString(), "Reels", Modifier.weight(1f))
+            ProfileStat(profile.postsCount?.toString() ?: "—", "Posts", Modifier.weight(1f))
+            ProfileStat(profile.reelsCount?.toString() ?: "—", "Reels", Modifier.weight(1f))
             ProfileStat(profile.followersCount.toString(), "Seguidores", Modifier.weight(1f))
             ProfileStat(profile.followingCount.toString(), "Siguiendo", Modifier.weight(1f))
         }
@@ -510,6 +506,7 @@ internal fun ProfileAvatar(displayName: String, avatarUrl: String, avatarBase64:
 
 @Composable
 internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
+    val previewUrl = if (post.isVideo) post.thumbnailUrl else post.imageUrl
     var bitmap by remember(post.imageBase64) { mutableStateOf<Bitmap?>(null) }
     val haptics = rememberVividHaptics()
     LaunchedEffect(post.imageBase64) {
@@ -529,11 +526,11 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
         contentAlignment = Alignment.Center
     ) {
-        var imageFailed by remember(post.imageUrl) { mutableStateOf(false) }
+        var imageFailed by remember(previewUrl) { mutableStateOf(false) }
         when {
             bitmap != null -> Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            post.imageUrl.isNotBlank() && !imageFailed -> AsyncImage(
-                model = post.imageUrl,
+            previewUrl.isNotBlank() && !imageFailed -> AsyncImage(
+                model = previewUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -555,63 +552,15 @@ internal fun ProfilePostThumbnail(post: ProfilePost, onClick: () -> Unit) {
 @Composable
 internal fun ProfilePostViewerDialog(
     post: ProfilePost,
-    currentUserId: String = "",
     onUnsave: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = VividExpressiveShapes.MediumCard) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(VividSpace.s),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(post.username.ifBlank { "Publicación" }, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                        if (post.timestamp > 0)
-                            Text(java.text.SimpleDateFormat("dd MMM yyyy · HH:mm", java.util.Locale.getDefault()).format(java.util.Date(post.timestamp)),
-                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (post.isSaved) {
-                            IconButton(onClick = onUnsave) {
-                                Icon(Icons.Default.Bookmark, contentDescription = "Eliminar de guardados", tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                        TextButton(onClick = onDismiss) { Text("Cerrar", fontWeight = FontWeight.Bold) }
-                    }
-                }
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    when {
-                        post.isVideo && post.videoUrl.isNotBlank() -> {
-                            val ctx = androidx.compose.ui.platform.LocalContext.current
-                            val player = remember(post.videoUrl) {
-                                ExoPlayer.Builder(ctx).build().apply {
-                                    if (com.vivid.app.util.VideoCacheManager.isCacheable(post.videoUrl)) {
-                                        setMediaSource(com.vivid.app.util.VideoCacheManager.buildCachedMediaSource(ctx, post.videoUrl))
-                                    } else {
-                                        setMediaItem(MediaItem.fromUri(post.videoUrl))
-                                    }
-                                    repeatMode = ExoPlayer.REPEAT_MODE_ALL; prepare(); playWhenReady = true
-                                }
-                            }
-                            DisposableEffect(player) { onDispose { player.release() } }
-                            AndroidView(factory = { ctx2 -> PlayerView(ctx2).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
-                        }
-                        post.imageBase64.isNotBlank() -> {
-                            val bmp = remember(post.imageBase64) { try { val bytes = Base64.decode(post.imageBase64, Base64.NO_WRAP); BitmapFactory.decodeByteArray(bytes, 0, bytes.size) } catch (_: Exception) { null } }
-                            if (bmp != null) Image(bitmap = bmp.asImageBitmap(), null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                        }
-                        post.imageUrl.isNotBlank() -> AsyncImage(model = post.imageUrl, null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
-                            placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHigh),
-                            error = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest))
-                    }
-                }
-                if (post.caption.isNotBlank()) Text(post.caption, modifier = Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    }
+    com.vivid.app.presentation.messages.ChatReelViewer(
+        reelId = post.id,
+        collection = post.collection,
+        onClose = onDismiss,
+        onUnsave = if (post.isSaved) onUnsave else null
+    )
 }
 
 /**
