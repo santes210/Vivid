@@ -107,7 +107,21 @@ jobs:
             --no-daemon \
             --max-workers=1 \
             --stacktrace
+            - name: Run Android unit tests
+          working-directory: vivid-app
+          run: ./gradlew testDebugUnitTest --no-daemon --max-workers=1 --stacktrace
 
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-reports
+          path: |
+            vivid-app/app/build/reports/tests/
+            vivid-app/app/build/test-results/
+            if-no-files-found: ignore
+          retention-days: 14
+          
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
