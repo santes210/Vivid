@@ -57,7 +57,14 @@ final class PostRepository {
         let like = post.collection("likes").document(uid)
         try await FirebaseAsync.write { completion in
             db.runTransaction({ transaction, errorPointer in
-                let liked = (try? transaction.getDocument(like).exists) ?? false
+                let liked: Bool
+                do {
+                    liked = try transaction.getDocument(like).exists
+                } catch {
+                    // A failed read is not evidence that the like is absent.
+                    errorPointer?.pointee = error as NSError
+                    return nil
+                }
                 if liked { transaction.deleteDocument(like); transaction.updateData(["likesCount": FieldValue.increment(Int64(-1))], forDocument: post) }
                 else { transaction.setData(["userId": uid, "timestamp": Int64(Date().timeIntervalSince1970 * 1_000)], forDocument: like); transaction.updateData(["likesCount": FieldValue.increment(Int64(1))], forDocument: post) }
                 return nil

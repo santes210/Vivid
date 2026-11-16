@@ -648,28 +648,33 @@ internal fun ReelCommentsSheet(
                 Spacer(Modifier.width(10.dp))
                 FilledIconButton(
                     onClick = {
-                        if (commentText.isBlank()) return@FilledIconButton
+                        if (isSending || currentUserId.isBlank() || commentText.isBlank()) return@FilledIconButton
+                        val submittedText = commentText.trim()
                         isSending = true
                         errorMsg = null
                         scope.launch {
                             runCatching {
                                 val userDoc = firestore.collection("users").document(currentUserId).get().await()
-                                val commentRef = firestore.collection("reels").document(reel.id).collection("comments").add(
+                                val reelRef = firestore.collection("reels").document(reel.id)
+                                val commentRef = reelRef.collection("comments").document()
+                                val batch = firestore.batch()
+                                batch.set(commentRef,
                                     mapOf(
                                         "userId" to currentUserId,
                                         "username" to (userDoc.getString("username") ?: "yo"),
-                                        "text" to commentText.trim(),
+                                        "text" to submittedText,
                                         "timestamp" to System.currentTimeMillis(),
+                                        "likesCount" to 0,
                                         "avatarUrl" to (userDoc.getString("avatarUrl") ?: ""),
                                         "avatarBase64" to (userDoc.getString("avatarBase64") ?: "")
                                     )
-                                ).await()
-                                firestore.collection("reels").document(reel.id)
-                                    .update("comments", FieldValue.increment(1))
-                                    .await()
+                                )
+                                batch.update(reelRef, "comments", FieldValue.increment(1))
+                                batch.commit().await()
                                 PushSender.reelComment(reel.id, commentRef.id)
                             }.onSuccess {
-                                commentText = ""
+                                // Preserve any new draft typed while the request was in flight.
+                                if (commentText.trim() == submittedText) commentText = ""
                                 onCommentAdded()
                             }.onFailure {
                                 errorMsg = it.message
@@ -677,7 +682,7 @@ internal fun ReelCommentsSheet(
                             isSending = false
                         }
                     },
-                    enabled = !isSending && commentText.isNotBlank(),
+                    enabled = !isSending && currentUserId.isNotBlank() && commentText.isNotBlank(),
                     modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,

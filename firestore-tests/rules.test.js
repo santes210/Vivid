@@ -14,6 +14,7 @@
  */
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { increment } from "firebase/firestore";
 import { readFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 
@@ -531,5 +532,99 @@ describe("chats", () => {
       "unreadCounts.bob": 1,
       updatedAt: 2
     }));
+  });
+});
+
+// The Android repository writes a comment and its counter atomically.
+describe("atomic post comments", () => {
+  test("another user can commit comment and counter together", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    await seedPost("p1");
+    const db = env.authenticatedContext("bob").firestore();
+    const batch = db.batch();
+    batch.set(db.doc("posts/p1/comments/c1"), {
+      userId: "bob", text: "hola", likesCount: 0
+    });
+    batch.update(db.doc("posts/p1"), { commentsCount: increment(1) });
+    await assertSucceeds(batch.commit());
+    assert.equal((await db.doc("posts/p1").get()).data().commentsCount, 1);
+    assert.equal((await db.doc("posts/p1/comments/c1").get()).exists, true);
+  });
+
+  test("rejected counter update also rolls back comment creation", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    await seedPost("p1");
+    const db = env.authenticatedContext("bob").firestore();
+    const batch = db.batch();
+    batch.set(db.doc("posts/p1/comments/c1"), {
+      userId: "bob", text: "hola", likesCount: 0
+    });
+    batch.update(db.doc("posts/p1"), { commentsCount: 99 });
+    await assertFails(batch.commit());
+    assert.equal((await db.doc("posts/p1/comments/c1").get()).exists, false);
+    assert.equal((await db.doc("posts/p1").get()).data().commentsCount, 0);
+  });
+
+  test("repeated deletion does not decrement the counter twice", async () => {
+    await seedUser("alice");
+    await seedUser("bob");
+    await seedPost("p1", { commentsCount: 1 });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("posts/p1/comments/c1").set({
+        userId: "bob", text: "hola", likesCount: 0
+      });
+    });
+    const db = env.authenticatedContext("bob").firestore();
+    const comment = db.doc("posts/p1/comments/c1");
+    const post = db.doc("posts/p1");
+    const remove = () => db.runTransaction(async (tx) => {
+      if ((await tx.get(comment)).exists) {
+        tx.delete(comment);
+        tx.update(post, { commentsCount: increment(-1) });
+      }
+    });
+    await assertSucceeds(remove());
+    await assertSucceeds(remove());
+    assert.equal((await post.get()).data().commentsCount, 0);
+    assert.equal((await comment.get()).exists, false);
+  });
+});
+
+describe("atomic reel comments", () => {
+  async function setup() {
+    await seedUser("alice");
+    await seedUser("bob");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("reels/r1").set({
+        userId: "alice", isPrivate: false, comments: 0, likes: 0
+      });
+    });
+    return env.authenticatedContext("bob").firestore();
+  }
+
+  test("comment and increment commit together for a non-owner", async () => {
+    const db = await setup();
+    const batch = db.batch();
+    batch.set(db.doc("reels/r1/comments/c1"), {
+      userId: "bob", text: "hola", likesCount: 0
+    });
+    batch.update(db.doc("reels/r1"), { comments: increment(1) });
+    await assertSucceeds(batch.commit());
+    assert.equal((await db.doc("reels/r1/comments/c1").get()).exists, true);
+    assert.equal((await db.doc("reels/r1").get()).data().comments, 1);
+  });
+
+  test("invalid author rolls back both writes", async () => {
+    const db = await setup();
+    const batch = db.batch();
+    batch.set(db.doc("reels/r1/comments/c1"), {
+      userId: "alice", text: "impersonation", likesCount: 0
+    });
+    batch.update(db.doc("reels/r1"), { comments: increment(1) });
+    await assertFails(batch.commit());
+    assert.equal((await db.doc("reels/r1/comments/c1").get()).exists, false);
+    assert.equal((await db.doc("reels/r1").get()).data().comments, 0);
   });
 });
