@@ -15,14 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
-import com.vivid.app.ui.components.HashtagCaption
 import com.vivid.app.ui.components.UserAvatar
-import com.vivid.app.util.rememberPooledExoPlayer
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.vivid.app.R
@@ -37,46 +30,14 @@ import com.vivid.app.ui.components.VividAlertDialog
 
 @Composable
 internal fun PostViewerDialog(posts: List<PostData>, initialIndex: Int, onDismiss: () -> Unit) {
-    if (initialIndex !in posts.indices) { onDismiss(); return }
-    val post = posts[initialIndex]
-    if (post.isVideo) {
-        com.vivid.app.presentation.messages.ChatReelViewer(post.id, onClose = onDismiss, collection = "posts")
+    val post = posts.getOrNull(initialIndex)
+    if (post == null) {
+        LaunchedEffect(Unit) { onDismiss() }
         return
     }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, shape = VividExpressiveShapes.MediumCard) {
-            Column(Modifier.fillMaxSize()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(VividSpace.s),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(post.username, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.viewer_close)) }
-                }
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    when {
-                        post.isVideo && post.videoUrl.isNotBlank() -> {
-                            val player = rememberPooledExoPlayer(
-                                mediaUrl = post.videoUrl,
-                                playWhenReady = true,
-                                repeatMode = Player.REPEAT_MODE_ALL
-                            )
-                            AndroidView(factory = { c -> PlayerView(c).apply { this.player = player } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
-                        }
-                        else -> PostImage(post.imageBase64, post.imageUrl, post.username, useDefaultHeight = false)
-                    }
-                }
-                if (post.caption.isNotBlank()) {
-                    HashtagCaption(
-                        text = post.caption,
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        }
-    }
+    com.vivid.app.presentation.messages.ChatReelViewer(
+        post.id, onClose = onDismiss, collection = "posts"
+    )
 }
 
 // ── PostDetailsDialog ──
@@ -123,18 +84,33 @@ internal fun EditPostDialog(
     onSaved: (String) -> Unit,
     viewModel: FeedViewModel
 ) {
-    var text by remember { mutableStateOf(post.caption) }
+    var text by androidx.compose.runtime.saveable.rememberSaveable(post.id) { mutableStateOf(post.caption) }
+    var saving by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     VividAlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(stringResource(R.string.edit_post_title), fontWeight = FontWeight.Bold) },
-        text = { OutlinedTextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(VividSpace.s)) {
+                OutlinedTextField(value = text, onValueChange = { text = it; failed = false },
+                    enabled = !saving, modifier = Modifier.fillMaxWidth(), isError = failed)
+                if (failed) Text(stringResource(R.string.feed_edit_failed),
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                if (saving) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        },
         confirmButton = {
-            Button(onClick = {
-                viewModel.editPostCaption(post.id, text)
-                onSaved(text.trim())
+            Button(enabled = !saving, onClick = {
+                saving = true
+                failed = false
+                val caption = text.trim()
+                viewModel.editPostCaption(post.id, caption) { error ->
+                    saving = false
+                    if (error == null) onSaved(caption) else failed = true
+                }
             }) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
+        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
 }
 
@@ -157,11 +133,24 @@ internal fun PostCommentsSheet(
     var isSending by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    var commentsLoading by remember(post.id) { mutableStateOf(true) }
+    var commentsFailed by remember(post.id) { mutableStateOf(false) }
+    var commentsRetry by remember(post.id) { mutableIntStateOf(0) }
 
-    DisposableEffect(post.id) {
+    DisposableEffect(post.id, commentsRetry) {
+        commentsLoading = true
+        commentsFailed = false
+        val timeout = scope.launch {
+            kotlinx.coroutines.delay(15_000)
+            if (commentsLoading) { commentsLoading = false; commentsFailed = true }
+        }
         val listener = db.collection("posts").document(post.id).collection("comments")
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, error ->
+                timeout.cancel()
+                commentsLoading = false
+                commentsFailed = error != null
+                if (error != null) return@addSnapshotListener
                 comments = snap?.documents?.mapNotNull { doc ->
                     PostComment(
                         id = doc.id,
@@ -178,7 +167,7 @@ internal fun PostCommentsSheet(
                     )
                 } ?: emptyList()
             }
-        onDispose { listener.remove() }
+        onDispose { timeout.cancel(); listener.remove() }
     }
 
     DisposableEffect(post.id, currentUserId) {
@@ -238,7 +227,12 @@ internal fun PostCommentsSheet(
         },
         text = {
             Column {
-                if (comments.isEmpty()) {
+                if (commentsLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                } else if (commentsFailed) {
+                    Text(stringResource(R.string.comments_load_failed), color = MaterialTheme.colorScheme.error)
+                    FilledTonalButton(onClick = { commentsRetry++ }) { Text(stringResource(R.string.action_retry)) }
+                } else if (comments.isEmpty()) {
                     Text(stringResource(R.string.comments_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 340.dp)) {

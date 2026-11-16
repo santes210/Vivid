@@ -50,8 +50,24 @@ data class PostComment(
 
 internal data class FeedPageResult(
     val posts: List<PostData>,
-    val lastDoc: com.google.firebase.firestore.DocumentSnapshot?
+    val lastDoc: com.google.firebase.firestore.DocumentSnapshot?,
+    val hasMore: Boolean = false
 )
 
 /** Minimum interval between full Room post cache writes (60 s). */
 internal const val FEED_CACHE_WRITE_INTERVAL_MS = 60_000L
+
+/** Live first-page documents win, without dropping already paginated rows. */
+internal fun mergeFeedPages(current: List<PostData>, older: List<PostData>): List<PostData> =
+    (current + older).distinctBy { it.id }.sortedByDescending { it.timestamp }
+
+/** Back-stack memory only, never persisted across sign-in sessions or process death. */
+internal data class FeedReturnState(
+    val userId: String,
+    val posts: List<PostData>,
+    val paginatedIds: Set<String>,
+    val cursor: com.google.firebase.firestore.DocumentSnapshot?,
+    val hasMore: Boolean,
+    val following: Set<String>,
+    val blocked: Set<String>
+)

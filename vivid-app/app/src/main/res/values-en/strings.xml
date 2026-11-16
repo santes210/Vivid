@@ -380,4 +380,17 @@
     <string name="viewer_unlock">Unlock playback controls</string>
     <string name="viewer_locked">Controls locked · tap the lock to unlock</string>
     <string name="profile_unsave">Remove from saved</string>
+    <string name="feed_edit_failed">Could not confirm the save. Your text is still here; you can retry.</string>
+    <string name="feed_save_failed">Could not update saved posts. Please try again.</string>
+    <string name="profile_load_failed">Could not load the profile. Please try again.</string>
+    <string name="comments_load_failed">Could not load comments.</string>
+    <string name="feed_refresh_failed">Could not refresh the entire feed. Retry</string>
+    <string name="image_load_failed">Could not load the image. Check your connection and retry.</string>
+    <string name="image_description">Post photo</string>
+    <string name="image_caption_less">Show less</string>
+    <string name="image_caption_more">Show full caption</string>
+    <string name="image_zoom_hint">Pinch to zoom, drag to explore, or double-tap to zoom and reset.</string>
+    <string name="image_zoom_in">Zoom in</string>
+    <string name="image_zoom_out">Zoom out</string>
+    <string name="image_zoom_reset">Reset image view</string>
 </resources>

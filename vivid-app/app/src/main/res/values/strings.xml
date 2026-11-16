@@ -396,4 +396,17 @@
     <string name="viewer_unlock">Desbloquear controles de reproducción</string>
     <string name="viewer_locked">Controles bloqueados · toca el candado para desbloquear</string>
     <string name="profile_unsave">Eliminar de guardados</string>
+    <string name="feed_edit_failed">No se pudo confirmar el guardado. Tu texto sigue aquí; puedes reintentar.</string>
+    <string name="feed_save_failed">No se pudo actualizar Guardados. Inténtalo de nuevo.</string>
+    <string name="profile_load_failed">No se pudo cargar el perfil. Inténtalo de nuevo.</string>
+    <string name="comments_load_failed">No se pudieron cargar los comentarios.</string>
+    <string name="feed_refresh_failed">No se pudo actualizar todo el feed. Reintentar</string>
+    <string name="image_load_failed">No se pudo cargar la imagen. Comprueba tu conexión y reintenta.</string>
+    <string name="image_description">Foto de la publicación</string>
+    <string name="image_caption_less">Ver menos</string>
+    <string name="image_caption_more">Ver descripción completa</string>
+    <string name="image_zoom_hint">Pellizca para ampliar, arrastra para explorar o toca dos veces para acercar y restablecer.</string>
+    <string name="image_zoom_in">Ampliar imagen</string>
+    <string name="image_zoom_out">Reducir imagen</string>
+    <string name="image_zoom_reset">Restablecer vista de la imagen</string>
 </resources>

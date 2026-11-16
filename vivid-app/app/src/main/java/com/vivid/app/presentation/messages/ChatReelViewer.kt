@@ -66,7 +66,7 @@ internal fun ChatReelViewer(
                     is ChatReelState.Ready -> if (current.video.id == reelId && current.video.collection == collection) {
                         key(current.video.id, current.video.url) {
                             if (current.video.isVideo) ChatReelPlayer(current.video, onRetry = { viewModel.load(reelId, collection) })
-                            else ChatPostImage(current.video, onRetry = { viewModel.load(reelId, collection) })
+                            else ZoomablePostImage(current.video, onRetry = { viewModel.load(reelId, collection) })
                         }
                     } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 }
@@ -223,45 +223,4 @@ private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
                 }, onMuted = { muted = !muted }, onRepeat = { repeat = !repeat },
                 onSpeed = { speed = it }, onFill = { fill = !fill }, onShare = { showShare = true })
     })
-}
-
-@Composable
-private fun ChatPostImage(content: ChatReelVideo, onRetry: () -> Unit) {
-    var fill by remember { mutableStateOf(false) }
-    var failed by remember(content.url, content.imageBase64) { mutableStateOf(false) }
-    var share by remember { mutableStateOf(false) }
-    if (share) com.vivid.app.presentation.reels.ContentShareSheet(
-        content = com.vivid.app.presentation.reels.ShareContent("vivid://post/${content.id}", content.caption),
-        playbackControls = false, onDismiss = { share = false }
-    )
-    val imageBytes by produceState<ByteArray?>(null, content.imageBase64) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            if (content.imageBase64.isBlank()) null else runCatching {
-                android.util.Base64.decode(content.imageBase64, android.util.Base64.DEFAULT)
-            }.getOrNull()
-        }
-        if (content.imageBase64.isNotBlank() && value == null) failed = true
-    }
-    if (failed) ChatReelError(onRetry)
-    else Column(Modifier.fillMaxSize()) {
-        coil3.compose.AsyncImage(model = if (content.imageBase64.isNotBlank()) imageBytes else content.url, contentDescription = content.caption,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentScale = if (fill) androidx.compose.ui.layout.ContentScale.Crop else androidx.compose.ui.layout.ContentScale.Fit,
-            onError = { if (content.imageBase64.isBlank() || imageBytes != null) failed = true })
-        Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainer,
-            modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Column(Modifier.padding(16.dp)) {
-                Text("@${content.username}", style = MaterialTheme.typography.titleMedium)
-                if (content.caption.isNotBlank()) Text(content.caption, maxLines = 3,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = { fill = !fill }) {
-                    Text(stringResource(if (fill) R.string.viewer_fit else R.string.viewer_fill))
-                }
-            }
-        }
-        TextButton(onClick = { share = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.content_share_title))
-        }
-    }
 }
