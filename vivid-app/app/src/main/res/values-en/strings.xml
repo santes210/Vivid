@@ -379,4 +379,5 @@
     <string name="viewer_lock">Lock playback controls</string>
     <string name="viewer_unlock">Unlock playback controls</string>
     <string name="viewer_locked">Controls locked · tap the lock to unlock</string>
+    <string name="profile_unsave">Remove from saved</string>
 </resources>

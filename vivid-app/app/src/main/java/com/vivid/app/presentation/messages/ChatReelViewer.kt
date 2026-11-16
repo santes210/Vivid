@@ -41,6 +41,7 @@ internal fun ChatReelViewer(
     reelId: String,
     onClose: () -> Unit,
     collection: String = "reels",
+    onUnsave: (() -> Unit)? = null,
     viewModel: ChatReelViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -54,6 +55,9 @@ internal fun ChatReelViewer(
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.content_video_title), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    if (onUnsave != null) IconButton(onClick = onUnsave) {
+                        Icon(Icons.Default.BookmarkRemove, stringResource(R.string.profile_unsave))
+                    }
                     IconButton(onClick = onClose) { Icon(Icons.Default.Close, stringResource(R.string.content_video_close)) }
                 }
                 when (val current = state) {
@@ -223,17 +227,39 @@ private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
 
 @Composable
 private fun ChatPostImage(content: ChatReelVideo, onRetry: () -> Unit) {
-    var failed by remember(content.url) { mutableStateOf(false) }
+    var fill by remember { mutableStateOf(false) }
+    var failed by remember(content.url, content.imageBase64) { mutableStateOf(false) }
     var share by remember { mutableStateOf(false) }
     if (share) com.vivid.app.presentation.reels.ContentShareSheet(
         content = com.vivid.app.presentation.reels.ShareContent("vivid://post/${content.id}", content.caption),
         playbackControls = false, onDismiss = { share = false }
     )
+    val imageBytes by produceState<ByteArray?>(null, content.imageBase64) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            if (content.imageBase64.isBlank()) null else runCatching {
+                android.util.Base64.decode(content.imageBase64, android.util.Base64.DEFAULT)
+            }.getOrNull()
+        }
+        if (content.imageBase64.isNotBlank() && value == null) failed = true
+    }
     if (failed) ChatReelError(onRetry)
     else Column(Modifier.fillMaxSize()) {
-        coil3.compose.AsyncImage(model = content.url, contentDescription = content.caption,
+        coil3.compose.AsyncImage(model = if (content.imageBase64.isNotBlank()) imageBytes else content.url, contentDescription = content.caption,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentScale = androidx.compose.ui.layout.ContentScale.Fit, onError = { failed = true })
+            contentScale = if (fill) androidx.compose.ui.layout.ContentScale.Crop else androidx.compose.ui.layout.ContentScale.Fit,
+            onError = { if (content.imageBase64.isBlank() || imageBytes != null) failed = true })
+        Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("@${content.username}", style = MaterialTheme.typography.titleMedium)
+                if (content.caption.isNotBlank()) Text(content.caption, maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { fill = !fill }) {
+                    Text(stringResource(if (fill) R.string.viewer_fit else R.string.viewer_fill))
+                }
+            }
+        }
         TextButton(onClick = { share = true }, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.content_share_title))
         }

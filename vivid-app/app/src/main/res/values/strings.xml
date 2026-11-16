@@ -395,4 +395,5 @@
     <string name="viewer_lock">Bloquear controles de reproducción</string>
     <string name="viewer_unlock">Desbloquear controles de reproducción</string>
     <string name="viewer_locked">Controles bloqueados · toca el candado para desbloquear</string>
+    <string name="profile_unsave">Eliminar de guardados</string>
 </resources>

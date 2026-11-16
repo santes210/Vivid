@@ -12,8 +12,8 @@ data class ProfileUiState(
     val bio: String = "",
     val avatarUrl: String = "",
     val avatarBase64: String = "",
-    val postsCount: Int = 0,
-    val reelsCount: Int = 0,
+    val postsCount: Int? = null,
+    val reelsCount: Int? = null,
     val followersCount: Int = 0,
     val followingCount: Int = 0,
     val isPrivate: Boolean = false,
@@ -38,5 +38,12 @@ data class ProfilePost(
     val caption: String = "",
     val timestamp: Long = 0L,
     val username: String = "",
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val collection: String = "posts",
+    val visibility: String = "public"
 )
+
+/** Unknown/denied/failed loads are not a count of zero. Never use legacy counters. */
+internal fun profileContentCount(
+    content: List<ProfilePost>, loaded: Boolean, failed: Boolean, canView: Boolean
+): Int? = if (loaded && !failed && canView) content.distinctBy { it.collection to it.id }.size else null
