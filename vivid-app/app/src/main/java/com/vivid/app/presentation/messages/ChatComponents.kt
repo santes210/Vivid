@@ -196,6 +196,14 @@ fun MessageBubble(
                             "voice" -> VoiceMessageContent(message = message, isMine = isMine, onResignVoice = onResignVoice, playbackAllowed = !pauseMedia)
                             "story_reply" -> StoryReplyContent(message = message, isMine = isMine)
                             else -> Column {
+                                val sharedNote = remember(message.text) {
+                                    com.vivid.app.presentation.reels.ShareSelection.noteFromMessage(message.text)
+                                }
+                                if (sharedNote != null && (sharedReelId != null || sharedPostId != null)) {
+                                    Text(com.vivid.app.util.SettingsManager.filterOffensiveWords(sharedNote),
+                                        color = contentColor, style = MaterialTheme.typography.bodyLarge)
+                                    Spacer(Modifier.height(8.dp))
+                                }
                                 if (sharedReelId != null) {
                                     FilledTonalButton(onClick = { onOpenReel(sharedReelId) }, shape = VividExpressiveShapes.MediumCard) {
                                         Icon(Icons.Default.PlayCircle, null, modifier = Modifier.size(36.dp))

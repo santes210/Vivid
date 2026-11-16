@@ -31,6 +31,12 @@ class ReelLinksTest {
         assertNull(ReelLinks.postFromMessage("vivid://post/../users"))
     }
 
+    @Test fun `a link in the optional note cannot replace the attached content`() {
+        val message = "Compare with\nvivid://reel/old\n\nShared:\nvivid://post/new"
+        assertNull(ReelLinks.fromMessage(message))
+        assertEquals("new", ReelLinks.postFromMessage(message))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `cannot create a path traversal link`() { ReelLinks.create("../users") }
 }

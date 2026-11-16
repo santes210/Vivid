@@ -1,6 +1,17 @@
 package com.vivid.app.presentation.messages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -71,6 +82,7 @@ private fun ChatReelError(onRetry: () -> Unit) {
 @Composable
 private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val animationsEnabled = com.vivid.app.theme.LocalVividAnimationsEnabled.current
     var playRequested by remember { mutableStateOf(true) }
     var showShare by remember { mutableStateOf(false) }
     var speed by remember { mutableFloatStateOf(1f) }
@@ -78,72 +90,135 @@ private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
     var repeat by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
-    // Opening the viewer is an explicit play action, even with data saver enabled.
+    var controlsVisible by remember { mutableStateOf(true) }
+    var locked by remember { mutableStateOf(false) }
+    var fill by remember { mutableStateOf(false) }
+    var position by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
+    var seekable by remember { mutableStateOf(false) }
+    var actuallyPlaying by remember { mutableStateOf(false) }
+    var ended by remember { mutableStateOf(false) }
+    var seekFeedback by remember { mutableStateOf<String?>(null) }
+    var feedbackSequence by remember { mutableIntStateOf(0) }
+    val backwardLabel = stringResource(R.string.viewer_back_ten)
+    val forwardLabel = stringResource(R.string.viewer_forward_ten)
     val player = rememberPooledExoPlayer(
         mediaUrl = video.url,
         playWhenReady = playRequested && !failed && !showShare,
         repeatMode = if (repeat) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF,
         volume = if (muted) 0f else 1f
     )
+    fun seek(target: Long) {
+        if (player.isCurrentMediaItemSeekable && player.duration > 0) {
+            player.seekTo(target.coerceIn(0, player.duration))
+            position = target.coerceIn(0, player.duration)
+        }
+    }
     LaunchedEffect(player, speed) { player.setPlaybackSpeed(speed) }
+    LaunchedEffect(feedbackSequence) {
+        if (seekFeedback != null) { delay(800); seekFeedback = null }
+    }
+    // Poll only the visible controls while foregrounded, never in the background.
+    LaunchedEffect(player, lifecycleOwner, controlsVisible, locked) {
+        if (!controlsVisible || locked) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (isActive) {
+                position = player.currentPosition.coerceAtLeast(0)
+                duration = player.duration.coerceAtLeast(0)
+                seekable = player.isCurrentMediaItemSeekable
+                delay(250)
+            }
+        }
+    }
     if (showShare) {
         com.vivid.app.presentation.reels.ContentShareSheet(
             content = com.vivid.app.presentation.reels.ShareContent(
                 "vivid://${if (video.collection == "posts") "post" else "reel"}/${video.id}", video.caption),
             speed = speed, onSpeed = { speed = it }, muted = muted, onMuted = { muted = it },
             repeat = repeat, onRepeat = { repeat = it },
-            onRestart = { player.seekTo(0); playRequested = true; showShare = false },
+            onRestart = { seek(0); playRequested = true; showShare = false },
             onDismiss = { showShare = false }
         )
     }
-    val sheetOpen = rememberUpdatedState(showShare)
-    DisposableEffect(player, lifecycleOwner) {
+    DisposableEffect(player) {
         val listener = object : Player.Listener {
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!sheetOpen.value && lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) &&
-                    reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
-                    playRequested = playWhenReady
-                }
-            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { actuallyPlaying = isPlaying }
             override fun onPlayerError(error: PlaybackException) { failed = true; buffering = false }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 buffering = playbackState == Player.STATE_BUFFERING
+                ended = playbackState == Player.STATE_ENDED
             }
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    if (failed) {
-        ChatReelError(onRetry)
-    } else {
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
-                AndroidView(
-                    factory = { context -> PlayerView(context).apply {
-                        this.player = player
-                        useController = true
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        setShowNextButton(false)
-                        setShowPreviousButton(false)
-                    } },
-                    update = { it.player = player },
-                    onRelease = { it.player = null },
-                    modifier = Modifier.fillMaxSize()
+    if (failed) ChatReelError(onRetry)
+    else AdaptiveVideoLayout(showControls = controlsVisible && !locked, media = { mediaModifier ->
+        Box(mediaModifier.clip(MaterialTheme.shapes.extraLarge).background(Color.Black)) {
+            AndroidView(
+                factory = { context -> PlayerView(context).apply {
+                    this.player = player
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                } },
+                update = {
+                    it.player = player
+                    it.resizeMode = if (fill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                },
+                onRelease = { it.player = null }, modifier = Modifier.fillMaxSize()
+            )
+            Box(Modifier.matchParentSize().pointerInput(player, locked, backwardLabel, forwardLabel) {
+                detectTapGestures(
+                    onTap = { if (!locked) controlsVisible = !controlsVisible },
+                    onDoubleTap = { offset ->
+                        if (!locked && player.isCurrentMediaItemSeekable && player.duration > 0) {
+                            val forward = offset.x > size.width / 2
+                            seek(VideoControlMath.seekTarget(player.currentPosition, player.duration, forward))
+                            seekFeedback = if (forward) forwardLabel else backwardLabel
+                            feedbackSequence++
+                        }
+                    }
                 )
-                if (buffering) CircularProgressIndicator(Modifier.align(Alignment.Center))
-            }
-            Text("@${video.username}", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleSmall)
-            if (video.caption.isNotBlank()) Text(video.caption, Modifier.padding(horizontal = 16.dp), maxLines = 2, style = MaterialTheme.typography.bodySmall)
-            LazyRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { AssistChip(onClick = { showShare = true }, label = { Text(stringResource(R.string.content_share_title)) }) }
-                item { FilterChip(selected = muted, onClick = { muted = !muted }, label = { Text(stringResource(R.string.reel_tools_mute)) }) }
-                item { FilterChip(selected = repeat, onClick = { repeat = !repeat }, label = { Text(stringResource(R.string.reel_tools_repeat)) }) }
-                items(listOf(0.5f, 1f, 1.5f, 2f)) { value ->
-                    FilterChip(selected = speed == value, onClick = { speed = value }, label = { Text("${value}×") })
+            })
+            if (buffering) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.BottomCenter))
+            Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!locked) FilledTonalIconButton(onClick = { controlsVisible = !controlsVisible }) {
+                    Icon(if (controlsVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        stringResource(if (controlsVisible) R.string.viewer_hide_controls else R.string.viewer_show_controls))
+                }
+                FilledTonalIconButton(onClick = { locked = !locked; if (!locked) controlsVisible = true }) {
+                    Icon(if (locked) Icons.Default.LockOpen else Icons.Default.Lock,
+                        stringResource(if (locked) R.string.viewer_unlock else R.string.viewer_lock))
                 }
             }
+            AnimatedVisibility(visible = seekFeedback != null, modifier = Modifier.align(Alignment.Center),
+                enter = if (animationsEnabled) fadeIn() else EnterTransition.None,
+                exit = if (animationsEnabled) fadeOut() else ExitTransition.None) {
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.94f),
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface) {
+                    Text(seekFeedback.orEmpty(), Modifier.padding(20.dp), style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            if (locked) Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Text(stringResource(R.string.viewer_locked), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
+            }
         }
-    }
+    }, controls = {
+            Column(Modifier.padding(horizontal = 8.dp)) {
+                Text("@${video.username}", style = MaterialTheme.typography.titleSmall)
+                if (video.caption.isNotBlank()) Text(video.caption, maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ExpressiveVideoControls(position, duration, seekable, actuallyPlaying || (playRequested && buffering), ended,
+                muted, repeat, speed, fill, onSeek = { seek(it) },
+                onPlayPause = {
+                    if (ended) { seek(0); playRequested = true; player.play() }
+                    else playRequested = !playRequested
+                }, onMuted = { muted = !muted }, onRepeat = { repeat = !repeat },
+                onSpeed = { speed = it }, onFill = { fill = !fill }, onShare = { showShare = true })
+    })
 }
 
 @Composable

@@ -9,8 +9,13 @@ object ReelLinks {
         return "vivid://reel/$id"
     }
     fun parse(link: String): String? = linkPattern.matchEntire(link)?.groupValues?.get(1)
-    fun postFromMessage(text: String): String? = text.lineSequence().map { it.trim() }
-        .mapNotNull { Regex("vivid://post/([A-Za-z0-9_-]{1,128})").matchEntire(it)?.groupValues?.get(1) }.firstOrNull()
-    fun fromMessage(text: String): String? = text.lineSequence().map { it.trim() }
-        .mapNotNull(::parse).firstOrNull()
+    private val messageLinkPattern = Regex("vivid://(reel|post)/([A-Za-z0-9_-]{1,128})")
+    // Optional notes precede the actual shared reference. A link inside the
+    // note must not replace the final attached post/reel card.
+    private fun messageReference(text: String): MatchResult? = text.lineSequence()
+        .mapNotNull { messageLinkPattern.matchEntire(it.trim()) }.lastOrNull()
+    fun postFromMessage(text: String): String? = messageReference(text)
+        ?.takeIf { it.groupValues[1] == "post" }?.groupValues?.get(2)
+    fun fromMessage(text: String): String? = messageReference(text)
+        ?.takeIf { it.groupValues[1] == "reel" }?.groupValues?.get(2)
 }
