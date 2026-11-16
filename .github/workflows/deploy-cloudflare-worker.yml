@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run Worker tests before deployment
+        run: npm test
+
       - name: Validate required secrets
         shell: bash
         env:
