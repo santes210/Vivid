@@ -84,13 +84,10 @@ struct SettingsView: View {
         } message: {
             Text("¿Seguro que quieres cerrar sesión?")
         }
-        .alert("Eliminar cuenta", isPresented: $showDeleteConfirmation) {
-            Button("Cancelar", role: .cancel) {}
-            Button("Eliminar", role: .destructive) {
-                // Eliminar cuenta
-            }
+        .alert("Eliminación de cuenta no disponible", isPresented: $showDeleteConfirmation) {
+            Button("Entendido", role: .cancel) {}
         } message: {
-            Text("Esta acción es irreversible. Se eliminarán todos tus datos, publicaciones y mensajes.")
+            Text("Esta versión todavía no permite eliminar la cuenta. No se ha eliminado tu cuenta ni ninguno de tus datos.")
         }
     }
 }

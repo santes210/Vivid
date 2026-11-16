@@ -10,6 +10,7 @@ import com.vivid.app.data.local.entity.PostEntity
 import com.vivid.app.data.storage.StorageProvider
 import com.vivid.app.domain.repository.FollowActionResult
 import com.vivid.app.domain.repository.FollowRepository
+import com.vivid.app.domain.repository.PostCommentRepository
 import com.vivid.app.util.PushSender
 import com.vivid.app.util.Hashtags
 import com.vivid.app.util.TextFold
@@ -27,6 +28,7 @@ class FeedViewModel @Inject constructor(
     private val postDao: PostDao,
     private val firestore: FirebaseFirestore,
     private val followRepository: FollowRepository,
+    private val commentRepository: PostCommentRepository,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -147,11 +149,8 @@ class FeedViewModel @Inject constructor(
                 if (!parentId.isNullOrBlank()) commentData["parentId"] = parentId
                 if (replyToUsername.isNotBlank()) commentData["replyToUsername"] = replyToUsername
 
-                val createdComment = firestore.collection("posts").document(postId)
-                    .collection("comments").add(commentData).await()
-                firestore.collection("posts").document(postId)
-                    .update("commentsCount", FieldValue.increment(1)).await()
-                PushSender.postComment(postId, createdComment.id)
+                val commentId = commentRepository.add(postId, commentData)
+                PushSender.postComment(postId, commentId)
             }.onSuccess { onSuccess() }
                 .onFailure { onFailure(it as? Exception ?: Exception(it)) }
         }
@@ -190,10 +189,7 @@ class FeedViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             runCatching {
-                firestore.collection("posts").document(postId)
-                    .collection("comments").document(commentId).delete().await()
-                firestore.collection("posts").document(postId)
-                    .update("commentsCount", FieldValue.increment(-1)).await()
+                commentRepository.delete(postId, commentId)
             }.onSuccess { onComplete(null) }
                 .onFailure { onComplete(it as? Exception ?: Exception(it)) }
         }

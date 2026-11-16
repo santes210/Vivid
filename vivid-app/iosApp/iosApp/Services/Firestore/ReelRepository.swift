@@ -57,8 +57,15 @@ final class ReelRepository {
         let reel = db.collection("reels").document(reelId)
         let like = reel.collection("likes").document(uid)
         try await FirebaseAsync.write { completion in
-            db.runTransaction({ transaction, _ in
-                let liked = (try? transaction.getDocument(like).exists) ?? false
+            db.runTransaction({ transaction, errorPointer in
+                let liked: Bool
+                do {
+                    liked = try transaction.getDocument(like).exists
+                } catch {
+                    // A failed read is not evidence that the like is absent.
+                    errorPointer?.pointee = error as NSError
+                    return nil
+                }
                 if liked { transaction.deleteDocument(like); transaction.updateData(["likes": FieldValue.increment(Int64(-1))], forDocument: reel) }
                 else { transaction.setData(["userId": uid], forDocument: like); transaction.updateData(["likes": FieldValue.increment(Int64(1))], forDocument: reel) }
                 return nil
