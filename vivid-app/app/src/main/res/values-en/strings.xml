@@ -291,4 +291,22 @@
     <string name="audience_friends">Friends only</string>
     <string name="audience_public_hint">Anyone can see it, including Explore</string>
     <string name="audience_friends_hint">Only people who follow you can see it</string>
+
+    <!-- Manual account-deletion request; no automatic purge. -->
+    <string name="account_deletion_group">Account management</string>
+    <string name="account_deletion_title">Delete account</string>
+    <string name="account_deletion_subtitle">Request deletion by email · manual review</string>
+    <string name="account_deletion_request_title">Request account deletion</string>
+    <string name="account_deletion_explanation">Automatic deletion is not available yet. You can request a manual review from support. Opening your email app does not send the request: you must send it yourself. Pressing this button will not delete your account or data. Support must verify your identity before making changes.</string>
+    <string name="account_deletion_contact">Support email: %1$s</string>
+    <string name="account_deletion_sign_in">Sign in to include your account details in the request.</string>
+    <string name="account_deletion_no_email">Could not open an email app. Copy the request and send it to the address shown using webmail.</string>
+    <string name="account_deletion_copy">Copy request</string>
+    <string name="account_deletion_open_email">Open email</string>
+    <string name="account_deletion_cancel">Cancel</string>
+    <string name="account_deletion_subject">Vivid account deletion request</string>
+    <string name="account_deletion_body">I request deletion of my Vivid account and a review of its associated data.\n\nUID: %1$s\n\nPlease provide the steps to verify my identity and confirm when the process is complete. No passwords or access codes are included.</string>
+    <string name="account_deletion_copied">Request copied. Send it to support using your email; it has not been sent yet.</string>
+    <string name="account_deletion_opened">Complete the submission in your email app. Your account has not been deleted.</string>
+    <string name="account_settings_summary">Password, personal details and deletion request</string>
 </resources>

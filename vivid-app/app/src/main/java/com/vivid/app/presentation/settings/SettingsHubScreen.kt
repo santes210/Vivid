@@ -61,7 +61,7 @@ fun SettingsHubScreen(
                 VividSettingsGroup {
                     VividSettingsItem(
                         title = "Cuenta",
-                        subtitle = "Contraseña, datos personales y verificación",
+                        subtitle = stringResource(R.string.account_settings_summary),
                         icon = Icons.Outlined.Person,
                         onClick = onNavigateCuenta,
                         showDivider = true

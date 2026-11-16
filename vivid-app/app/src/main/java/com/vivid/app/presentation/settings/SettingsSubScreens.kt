@@ -146,6 +146,39 @@ fun CuentaSettingsScreen(
                 }
             }
             item {
+                AccountDeletionRequest(
+                    signedIn = user != null,
+                    onOpenEmail = {
+                        val currentUser = auth.currentUser
+                        if (currentUser == null) false
+                        else {
+                            val opened = composeEmail(
+                                context,
+                                ACCOUNT_SUPPORT_EMAIL,
+                                context.getString(com.vivid.app.R.string.account_deletion_subject),
+                                context.getString(com.vivid.app.R.string.account_deletion_body, currentUser.uid)
+                            )
+                            if (opened) scope.launch {
+                                onShowSnackbar(context.getString(com.vivid.app.R.string.account_deletion_opened))
+                            }
+                            opened
+                        }
+                    },
+                    onCopyRequest = {
+                        auth.currentUser?.let { currentUser ->
+                            clipboard.setText(AnnotatedString(
+                                context.getString(com.vivid.app.R.string.account_deletion_contact, ACCOUNT_SUPPORT_EMAIL) +
+                                    "\n\n" + context.getString(com.vivid.app.R.string.account_deletion_subject) +
+                                    "\n\n" + context.getString(com.vivid.app.R.string.account_deletion_body, currentUser.uid)
+                            ))
+                            scope.launch {
+                                onShowSnackbar(context.getString(com.vivid.app.R.string.account_deletion_copied))
+                            }
+                        }
+                    }
+                )
+            }
+            item {
                 VividSettingsGroup(title = "Datos rápidos") {
                     VividSettingsItem(
                         title = "Copiar usuario",
