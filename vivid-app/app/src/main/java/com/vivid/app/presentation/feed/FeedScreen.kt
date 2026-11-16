@@ -68,28 +68,38 @@ fun FeedScreen(
     val currentUserId = feedViewModel.currentUserId
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarHostState = remember(currentUserId) { SnackbarHostState() }
 
-    var posts by remember { mutableStateOf<List<PostData>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isError by remember { mutableStateOf(false) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var retryKey by remember { mutableStateOf(0) }
-    var lastVisibleDoc by remember { mutableStateOf<DocumentSnapshot?>(null) }
-    var isLoadingMore by remember { mutableStateOf(false) }
-    var hasMore by remember { mutableStateOf(true) }
+    val returning = remember(currentUserId) { feedViewModel.returnState?.takeIf { it.userId == currentUserId } }
+    var posts by remember(currentUserId) { mutableStateOf(returning?.posts.orEmpty()) }
+    var isLoading by remember(currentUserId) { mutableStateOf(true) }
+    var isError by remember(currentUserId) { mutableStateOf(false) }
+    var isRefreshing by remember(currentUserId) { mutableStateOf(false) }
+    var retryKey by remember(currentUserId) { mutableStateOf(0) }
+    var lastVisibleDoc by remember(currentUserId) { mutableStateOf(returning?.cursor) }
+    var isLoadingMore by remember(currentUserId) { mutableStateOf(false) }
+    var paginationFailed by remember(currentUserId) { mutableStateOf(false) }
+    var paginationRetry by remember(currentUserId) { mutableIntStateOf(0) }
+    var paginatedIds by remember(currentUserId) { mutableStateOf(returning?.paginatedIds.orEmpty()) }
+    var hasMore by remember(currentUserId) { mutableStateOf(returning?.hasMore ?: true) }
 
-    var likedPostIds by remember { mutableStateOf<Set<String>?>(null) }
-    var followingUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var pendingFollowUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var savedPostIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var refreshAttemptedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var resignedImageUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var resignedMusicUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var resignedVideoUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var stalePosts by remember { mutableStateOf<List<PostData>>(emptyList()) }
-    var lastCacheWriteAt by remember { mutableLongStateOf(0L) }
+    var likedPostIds by remember(currentUserId) { mutableStateOf<Set<String>?>(null) }
+    var followingUserIds by remember(currentUserId) { mutableStateOf(returning?.following.orEmpty()) }
+    var pendingFollowUserIds by remember(currentUserId) { mutableStateOf<Set<String>>(emptySet()) }
+    var savedPostIds by remember(currentUserId) { mutableStateOf<Set<String>>(emptySet()) }
+    var refreshAttemptedIds by remember(currentUserId) { mutableStateOf<Set<String>>(emptySet()) }
+    var resignedImageUrls by remember(currentUserId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var resignedMusicUrls by remember(currentUserId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var resignedVideoUrls by remember(currentUserId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var stalePosts by remember(currentUserId) { mutableStateOf<List<PostData>>(emptyList()) }
+    var lastCacheWriteAt by remember(currentUserId) { mutableLongStateOf(0L) }
 
+    var queryAudience by remember(currentUserId) { mutableStateOf(returning?.let { it.following to it.blocked }) }
+    SideEffect {
+        if (blockedUsersState.isLoaded) feedViewModel.returnState = FeedReturnState(
+            currentUserId, posts, paginatedIds, lastVisibleDoc, hasMore, followingUserIds, blockedUserIds
+        )
+    }
     val listState = rememberLazyListState()
     val postIds = remember(posts) { posts.mapTo(hashSetOf()) { it.id } }
     val firstPostVisible by remember(postIds, listState) {
@@ -97,32 +107,32 @@ fun FeedScreen(
     }
     com.vivid.app.util.MeasureFirstFeedPost(firstPostVisible)
 
-    var followRequestsCount by remember { mutableIntStateOf(0) }
-    var selectedPostForComments by remember { mutableStateOf<PostData?>(null) }
-    var selectedPostViewerId by remember { mutableStateOf<String?>(null) }
-    var selectedPostForDetails by remember { mutableStateOf<PostData?>(null) }
-    var selectedPostForEdit by remember { mutableStateOf<PostData?>(null) }
-    var selectedPostForDelete by remember { mutableStateOf<PostData?>(null) }
-    var showReportDialog by remember { mutableStateOf(false) }
-    var reportPostId by remember { mutableStateOf("") }
-    var reportPostUser by remember { mutableStateOf("") }
-    var reportPostCaption by remember { mutableStateOf("") }
-    var reportReason by remember { mutableStateOf(context.getString(R.string.report_reason_inappropriate)) }
+    var followRequestsCount by remember(currentUserId) { mutableIntStateOf(0) }
+    var selectedPostForComments by remember(currentUserId) { mutableStateOf<PostData?>(null) }
+    var selectedPostViewerId by remember(currentUserId) { mutableStateOf<String?>(null) }
+    var selectedPostForDetails by remember(currentUserId) { mutableStateOf<PostData?>(null) }
+    var selectedPostForEdit by remember(currentUserId) { mutableStateOf<PostData?>(null) }
+    var selectedPostForDelete by remember(currentUserId) { mutableStateOf<PostData?>(null) }
+    var showReportDialog by remember(currentUserId) { mutableStateOf(false) }
+    var reportPostId by remember(currentUserId) { mutableStateOf("") }
+    var reportPostUser by remember(currentUserId) { mutableStateOf("") }
+    var reportPostCaption by remember(currentUserId) { mutableStateOf("") }
+    var reportReason by remember(currentUserId) { mutableStateOf(context.getString(R.string.report_reason_inappropriate)) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    val displayPosts = remember(posts, savedPostIds) {
+    val displayPosts = remember(posts, savedPostIds, likedPostIds) {
         posts.map { post ->
             val saved = post.id in savedPostIds
-            if (post.isSaved == saved) post else post.copy(isSaved = saved)
+            post.copy(isSaved = saved, isLiked = likedPostIds?.contains(post.id) ?: post.isLiked)
         }
     }
 
-    val onOpenPost = remember { { post: PostData -> selectedPostViewerId = post.id } }
-    val onOpenComments = remember { { post: PostData -> selectedPostForComments = post } }
-    val onOpenDetails = remember { { post: PostData -> selectedPostForDetails = post } }
-    val onEditPost = remember { { post: PostData -> selectedPostForEdit = post } }
-    val onDeletePost = remember { { post: PostData -> selectedPostForDelete = post } }
-    val onReportPost = remember {
+    val onOpenPost = remember(currentUserId) { { post: PostData -> com.vivid.app.util.ExoPlayerPool.pauseAll(); selectedPostViewerId = post.id } }
+    val onOpenComments = remember(currentUserId) { { post: PostData -> com.vivid.app.util.ExoPlayerPool.pauseAll(); selectedPostForComments = post } }
+    val onOpenDetails = remember(currentUserId) { { post: PostData -> selectedPostForDetails = post } }
+    val onEditPost = remember(currentUserId) { { post: PostData -> selectedPostForEdit = post } }
+    val onDeletePost = remember(currentUserId) { { post: PostData -> selectedPostForDelete = post } }
+    val onReportPost = remember(currentUserId) {
         { pid: String, user: String, cap: String ->
             showReportDialog = true
             reportPostId = pid
@@ -130,7 +140,7 @@ fun FeedScreen(
             reportPostCaption = cap
         }
     }
-    val onToggleFollow = remember {
+    val onToggleFollow = remember(currentUserId) {
         { targetUserId: String ->
             feedViewModel.toggleFollowUser(targetUserId) { action ->
                 val msg = when (action) {
@@ -144,16 +154,16 @@ fun FeedScreen(
             }
         }
     }
-    val onToggleSave = remember {
+    val onToggleSave = remember(currentUserId) {
         { post: PostData ->
             val shouldSave = !post.isSaved
-            feedViewModel.toggleSavePost(post.id, currentUserId, shouldSave) { _, _ ->
-                val msg = if (shouldSave) context.getString(R.string.feed_post_saved) else context.getString(R.string.feed_post_unsaved)
+            feedViewModel.toggleSavePost(post.id, currentUserId, shouldSave) { success, _ ->
+                val msg = if (!success) context.getString(R.string.feed_save_failed) else if (shouldSave) context.getString(R.string.feed_post_saved) else context.getString(R.string.feed_post_unsaved)
                 scope.launch { snackbarHostState.showSnackbar(msg) }
             }
         }
     }
-    val onToggleLike = remember {
+    val onToggleLike = remember(currentUserId) {
         { target: PostData ->
             val newLiked = !target.isLiked
             posts = posts.map {
@@ -170,7 +180,7 @@ fun FeedScreen(
             )
         }
     }
-    val onImageUrlExpired = remember {
+    val onImageUrlExpired = remember(currentUserId) {
         { post: PostData ->
             val key = post.storageKey
             if (key.isNotBlank() && post.id !in refreshAttemptedIds) {
@@ -185,7 +195,7 @@ fun FeedScreen(
             }
         }
     }
-    val onMusicUrlExpired = remember {
+    val onMusicUrlExpired = remember(currentUserId) {
         { post: PostData ->
             val mKey = post.musicStorageKey
             if (mKey.isNotBlank()) {
@@ -199,7 +209,7 @@ fun FeedScreen(
             }
         }
     }
-    val onVideoUrlExpired = remember {
+    val onVideoUrlExpired = remember(currentUserId) {
         { post: PostData ->
             val vKey = post.storageKey
             if (vKey.isNotBlank()) {
@@ -213,7 +223,7 @@ fun FeedScreen(
             }
         }
     }
-    var sharedPost by remember { mutableStateOf<PostData?>(null) }
+    var sharedPost by remember(currentUserId) { mutableStateOf<PostData?>(null) }
     val onSharePost: (PostData) -> Unit = {
         com.vivid.app.util.ExoPlayerPool.pauseAll()
         sharedPost = it
@@ -222,10 +232,8 @@ fun FeedScreen(
 
     // ── Initial load: single likes query + real-time listener for posts ──
     LaunchedEffect(currentUserId) {
-        isLoading = true
         val likedIds = feedViewModel.fetchLikedPostIds(currentUserId)
         likedPostIds = likedIds
-        isLoading = false
     }
 
     // ── Room cache (offline / fast startup) ──
@@ -237,7 +245,7 @@ fun FeedScreen(
                     resignedImageUrls = cached.filter { it.imageUrl.isNotBlank() }.associate { it.id to it.imageUrl }
                     resignedMusicUrls = cached.filter { it.musicUrl.isNotBlank() }.associate { it.id to it.musicUrl }
                     resignedVideoUrls = cached.filter { it.videoUrl.isNotBlank() }.associate { it.id to it.videoUrl }
-                    if (feedViewModel.isPostCacheFresh()) {
+                    if (feedViewModel.isPostCacheFresh() && posts.isEmpty()) {
                         posts = feedViewModel.cachedPostsToData(cached)
                     } else {
                         stalePosts = feedViewModel.cachedPostsToData(cached)
@@ -253,15 +261,27 @@ fun FeedScreen(
     }
 
     // ── Firestore snapshot listeners for feed ──
-    DisposableEffect(currentUserId, likedPostIds, blockedUserIds, blockedUsersState.isLoaded, followingUserIds, retryKey) {
+    DisposableEffect(currentUserId, blockedUserIds, blockedUsersState.isLoaded, followingUserIds, retryKey) {
         if (currentUserId.isBlank() || !blockedUsersState.isLoaded) {
             onDispose { }
         } else {
-            isLoading = true
+            isLoading = posts.isEmpty()
             isError = false
+            val audience = followingUserIds to blockedUserIds
+            if (queryAudience != audience || retryKey > 0) {
+                paginatedIds = emptySet()
+                lastVisibleDoc = null
+                hasMore = true
+            }
+            queryAudience = audience
+            paginationFailed = false
             val db = FirebaseFirestore.getInstance()
             val registrations = mutableListOf<ListenerRegistration>()
             val pages = mutableMapOf<String, List<DocumentSnapshot>>()
+            val privateGroups = (followingUserIds + currentUserId).chunked(30)
+            val pendingSources = (listOf("public") + privateGroups.indices.map { "private_$it" }).toMutableSet()
+            val failedSources = mutableSetOf<String>()
+            var active = true
 
             // Watchdog de la carga inicial: si Firestore no entrega nada en
             // 15 s, se pasa al estado de error con reintento. Se cancela en
@@ -269,10 +289,10 @@ fun FeedScreen(
             var initialLoadTimeout: Job? = null
 
             fun publishVisiblePosts() {
-                initialLoadTimeout?.cancel()
+                if (pendingSources.isEmpty()) initialLoadTimeout?.cancel()
                 val documents = pages.values.flatten().distinctBy { it.id }
                     .sortedByDescending { it.getLong("timestamp") ?: 0L }
-                posts = documents.mapNotNull { doc ->
+                val headPosts = documents.mapNotNull { doc ->
                     try {
                         val data = doc.data ?: return@mapNotNull null
                         val authorId = data["userId"] as? String ?: ""
@@ -312,7 +332,10 @@ fun FeedScreen(
                         )
                     } catch (_: Exception) { null }
                 }
-                isLoading = false
+                posts = mergeFeedPages(headPosts, posts.filter { it.id in paginatedIds })
+                isLoading = pendingSources.isNotEmpty() && posts.isEmpty()
+                isRefreshing = isRefreshing && pendingSources.isNotEmpty()
+                isError = failedSources.isNotEmpty()
 
                 if (posts.isNotEmpty()) {
                     val nowMs = System.currentTimeMillis()
@@ -331,39 +354,54 @@ fun FeedScreen(
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .limit(20)
                 .addSnapshotListener { snap, err ->
+                    if (!active) return@addSnapshotListener
+                    pendingSources.remove("public")
                     if (snap != null) {
+                        failedSources.remove("public")
                         pages["public"] = snap.documents
-                        lastVisibleDoc = snap.documents.lastOrNull()
-                        hasMore = snap.size() >= 20
+                        if (paginatedIds.isEmpty()) {
+                            lastVisibleDoc = snap.documents.lastOrNull()
+                            hasMore = snap.size() >= 20
+                        }
                         publishVisiblePosts()
                         snap.documentChanges.forEach { change ->
                             if (change.type == DocumentChange.Type.REMOVED) {
                                 scope.launch { feedViewModel.deleteCachedPost(change.document.id) }
                             }
                         }
-                    } else if (err != null && pages.isEmpty()) {
-                        CrashReporter.recordNonFatal(TAG, err, "Listener del feed falló en la carga inicial")
-                        isLoading = false
-                        if (posts.isEmpty() && stalePosts.isNotEmpty()) posts = stalePosts
-                        isError = posts.isEmpty()
+                    } else if (err != null) {
+                        failedSources.add("public")
+                        CrashReporter.recordNonFatal(TAG, err, "Feed public query failed")
+                        isLoading = pendingSources.isNotEmpty() && posts.isEmpty()
+                        isRefreshing = isRefreshing && pendingSources.isNotEmpty()
+                        isError = true
                     }
                 }
 
-            (followingUserIds + currentUserId).chunked(30).forEachIndexed { index, privateAuthors ->
+            privateGroups.forEachIndexed { index, privateAuthors ->
                 registrations += db.collection("posts")
                     .whereIn("userId", privateAuthors)
                     .whereEqualTo("isPrivate", true)
                     .orderBy("timestamp", Query.Direction.DESCENDING)
                     .limit(20)
-                    .addSnapshotListener { snap, _ ->
+                    .addSnapshotListener { snap, error ->
+                        if (!active) return@addSnapshotListener
+                        val source = "private_$index"
+                        pendingSources.remove(source)
                         if (snap != null) {
-                            pages["private_$index"] = snap.documents
+                            failedSources.remove(source)
+                            pages[source] = snap.documents
                             publishVisiblePosts()
                             snap.documentChanges.forEach { change ->
                                 if (change.type == DocumentChange.Type.REMOVED) {
                                     scope.launch { feedViewModel.deleteCachedPost(change.document.id) }
                                 }
                             }
+                        } else if (error != null) {
+                            failedSources.add(source)
+                            isLoading = pendingSources.isNotEmpty() && posts.isEmpty()
+                            isRefreshing = isRefreshing && pendingSources.isNotEmpty()
+                            isError = true
                         }
                     }
             }
@@ -372,14 +410,18 @@ fun FeedScreen(
             // dispara si ninguna snapshot llegó en el tiempo límite.
             initialLoadTimeout = scope.launch {
                 delay(FEED_INITIAL_LOAD_TIMEOUT_MS)
-                if (pages.isEmpty()) {
+                if (pendingSources.isNotEmpty()) {
+                    failedSources.addAll(pendingSources)
+                    pendingSources.clear()
                     isLoading = false
+                    isRefreshing = false
                     if (posts.isEmpty() && stalePosts.isNotEmpty()) posts = stalePosts
-                    isError = posts.isEmpty()
+                    isError = true
                 }
             }
 
             onDispose {
+                active = false
                 initialLoadTimeout?.cancel()
                 registrations.forEach { it.remove() }
             }
@@ -387,7 +429,7 @@ fun FeedScreen(
     }
 
     // ── Pagination ──
-    val shouldLoadMore = remember {
+    val shouldLoadMore = remember(currentUserId) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
@@ -396,24 +438,28 @@ fun FeedScreen(
         }
     }
 
-    LaunchedEffect(shouldLoadMore.value) {
-        if (shouldLoadMore.value && !isLoadingMore && hasMore && lastVisibleDoc != null) {
+    LaunchedEffect(shouldLoadMore.value, paginationRetry, lastVisibleDoc, isLoading,
+        currentUserId, retryKey, blockedUserIds, followingUserIds) {
+        if (shouldLoadMore.value && !isLoading && !paginationFailed && hasMore && lastVisibleDoc != null) {
             isLoadingMore = true
-            val result = runCatching {
-                loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, blockedUserIds, feedViewModel, followingUserIds)
-            }.getOrElse { FeedPageResult(emptyList(), null) }
-            if (result.posts.isNotEmpty()) {
-                val existingIds = posts.map { it.id }.toSet()
-                val newUnique = result.posts.filter { it.id !in existingIds }
-                if (newUnique.isNotEmpty()) {
-                    posts = posts + newUnique
-                    lastVisibleDoc = result.lastDoc
-                    hasMore = result.posts.size >= 20
+            try {
+                val result = kotlinx.coroutines.withTimeout(15_000) {
+                    loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, blockedUserIds, followingUserIds)
                 }
-            } else {
-                hasMore = false
+                val existingIds = posts.mapTo(hashSetOf()) { it.id }
+                paginatedIds = paginatedIds + result.posts.filterNot { it.id in existingIds }.map { it.id }
+                posts = mergeFeedPages(posts, result.posts)
+                lastVisibleDoc = result.lastDoc
+                hasMore = result.hasMore
+            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                paginationFailed = true
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                paginationFailed = true
+            } finally {
+                isLoadingMore = false
             }
-            isLoadingMore = false
         }
     }
 
@@ -427,13 +473,13 @@ fun FeedScreen(
         if (currentUserId.isNotBlank()) {
             val db = FirebaseFirestore.getInstance()
             regRequests = db.collection("users").document(currentUserId)
-                .collection("followRequests").addSnapshotListener { snap, _ -> followRequestsCount = snap?.size() ?: 0 }
+                .collection("followRequests").addSnapshotListener { snap, error -> if (error == null && snap != null) followRequestsCount = snap.size() }
             regFollowing = db.collection("users").document(currentUserId)
-                .collection("following").addSnapshotListener { snap, _ -> followingUserIds = snap?.documents?.map { it.id }?.toSet().orEmpty() }
+                .collection("following").addSnapshotListener { snap, error -> if (error == null && snap != null) followingUserIds = snap.documents.map { it.id }.toSet() }
             regPending = db.collection("users").document(currentUserId)
-                .collection("sentFollowRequests").addSnapshotListener { snap, _ -> pendingFollowUserIds = snap?.documents?.map { it.id }?.toSet().orEmpty() }
+                .collection("sentFollowRequests").addSnapshotListener { snap, error -> if (error == null && snap != null) pendingFollowUserIds = snap.documents.map { it.id }.toSet() }
             regSaved = db.collection("users").document(currentUserId)
-                .collection("savedPosts").addSnapshotListener { snap, _ -> savedPostIds = snap?.documents?.map { it.id }?.toSet().orEmpty() }
+                .collection("savedPosts").addSnapshotListener { snap, error -> if (error == null && snap != null) savedPostIds = snap.documents.map { it.id }.toSet() }
         }
         onDispose {
             regRequests?.remove(); regFollowing?.remove(); regPending?.remove(); regSaved?.remove()
@@ -473,9 +519,10 @@ fun FeedScreen(
                 onRefresh = {
                     scope.launch {
                         isRefreshing = true
-                        likedPostIds = feedViewModel.fetchLikedPostIds(currentUserId)
-                        delay(650)
-                        isRefreshing = false
+                        likedPostIds = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                            feedViewModel.fetchLikedPostIds(currentUserId)
+                        } ?: likedPostIds
+                        retryKey++
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -493,7 +540,7 @@ fun FeedScreen(
                     }
 
                     when {
-                        isLoading -> {
+                        isLoading && displayPosts.isEmpty() -> {
                             items(3, key = { "skeleton_$it" }) {
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
@@ -504,9 +551,16 @@ fun FeedScreen(
                                 }
                             }
                         }
-                        isError -> { item(key = "error") { FeedErrorState(onRetry = { retryKey++ }) } }
+                        isError && displayPosts.isEmpty() -> { item(key = "error") { FeedErrorState(onRetry = { retryKey++ }) } }
                         displayPosts.isEmpty() -> { item(key = "empty") { FeedEmptyState() } }
                         else -> {
+                            if (isError) {
+                                item(key = "refresh_error") {
+                                    TextButton(onClick = { retryKey++ }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(stringResource(R.string.feed_refresh_failed))
+                                    }
+                                }
+                            }
                             items(displayPosts, key = { it.id }) { post ->
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
@@ -536,6 +590,11 @@ fun FeedScreen(
                                         onVideoUrlExpired = onVideoUrlExpired,
                                         onHashtagClick = onOpenHashtag
                                     )
+                                }
+                            }
+                            if (paginationFailed) {
+                                item(key = "pagination_error") {
+                                    FeedErrorState(onRetry = { paginationFailed = false; paginationRetry++ })
                                 }
                             }
                             if (isLoadingMore) {
@@ -644,7 +703,6 @@ private suspend fun loadMorePostsFromFirebase(
     lastDoc: DocumentSnapshot?,
     likedPostIds: Set<String>?,
     blockedUserIds: Set<String>,
-    feedViewModel: FeedViewModel,
     followingUserIds: Set<String> = emptySet()
 ): FeedPageResult = withContext(Dispatchers.IO) {
     if (lastDoc == null) return@withContext FeedPageResult(emptyList(), null)
@@ -675,7 +733,7 @@ private suspend fun loadMorePostsFromFirebase(
         visiblePosts += mapped
     } while (visiblePosts.size < 20 && sourcePageWasFull)
 
-    FeedPageResult(visiblePosts, cursor)
+    FeedPageResult(visiblePosts, cursor, sourcePageWasFull)
 }
 
 private suspend fun mapPostDoc(

@@ -32,6 +32,8 @@ class FeedViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
+    internal var returnState: FeedReturnState? = null
+
     // Room cache (future offline feature). Firestore→Room loading is
     // on-demand; FeedScreen shows its own live data.
     val posts: StateFlow<List<PostEntity>> = postDao.getAllPosts()
@@ -197,23 +199,29 @@ class FeedViewModel @Inject constructor(
 
     // ── Edit post caption ──
 
-    fun editPostCaption(postId: String, newCaption: String) {
+    fun editPostCaption(postId: String, newCaption: String, onComplete: (Exception?) -> Unit = {}) {
         viewModelScope.launch {
             runCatching {
-                val caption = newCaption.trim()
-                firestore.collection("posts").document(postId)
-                    .update(
-                        mapOf(
-                            "caption" to caption,
-                            // Caption plegado para el buscador inteligente.
-                            "captionFold" to TextFold.fold(caption),
-                            // El caption editado puede ganar o perder hashtags;
-                            // si no se recalculan, el post quedaría en Explorar
-                            // con tags que ya no están en el texto.
-                            "hashtags" to Hashtags.extract(caption)
-                        )
-                    )
-            }
+                kotlinx.coroutines.withTimeout(15_000) {
+                    val caption = newCaption.trim()
+                    firestore.collection("posts").document(postId)
+                        .update(
+                            mapOf(
+                                "caption" to caption,
+                                // Caption plegado para el buscador inteligente.
+                                "captionFold" to TextFold.fold(caption),
+                                // El caption editado puede ganar o perder hashtags;
+                                // si no se recalculan, el post quedaría en Explorar
+                                // con tags que ya no están en el texto.
+                                "hashtags" to Hashtags.extract(caption)
+                            )
+                        ).await()
+                }
+            }.onSuccess { onComplete(null) }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException && it !is kotlinx.coroutines.TimeoutCancellationException) throw it
+                    onComplete(it as? Exception ?: Exception(it))
+                }
         }
     }
 
@@ -253,7 +261,10 @@ class FeedViewModel @Inject constructor(
         shouldSave: Boolean,
         onResult: (Boolean, String?) -> Unit
     ) {
-        if (currentUserId.isBlank() || postId.isBlank()) return
+        if (currentUserId.isBlank() || postId.isBlank()) {
+            onResult(false, "No active session")
+            return
+        }
         viewModelScope.launch {
             runCatching {
                 val savedRef = firestore.collection("users").document(currentUserId)
@@ -266,6 +277,7 @@ class FeedViewModel @Inject constructor(
             }.onSuccess {
                 onResult(true, null)
             }.onFailure { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 onResult(false, e.message)
             }
         }

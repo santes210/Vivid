@@ -103,7 +103,8 @@ fun ProfileScreen(
     var postsFailed by remember(userId, currentUserId) { mutableStateOf(false) }
     var savedFailed by remember(userId, currentUserId) { mutableStateOf(false) }
     var reelsFailed by remember(userId, currentUserId) { mutableStateOf(false) }
-    val canViewContent = isOwnProfile || !profile.isPrivate || profile.isFollowedByCurrentUser
+    val canViewContent = isProfileLoaded && !loadFailed &&
+        (isOwnProfile || !profile.isPrivate || profile.isFollowedByCurrentUser)
 
     LaunchedEffect(userId) {
         if (!isOwnProfile) viewModel.checkFollowStatus(userId)
@@ -141,7 +142,12 @@ fun ProfileScreen(
                         return@addSnapshotListener
                     }
                     loadFailed = false
-                    val data = snapshot?.data.orEmpty()
+                    if (snapshot?.exists() != true) {
+                        isProfileLoaded = true
+                        loadFailed = true
+                        return@addSnapshotListener
+                    }
+                    val data = snapshot.data.orEmpty()
                     profile = ProfileUiState(
                         uid = userId,
                         username = data["username"] as? String ?: "vivid_user",
@@ -307,6 +313,15 @@ fun ProfileScreen(
             }
         }
 
+        // Bound every initial load, including saved-document fetches.
+        mediaJobs += scope.launch {
+            kotlinx.coroutines.delay(15_000)
+            if (!active) return@launch
+            if (!isProfileLoaded) { isProfileLoaded = true; loadFailed = true }
+            if (!postsLoaded) { postsLoaded = true; postsFailed = true }
+            if (!reelsLoaded) { reelsLoaded = true; reelsFailed = true }
+            if (isOwnProfile && !savedLoaded) { savedLoaded = true; savedFailed = true }
+        }
         onDispose {
             active = false
             mediaJobs.forEach { it.cancel() }
@@ -475,7 +490,7 @@ fun ProfileScreen(
         ) {
             // ── Header del perfil (skeleton mientras carga) ──
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                if (isProfileLoaded) {
+                if (isProfileLoaded && !loadFailed) {
                     ProfileHeader(
                         profile = countedProfile, isOwnProfile = isOwnProfile,
                         relationshipState = relationshipState,
@@ -484,7 +499,7 @@ fun ProfileScreen(
                         onToggleFollow = { viewModel.toggleFollow(userId) },
                         onEditProfile = onEditProfile
                     )
-                } else {
+                } else if (!isProfileLoaded) {
                     ProfileHeaderSkeleton()
                 }
             }
@@ -531,17 +546,17 @@ fun ProfileScreen(
             }
 
             // ── Contenido de la pestaña activa ──
-            if (!canViewContent) {
+            if (isProfileLoaded && !loadFailed && !canViewContent) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     PrivateProfileLock(
                         username = profile.username,
                         hasPendingRequest = profile.isFollowRequestPending
                     )
                 }
-            } else if ((loadFailed || activeTabFailed) && currentDisplayList.isEmpty()) {
+            } else if (loadFailed || activeTabFailed) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                     VividErrorState(
-                        title = "No se pudieron cargar los datos del perfil",
+                        title = stringResource(R.string.profile_load_failed),
                         onRetry = {
                             loadFailed = false
                             isProfileLoaded = false
@@ -555,7 +570,7 @@ fun ProfileScreen(
                         }
                     )
                 }
-            } else if (activeTabLoading) {
+            } else if (!isProfileLoaded || activeTabLoading) {
                 items(9) { ProfileGridSkeletonCell() }
             } else if (selectedTabIndex == 2 && savedPosts.isEmpty()) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
