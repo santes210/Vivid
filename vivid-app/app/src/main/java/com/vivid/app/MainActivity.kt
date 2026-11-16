@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
     private var pendingChatId: String? by mutableStateOf(null)
     private var pendingReelId: String? by mutableStateOf(null)
     private var pendingReelSequence by mutableStateOf(0L)
+    private var pendingProfileSequence by mutableStateOf(0L)
     private var pendingProfileUserId: String? by mutableStateOf(null)
     private var pendingPostId: String? by mutableStateOf(null)
     private var pendingShortcutRequest: ShortcutRequest? by mutableStateOf(null)
@@ -146,6 +147,7 @@ class MainActivity : ComponentActivity() {
                             deepLinkReelId = deepLinkReelId,
                             deepLinkReelSequence = pendingReelSequence,
                             deepLinkProfileUserId = deepLinkProfileUserId,
+                            deepLinkProfileSequence = pendingProfileSequence,
                             deepLinkPostId = deepLinkPostId,
                             deepLinkShortcut = deepLinkShortcut
                         )
@@ -185,6 +187,10 @@ class MainActivity : ComponentActivity() {
         // Deep links Material You 3: vivid://post/xxx
         if (intent.action == android.content.Intent.ACTION_VIEW) {
             val data = intent.data
+            com.vivid.app.presentation.profile.ProfileLinks.parse(data?.toString().orEmpty())?.let {
+                pendingProfileUserId = it
+                pendingProfileSequence += 1
+            }
             com.vivid.app.presentation.reels.ReelLinks.parse(data?.toString().orEmpty())?.let {
                 pendingReelId = it
                 pendingReelSequence += 1
@@ -204,6 +210,7 @@ class MainActivity : ComponentActivity() {
         }
         if (intent.getBooleanExtra("openProfile", false)) {
             pendingProfileUserId = intent.getStringExtra("profileUserId")
+            pendingProfileSequence += 1
         }
         if (intent.getBooleanExtra("openPost", false)) {
             pendingPostId = intent.getStringExtra("postId")
@@ -227,6 +234,7 @@ fun VividApp(
     deepLinkChatId: String? = null,
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
+    deepLinkProfileSequence: Long = 0L,
     deepLinkPostId: String? = null,
     deepLinkShortcut: MainActivity.ShortcutRequest? = null,
     deepLinkReelSequence: Long = 0L
@@ -238,6 +246,7 @@ fun VividApp(
         deepLinkReelId = deepLinkReelId,
         deepLinkReelSequence = deepLinkReelSequence,
         deepLinkProfileUserId = deepLinkProfileUserId,
+        deepLinkProfileSequence = deepLinkProfileSequence,
         deepLinkPostId = deepLinkPostId,
         deepLinkShortcut = deepLinkShortcut
     )

@@ -56,7 +56,11 @@ fun CreateReelScreen(
     val context = LocalContext.current
     val publishInteraction = remember { MutableInteractionSource() }
     val state by viewModel.state.collectAsState()
+    var draftBusy by remember { mutableStateOf(false) }
+    val publishing = state !is CreateReelUiState.Idle && state !is CreateReelUiState.Error && state !is CreateReelUiState.Success
+    val isBusy = publishing || draftBusy
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var coverTimeMs by remember { mutableStateOf<Long?>(null) }
     var caption by remember { mutableStateOf("") }
     var withWatermark by remember { mutableStateOf(true) }
     var trimStartMs by remember { mutableLongStateOf(0L) }
@@ -81,6 +85,7 @@ fun CreateReelScreen(
     LaunchedEffect(recordedPath) {
         if (recordedPath.isNotBlank()) {
             selectedUri = Uri.parse(recordedPath)
+            coverTimeMs = null
             trimStartMs = 0L
             trimEndMs = -1L
             viewModel.reset()
@@ -104,6 +109,7 @@ fun CreateReelScreen(
     ) { uri: Uri? ->
         uri?.let {
             selectedUri = it
+            coverTimeMs = null
             trimStartMs = 0L
             trimEndMs = -1L
             viewModel.reset()
@@ -141,6 +147,34 @@ fun CreateReelScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(VividSpace.xs))
+
+            val draftUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (!draftUserId.isNullOrBlank()) {
+                ReelDraftPanel(
+                    uid = draftUserId,
+                    current = selectedUri?.let { ReelDraft(it, caption, trimStartMs, trimEndMs, coverTimeMs,
+                        withWatermark, selectedMusicUri, selectedTrack?.assetFile, selectedTrack?.title.orEmpty(),
+                        selectedTrack?.artist.orEmpty(), musicVolume, originalVolume) },
+                    publishing = publishing,
+                    onBusy = { draftBusy = it },
+                    onSavedPaths = { draft -> selectedUri = draft.video; selectedMusicUri = draft.music },
+                    onRestore = { draft ->
+                        selectedUri = draft.video; caption = draft.caption
+                        trimStartMs = draft.trimStart; trimEndMs = draft.trimEnd; coverTimeMs = draft.cover
+                        withWatermark = draft.watermark; selectedMusicUri = draft.music
+                        musicVolume = draft.musicVolume; originalVolume = draft.originalVolume
+                        selectedTrack = if (draft.music != null || draft.musicAsset != null)
+                            MusicTrack("draft", draft.musicTitle, draft.musicArtist, "", "", draft.musicAsset, draft.music) else null
+                        viewModel.reset()
+                    },
+                    onDiscard = {
+                        selectedUri = null; caption = ""; coverTimeMs = null
+                        trimStartMs = 0; trimEndMs = -1
+                        selectedTrack = null; selectedMusicUri = null; viewModel.reset()
+                    }
+                )
+                Spacer(Modifier.height(VividSpace.m))
+            }
 
             // Preview
             Box(
@@ -195,6 +229,7 @@ fun CreateReelScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(VividSpace.xs), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = { selectedUri = null; trimStartMs = 0L; trimEndMs = -1L; viewModel.reset() },
+                        enabled = !isBusy,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
@@ -202,6 +237,7 @@ fun CreateReelScreen(
                         Text("Cambiar")
                     }
                     FilledTonalButton(
+                        enabled = !isBusy,
                         onClick = {
                             backStackEntry?.savedStateHandle?.set("trimInputUri", selectedUri.toString())
                             navController.navigate("video_trimmer")
@@ -218,6 +254,7 @@ fun CreateReelScreen(
             if (selectedUri != null && trimEndMs > trimStartMs && trimEndMs > 0L) {
                 Spacer(Modifier.height(VividSpace.s))
                 AssistChip(
+                    enabled = !isBusy,
                     onClick = {
                         backStackEntry?.savedStateHandle?.set("trimInputUri", selectedUri.toString())
                         navController.navigate("video_trimmer")
@@ -261,11 +298,11 @@ fun CreateReelScreen(
                             )
                         }
                         if (selectedTrack != null) {
-                            IconButton(onClick = { selectedTrack = null; selectedMusicUri = null }) {
+                            IconButton(enabled = !isBusy, onClick = { selectedTrack = null; selectedMusicUri = null }) {
                                 Icon(Icons.Default.Close, contentDescription = "Quitar música")
                             }
                         }
-                        FilledTonalButton(onClick = { showMusicSheet = true }, shape = VividExpressiveShapes.SegmentedControl) {
+                        FilledTonalButton(enabled = !isBusy, onClick = { showMusicSheet = true }, shape = VividExpressiveShapes.SegmentedControl) {
                             Text(if (selectedTrack != null) "Cambiar" else "Elegir")
                         }
                     }
@@ -283,9 +320,16 @@ fun CreateReelScreen(
                             Text("Marca de agua \"Vivid\"", style = MaterialTheme.typography.titleSmall)
                             Text("Tu logo en cada frame", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Switch(checked = withWatermark, onCheckedChange = { withWatermark = it })
+                        Switch(enabled = !isBusy, checked = withWatermark, onCheckedChange = { withWatermark = it })
                     }
                 }
+                Spacer(Modifier.height(VividSpace.m))
+            }
+
+            selectedUri?.let { uri ->
+                ReelCoverPicker(uri, trimStartMs, trimEndMs, coverTimeMs,
+                    enabled = !isBusy,
+                    onTimeSelected = { coverTimeMs = it })
                 Spacer(Modifier.height(VividSpace.m))
             }
 
@@ -293,6 +337,7 @@ fun CreateReelScreen(
             OutlinedTextField(
                 value = caption,
                 onValueChange = { caption = it },
+                enabled = !isBusy,
                 label = { Text("Caption") },
                 placeholder = { Text("Escribe algo…") },
                 modifier = Modifier.fillMaxWidth(),
@@ -302,7 +347,6 @@ fun CreateReelScreen(
 
             Spacer(Modifier.height(VividSpace.m))
 
-            val isBusy = state !is CreateReelUiState.Idle && state !is CreateReelUiState.Error && state !is CreateReelUiState.Success
 
             Button(
                 onClick = {
@@ -317,7 +361,8 @@ fun CreateReelScreen(
                             musicUri = selectedMusicUri,
                             musicAssetFile = selectedTrack?.assetFile,
                             musicVolume = musicVolume,
-                            originalVolume = originalVolume
+                            originalVolume = originalVolume,
+                            coverTimeMs = coverTimeMs
                         )
                     }
                 },
@@ -326,7 +371,7 @@ fun CreateReelScreen(
                 interactionSource = publishInteraction,
                 shape = pressPrimaryButtonShape(publishInteraction)
             ) {
-                if (isBusy) {
+                if (publishing) {
                     LoadingIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.onPrimary, polygons = VividMaterialShapes.LoadingSequence)
                     Spacer(Modifier.width(10.dp))
                     Text("Subiendo…")

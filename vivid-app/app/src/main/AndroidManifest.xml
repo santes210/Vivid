@@ -89,6 +89,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vivid" android:host="profile" />
                 <data android:scheme="vivid" android:host="post" />
                 <data android:scheme="vivid" android:host="reel" />
             </intent-filter>

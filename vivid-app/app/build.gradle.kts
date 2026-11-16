@@ -304,6 +304,7 @@ kotlin {
 }
 
 dependencies {
+    implementation("com.google.zxing:core:3.5.3")
     // TODO [KMP]: Cuando los repositorios Android migren a las interfaces
     // del módulo shared, descomentar esta línea:
     // implementation(project(":shared"))

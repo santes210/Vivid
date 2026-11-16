@@ -58,7 +58,8 @@ class CreatePostViewModel @Inject constructor(
         caption: String,
         musicTrack: com.vivid.app.presentation.create.MusicTrack? = null,
         musicUri: Uri? = null,
-        visibility: PostVisibility = PostVisibility.PUBLIC
+        visibility: PostVisibility = PostVisibility.PUBLIC,
+        altText: String = ""
     ) {
         viewModelScope.launch {
             try {
@@ -199,6 +200,7 @@ class CreatePostViewModel @Inject constructor(
                         "storageKey" to storageKey,
                         "provider" to "backblaze-direct",
                         "caption" to caption.trim(),
+                        "altText" to altText.trim().take(1000),
                         "captionFold" to TextFold.fold(caption),
                         "likesCount" to 0L,
                         "commentsCount" to 0L,
@@ -228,6 +230,7 @@ class CreatePostViewModel @Inject constructor(
                         "isPrivate" to isPrivate,
                         "imageBase64" to compressedBase64,
                         "caption" to caption.trim(),
+                        "altText" to altText.trim().take(1000),
                         "captionFold" to TextFold.fold(caption),
                         "likesCount" to 0L,
                         "commentsCount" to 0L,

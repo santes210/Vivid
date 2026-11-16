@@ -19,6 +19,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -133,6 +136,7 @@ fun VividNavigation(
     deepLinkChatId: String? = null,
     deepLinkReelId: String? = null,
     deepLinkProfileUserId: String? = null,
+    deepLinkProfileSequence: Long = 0L,
     deepLinkPostId: String? = null,
     deepLinkShortcut: com.vivid.app.MainActivity.ShortcutRequest? = null,
     deepLinkReelSequence: Long = 0L
@@ -212,8 +216,17 @@ fun VividNavigation(
             }
         }
     }
-    LaunchedEffect(deepLinkProfileUserId) {
-        if (!deepLinkProfileUserId.isNullOrBlank()) {
+    var profileLinkUser by remember { mutableStateOf(auth.currentUser?.uid) }
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { profileLinkUser = it.currentUser?.uid }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+    var handledProfileLink by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    LaunchedEffect(deepLinkProfileUserId, deepLinkProfileSequence, profileLinkUser) {
+        val request = deepLinkProfileUserId?.let { it to deepLinkProfileSequence }
+        if (!profileLinkUser.isNullOrBlank() && !deepLinkProfileUserId.isNullOrBlank() && request != handledProfileLink) {
+            handledProfileLink = request
             navController.navigate("profile/${Uri.encode(deepLinkProfileUserId)}") {
                 popUpTo(Screen.Feed.route)
             }

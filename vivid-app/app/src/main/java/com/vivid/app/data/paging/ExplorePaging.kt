@@ -128,6 +128,7 @@ internal fun mapExplorePost(doc: DocumentSnapshot, blockedUserIds: Set<String>):
         isVideo = doc.getBoolean("isVideo") ?: false,
         thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
         caption = doc.getString("caption") ?: "",
+        altText = doc.getString("altText").orEmpty(),
         likesCount = doc.getLong("likesCount")?.toInt() ?: 0,
         commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0,
         timestamp = doc.getLong("timestamp") ?: 0L,

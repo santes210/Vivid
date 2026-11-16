@@ -24,6 +24,15 @@ import java.io.FileOutputStream
  */
 object VideoThumbnailer {
 
+    suspend fun durationMs(context: Context, uri: Uri): Long = withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+        } catch (_: Exception) { 0L }
+        finally { runCatching { retriever.release() } }
+    }
+
     private const val TAG = "VideoThumbnailer"
 
     /**
@@ -35,7 +44,8 @@ object VideoThumbnailer {
         context: Context,
         videoUri: Uri,
         outputFile: File,
-        targetWidth: Int = 480
+        targetWidth: Int = 480,
+        frameTimeMs: Long? = null
     ): File? = withContext(Dispatchers.IO) {
         if (outputFile.exists()) outputFile.delete()
 
@@ -48,11 +58,11 @@ object VideoThumbnailer {
                 ?.toLongOrNull() ?: 0L
 
             // Frame en el segundo 1, o a la mitad si el video es muy corto
-            val timeUs = if (durationMs > 2000) 1_000_000L else (durationMs * 1000L) / 2
+            val timeUs = VideoCoverTiming.frameTime(frameTimeMs, durationMs) * 1000L
 
             val fullBitmap = retriever.getFrameAtTime(
                 timeUs,
-                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                MediaMetadataRetriever.OPTION_CLOSEST
             ) ?: run {
                 Log.w(TAG, "No se pudo extraer frame del video")
                 return@withContext null
@@ -68,7 +78,7 @@ object VideoThumbnailer {
             }
 
             fullBitmap.recycle()
-            scaled.recycle()
+            if (scaled !== fullBitmap) scaled.recycle()
 
             Log.d(TAG, "Thumbnail extraído: ${outputFile.length() / 1024} KB")
             outputFile

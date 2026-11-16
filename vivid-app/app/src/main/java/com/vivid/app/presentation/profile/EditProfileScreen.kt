@@ -39,6 +39,7 @@ fun EditProfileScreen(
     val user = FirebaseAuth.getInstance().currentUser
 
     var displayName by remember { mutableStateOf(user?.displayName ?: user?.email?.substringBefore("@") ?: "") }
+    var website by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var username by remember { mutableStateOf(user?.email?.substringBefore("@") ?: "") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -54,6 +55,7 @@ fun EditProfileScreen(
                 .get()
                 .addOnSuccessListener { doc ->
                     bio = doc.getString("bio") ?: ""
+                    website = doc.getString("website").orEmpty()
                     val existingUsername = doc.getString("username")
                     if (!existingUsername.isNullOrBlank()) username = existingUsername
                     val existingName = doc.getString("displayName")
@@ -138,6 +140,12 @@ fun EditProfileScreen(
             maxLines = 3
         )
 
+        Spacer(Modifier.height(VividSpace.s))
+        OutlinedTextField(value = website, onValueChange = { website = it },
+            label = { Text(androidx.compose.ui.res.stringResource(com.vivid.app.R.string.profile_website)) },
+            placeholder = { Text("https://…") }, singleLine = true,
+            isError = validProfileWebsite(website) == null, modifier = Modifier.fillMaxWidth())
+
         errorMessage?.let {
             Spacer(modifier = Modifier.height(VividSpace.s))
             Text(it, color = MaterialTheme.colorScheme.error)
@@ -165,6 +173,7 @@ fun EditProfileScreen(
                             context = context,
                             displayName = displayName.trim(),
                             bio = bio.trim(),
+                            website = website,
                             username = username.trim(),
                             imageUri = profileImageUri,
                             onSuccess = onSave,
@@ -242,12 +251,15 @@ private suspend fun saveProfile(
     context: Context,
     displayName: String,
     bio: String,
+    website: String,
     username: String,
     imageUri: Uri?,
     onSuccess: () -> Unit,
     onError: (String) -> Unit
 ) {
     val user = FirebaseAuth.getInstance().currentUser ?: return onError("No hay sesión iniciada")
+    val normalizedWebsite = validProfileWebsite(website)
+        ?: return onError(context.getString(com.vivid.app.R.string.profile_website_invalid))
     val db = FirebaseFirestore.getInstance()
 
     val baseData = mutableMapOf<String, Any>(
@@ -257,6 +269,7 @@ private suspend fun saveProfile(
         // Campos plegados (sin tildes) del buscador inteligente.
         "displayNameFold" to TextFold.fold(displayName),
         "bio" to bio,
+        "website" to normalizedWebsite,
         "username" to username,
         "usernameLower" to username.lowercase(),
         "usernameFold" to TextFold.fold(username),

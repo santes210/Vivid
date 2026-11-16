@@ -65,6 +65,8 @@ fun CreatePostScreen(
     viewModel: CreatePostViewModel = hiltViewModel()
 ) {
     var selectedContentType by remember { mutableStateOf(CreateContentType.POST) }
+    var altText by remember { mutableStateOf("") }
+    var draftBusy by remember { mutableStateOf(false) }
     var caption by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isUploading by remember { mutableStateOf(false) }
@@ -117,6 +119,7 @@ fun CreatePostScreen(
     LaunchedEffect(capturedPhotoPath) {
         if (capturedPhotoPath.isNotBlank()) {
             selectedImageUri = Uri.parse(capturedPhotoPath)
+            altText = ""
             errorMessage = null
             currentBackStackEntry?.savedStateHandle?.remove<String>("capturedPhoto")
         }
@@ -125,8 +128,11 @@ fun CreatePostScreen(
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        selectedImageUri = uri
-        errorMessage = null
+        if (uri != null) {
+            selectedImageUri = uri
+            altText = ""
+            errorMessage = null
+        }
     }
 
     Scaffold(
@@ -173,6 +179,7 @@ fun CreatePostScreen(
             ) {
                 FilterChip(
                     selected = selectedContentType == CreateContentType.POST,
+                    enabled = !isUploading && !draftBusy,
                     onClick = { selectedContentType = CreateContentType.POST },
                     label = { Text("Publicación", fontWeight = if (selectedContentType == CreateContentType.POST) FontWeight.Bold else FontWeight.Normal) },
                     leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
@@ -185,6 +192,7 @@ fun CreatePostScreen(
                 )
                 FilterChip(
                     selected = selectedContentType == CreateContentType.STORY,
+                    enabled = !isUploading && !draftBusy,
                     onClick = { selectedContentType = CreateContentType.STORY },
                     label = { Text("Story") },
                     leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
@@ -196,6 +204,7 @@ fun CreatePostScreen(
                 )
                 FilterChip(
                     selected = selectedContentType == CreateContentType.REEL,
+                    enabled = !isUploading && !draftBusy,
                     onClick = { selectedContentType = CreateContentType.REEL },
                     label = { Text("Reel") },
                     leadingIcon = { Icon(Icons.Default.MovieCreation, contentDescription = null) },
@@ -208,6 +217,28 @@ fun CreatePostScreen(
             }
 
             Spacer(modifier = Modifier.height(VividSpace.m))
+
+            val draftUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (selectedContentType == CreateContentType.POST && !draftUid.isNullOrBlank()) {
+                ReelDraftPanel(uid = draftUid, forPost = true,
+                    current = selectedImageUri?.let { ReelDraft(it, caption, 0, -1, null, false,
+                        selectedMusicUri, selectedTrack?.assetFile, selectedTrack?.title.orEmpty(),
+                        selectedTrack?.artist.orEmpty(), 1f, 1f, audience.value, altText) },
+                    publishing = isUploading, onBusy = { draftBusy = it },
+                    onSavedPaths = { draft -> selectedImageUri = draft.video; selectedMusicUri = draft.music },
+                    onRestore = { draft ->
+                        selectedImageUri = draft.video; caption = draft.caption; altText = draft.altText
+                        audience = PostVisibility.fromValue(draft.visibility)
+                        selectedMusicUri = draft.music
+                        selectedTrack = if (draft.music != null || draft.musicAsset != null)
+                            MusicTrack("draft", draft.musicTitle, draft.musicArtist, "", "", draft.musicAsset, draft.music) else null
+                    },
+                    onDiscard = {
+                        selectedImageUri = null; caption = ""; altText = ""
+                        selectedMusicUri = null; selectedTrack = null; audience = PostVisibility.PUBLIC
+                    })
+                Spacer(Modifier.height(VividSpace.m))
+            }
 
             // Si eligió Reel, redirigir
             if (selectedContentType == CreateContentType.REEL) {
@@ -358,6 +389,7 @@ fun CreatePostScreen(
                 horizontalArrangement = Arrangement.spacedBy(VividSpace.s)
             ) {
                 FilledTonalButton(
+                    enabled = !isUploading && !draftBusy,
                     onClick = { imagePickerLauncher.launch("image/*") },
                     modifier = Modifier.weight(1f),
                     shape = VividExpressiveShapes.SecondaryButton,
@@ -371,6 +403,7 @@ fun CreatePostScreen(
                     Text("Galería")
                 }
                 Button(
+                    enabled = !isUploading && !draftBusy,
                     onClick = { navController.navigate("camera") },
                     modifier = Modifier.weight(1f),
                     shape = VividExpressiveShapes.SecondaryButton
@@ -426,12 +459,13 @@ fun CreatePostScreen(
                         )
                     }
                     if (selectedTrack != null) {
-                        IconButton(onClick = { selectedTrack = null; selectedMusicUri = null }) {
+                        IconButton(enabled = !isUploading && !draftBusy, onClick = { selectedTrack = null; selectedMusicUri = null }) {
                             Icon(Icons.Default.Close, contentDescription = "Quitar música")
                         }
                     }
                     FilledTonalButton(
-                        onClick = { showMusicSheet = true },
+                        enabled = !isUploading && !draftBusy,
+                    onClick = { showMusicSheet = true },
                         shape = VividExpressiveShapes.SegmentedControl
                     ) {
                         Text(
@@ -457,6 +491,7 @@ fun CreatePostScreen(
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 SegmentedButton(
                     selected = audience == PostVisibility.PUBLIC,
+                    enabled = !isUploading && !draftBusy,
                     onClick = { audience = PostVisibility.PUBLIC },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     icon = { Icon(Icons.Outlined.Public, contentDescription = null) },
@@ -464,6 +499,7 @@ fun CreatePostScreen(
                 )
                 SegmentedButton(
                     selected = audience == PostVisibility.FRIENDS,
+                    enabled = !isUploading && !draftBusy,
                     onClick = { audience = PostVisibility.FRIENDS },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     icon = { Icon(Icons.Outlined.Group, contentDescription = null) },
@@ -486,6 +522,7 @@ fun CreatePostScreen(
             OutlinedTextField(
                 value = caption,
                 onValueChange = { caption = it },
+                enabled = !isUploading && !draftBusy,
                 label = { Text(stringResource(R.string.create_caption_label)) },
                 placeholder = { Text(stringResource(R.string.create_caption_placeholder)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -496,6 +533,12 @@ fun CreatePostScreen(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
                 )
             )
+
+            OutlinedTextField(value = altText, onValueChange = { altText = it.take(1000) },
+                enabled = !isUploading && !draftBusy, modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.post_alt_text)) },
+                supportingText = { Text(stringResource(R.string.post_alt_hint)) }, maxLines = 4)
+            Spacer(Modifier.height(VividSpace.s))
 
             val extractedTags = remember(caption) { Hashtags.extract(caption) }
             if (extractedTags.isNotEmpty()) {
@@ -545,7 +588,8 @@ fun CreatePostScreen(
                 ) {
                     suggestedTags.forEach { tag ->
                         SuggestionChip(
-                            onClick = { caption = Hashtags.appendToCaption(caption, tag) },
+                            enabled = !isUploading && !draftBusy,
+                    onClick = { caption = Hashtags.appendToCaption(caption, tag) },
                             label = { Text(Hashtags.display(tag)) },
                             icon = {
                                 Icon(
@@ -575,11 +619,12 @@ fun CreatePostScreen(
                             caption = caption,
                             musicTrack = selectedTrack,
                             musicUri = selectedMusicUri,
-                            visibility = audience
+                            visibility = audience,
+                            altText = altText
                         )
                     }
                 },
-                enabled = !isUploading && selectedImageUri != null,
+                enabled = !isUploading && !draftBusy && selectedImageUri != null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

@@ -89,7 +89,12 @@ class VividDatabaseMigrationsTest {
     @Test
     fun `ALL_MIGRATIONS covers every step up to VERSION`() {
         assertEquals(VividDatabase.VERSION - 1, VividDatabase.ALL_MIGRATIONS.size)
-        assertEquals(9, VividDatabase.VERSION)
+        assertEquals(10, VividDatabase.VERSION)
+    }
+
+    @Test fun `MIGRATION_9_10 adds alternative text`() {
+        assertEquals(9, VividDatabase.MIGRATION_9_10.startVersion)
+        assertEquals(10, VividDatabase.MIGRATION_9_10.endVersion)
     }
 
     // ── Entity default values match DDL defaults ──
@@ -133,6 +138,7 @@ class VividDatabaseMigrationsTest {
         assertEquals("", post.musicStorageKey)
         // Field added in MIGRATION_8_9 (audiencia para la búsqueda offline)
         assertEquals("public", post.visibility)
+        assertEquals("", post.altText)
     }
 
     @Test

@@ -79,8 +79,13 @@ fun ProfileScreen(
     var profile by remember(userId, currentUserId) { mutableStateOf(ProfileUiState(uid = userId, isCurrentUser = isOwnProfile)) }
     var photoPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
     var reelPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
+    var savedCollections by remember(userId, currentUserId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var selectedCollection by remember(userId, currentUserId) { mutableStateOf<String?>(null) }
+    var organizePost by remember(userId, currentUserId) { mutableStateOf<ProfilePost?>(null) }
+    var showShareProfile by remember(userId) { mutableStateOf(false) }
     var savedPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
     var selectedPost by remember(userId, currentUserId) { mutableStateOf<ProfilePost?>(null) }
+    var showPins by remember(userId) { mutableStateOf(false) }
     var showProfileMenu by remember(userId, currentUserId) { mutableStateOf(false) }
     var selectedTabIndex by remember(userId, currentUserId) { mutableIntStateOf(0) } // 0: Posts, 1: Reels, 2: Guardados
 
@@ -95,6 +100,7 @@ fun ProfileScreen(
     var loadFailed by remember(userId, currentUserId) { mutableStateOf(false) }
     var retryKey by remember(userId, currentUserId) { mutableIntStateOf(0) }
 
+    val pinBusy by viewModel.pinBusy.collectAsState()
     val relationshipState by viewModel.relationshipState.collectAsState()
     val isFollowActionLoading by viewModel.isFollowActionLoading.collectAsState()
     val followActionError by viewModel.followActionError.collectAsState()
@@ -123,6 +129,7 @@ fun ProfileScreen(
         reelsFailed = false
         var active = true
         var savedGeneration = 0
+        var previousSavedIds: Set<String>? = null
         val mediaJobs = mutableListOf<kotlinx.coroutines.Job>()
         var profileListener: ListenerRegistration? = null
         var followListener: ListenerRegistration? = null
@@ -150,9 +157,11 @@ fun ProfileScreen(
                     val data = snapshot.data.orEmpty()
                     profile = ProfileUiState(
                         uid = userId,
+                        pinnedContent = (data["pinnedContent"] as? List<*>)?.filterIsInstance<String>().orEmpty(),
                         username = data["username"] as? String ?: "vivid_user",
                         displayName = data["displayName"] as? String ?: "Usuario Vivid",
                         bio = data["bio"] as? String ?: "",
+                        website = data["website"] as? String ?: "",
                         avatarUrl = data["avatarUrl"] as? String ?: "",
                         avatarBase64 = data["avatarBase64"] as? String ?: "",
                         followersCount = (data["followersCount"] as? Long)?.toInt() ?: 0,
@@ -197,6 +206,8 @@ fun ProfileScreen(
                     photoPosts = snapshot?.documents.orEmpty().map { doc ->
                         ProfilePost(
                             id = doc.id,
+                            durationMs = doc.getLong("durationMs") ?: 0L,
+                            altText = doc.getString("altText").orEmpty(),
                             visibility = doc.getString("visibility") ?: "public",
                             videoUrl = doc.getString("videoUrl").orEmpty(),
                             thumbnailUrl = doc.getString("thumbnailUrl").orEmpty(),
@@ -242,6 +253,8 @@ fun ProfileScreen(
                         val videoUrl = doc.getString("videoUrl").orEmpty()
                         ProfilePost(
                             id = doc.id,
+                            durationMs = doc.getLong("durationMs") ?: 0L,
+                            altText = doc.getString("altText").orEmpty(),
                             collection = "reels",
                             storageKey = doc.getString("storageKey").orEmpty(),
                             imageUrl = doc.getString("thumbnailUrl").orEmpty(),
@@ -254,6 +267,16 @@ fun ProfileScreen(
                         )
                     }.sortedByDescending { it.timestamp }
                     reelsLoaded = true
+                    snapshot?.documents.orEmpty().forEach { doc ->
+                        val thumbnailKey = doc.getString("thumbnailStorageKey").orEmpty()
+                        if (thumbnailKey.isNotBlank()) mediaJobs += scope.launch {
+                            viewModel.refreshSignedUrl(thumbnailKey)?.let { url ->
+                                if (active) reelPosts = reelPosts.map {
+                                    if (it.id == doc.id) it.copy(thumbnailUrl = url, imageUrl = url) else it
+                                }
+                            }
+                        }
+                    }
                 }
 
             // ── Pestaña Guardados (solo en el perfil propio) ──
@@ -271,6 +294,11 @@ fun ProfileScreen(
                         }
                         savedFailed = false
                         val savedIds = snap?.documents.orEmpty().map { it.id }
+                        savedCollections = snap?.documents.orEmpty().associate { it.id to it.getString("collectionName").orEmpty() }
+                        // Moving between collections changes only saved metadata, not the posts.
+                        // Avoid re-reading every saved post for each organization action.
+                        if (savedLoaded && savedIds.toSet() == previousSavedIds && savedPosts.size == savedIds.size) return@addSnapshotListener
+                        previousSavedIds = savedIds.toSet()
                         if (savedIds.isEmpty()) {
                             savedPosts = emptyList()
                             savedLoaded = true
@@ -285,6 +313,8 @@ fun ProfileScreen(
                                             list.add(
                                                 ProfilePost(
                                                     id = postDoc.id,
+                                                    durationMs = postDoc.getLong("durationMs") ?: 0L,
+                                                    altText = postDoc.getString("altText").orEmpty(),
                                                     imageUrl = postDoc.getString("imageUrl").orEmpty(),
                                                     imageBase64 = postDoc.getString("imageBase64").orEmpty(),
                                                     storageKey = postDoc.getString("storageKey").orEmpty(),
@@ -346,10 +376,11 @@ fun ProfileScreen(
         1 -> reelsFailed
         else -> savedFailed
     }
+    val collectionNames = savedCollections.values.filter { it.isNotBlank() }.distinct().sorted()
     val currentDisplayList = when (selectedTabIndex) {
-        0 -> visiblePosts
-        1 -> reelPosts
-        2 -> savedPosts
+        0 -> orderProfileContent(visiblePosts, profile.pinnedContent)
+        1 -> orderProfileContent(reelPosts, profile.pinnedContent)
+        2 -> savedPosts.filter { selectedCollection == null || savedCollections[it.id].orEmpty() == selectedCollection }
         else -> visiblePosts
     }
 
@@ -504,6 +535,18 @@ fun ProfileScreen(
                 }
             }
 
+            if (isProfileLoaded && !loadFailed) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                    TextButton(onClick = { showShareProfile = true }) { Text(stringResource(R.string.profile_share_title)) }
+                }
+            }
+
+            if (isOwnProfile && isProfileLoaded && profile.pinnedContent.isNotEmpty()) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                    TextButton(onClick = { showPins = true }) { Text(stringResource(R.string.profile_manage_pins)) }
+                }
+            }
+
             // ── Pestañas primarias M3 (Posts / Reels / Guardados) ──
             if (canViewContent) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
@@ -545,6 +588,21 @@ fun ProfileScreen(
                 }
             }
 
+            if (isOwnProfile && selectedTabIndex == 2 && canViewContent) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { FilterChip(selected = selectedCollection == null, onClick = { selectedCollection = null },
+                            label = { Text(stringResource(R.string.saved_all)) }) }
+                        item { FilterChip(selected = selectedCollection == "", onClick = { selectedCollection = "" },
+                            label = { Text(stringResource(R.string.saved_unfiled)) }) }
+                        items(collectionNames.size) { index ->
+                            val name = collectionNames[index]
+                            FilterChip(selected = selectedCollection == name, onClick = { selectedCollection = name }, label = { Text(name) })
+                        }
+                    }
+                }
+            }
+
             // ── Contenido de la pestaña activa ──
             if (isProfileLoaded && !loadFailed && !canViewContent) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
@@ -578,14 +636,57 @@ fun ProfileScreen(
                 }
             } else if (currentDisplayList.isEmpty()) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                    EmptyPostsPlaceholder()
+                    if (selectedTabIndex == 2) Text(stringResource(R.string.saved_collection_empty), Modifier.padding(24.dp))
+                    else EmptyPostsPlaceholder()
                 }
             } else {
                 items(currentDisplayList, key = { "${it.collection}/${it.id}" }) { post ->
-                    ProfilePostThumbnail(post = post, onClick = { selectedPost = post })
+                    ProfilePostThumbnail(post = post, onClick = { selectedPost = post },
+                        onOrganize = if (isOwnProfile && selectedTabIndex == 2) ({ organizePost = post }) else null,
+                        pinned = post.contentKey() in profile.pinnedContent,
+                        pinEnabled = !pinBusy,
+                        onTogglePin = if (isOwnProfile && selectedTabIndex != 2) ({
+                            viewModel.togglePinned(post) { error ->
+                                val message = when (error) {
+                                    null -> R.string.profile_pins_updated
+                                    "limit" -> R.string.profile_pin_limit
+                                    else -> R.string.profile_pin_error
+                                }
+                                scope.launch { snackbarHostState.showSnackbar(context.getString(message)) }
+                            }
+                        }) else null)
                 }
             }
         }
+    }
+
+    if (showShareProfile) ProfileShareDialog(userId, profile.username) { showShareProfile = false }
+    organizePost?.let { post ->
+        SavedCollectionDialog(initialName = savedCollections[post.id].orEmpty(),
+            names = collectionNames,
+            onDismiss = { organizePost = null },
+            onSave = { name, completed -> viewModel.organizeSaved(post.id, name, completed) })
+    }
+
+    if (showPins) {
+        AlertDialog(onDismissRequest = { showPins = false },
+            title = { Text(stringResource(R.string.profile_manage_pins)) },
+            text = {
+                Column {
+                    profile.pinnedContent.forEach { key ->
+                        val item = (photoPosts + reelPosts).find { it.contentKey() == key }
+                        TextButton(enabled = !pinBusy, onClick = {
+                            viewModel.removePinned(key) { success ->
+                                if (!success) scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profile_pin_error)) }
+                            }
+                        }) {
+                            Text(stringResource(R.string.profile_unpin) + ": " +
+                                (item?.caption?.takeIf { it.isNotBlank() } ?: key), maxLines = 2)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showPins = false }) { Text(stringResource(R.string.viewer_close)) } })
     }
 
     // ── Visor de post ──

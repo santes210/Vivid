@@ -64,8 +64,11 @@ class CreateReelViewModel @Inject constructor(
         musicUri: Uri? = null,
         musicAssetFile: String? = null,
         musicVolume: Float = 1.0f,
-        originalVolume: Float = 0.3f
+        originalVolume: Float = 0.3f,
+        coverTimeMs: Long? = null
     ) {
+        if (_state.value !is CreateReelUiState.Idle && _state.value !is CreateReelUiState.Error) return
+        _state.value = CreateReelUiState.Compressing(0)
         viewModelScope.launch {
             try {
                 val user = auth.currentUser
@@ -140,12 +143,15 @@ class CreateReelViewModel @Inject constructor(
 
                 // 3. Miniatura (JPEG, 720px ancho)
                 val thumbFile = File(context.cacheDir, "reel_thumb_${System.currentTimeMillis()}.jpg")
-                VideoThumbnailer.extract(
+                val extractedCover = VideoThumbnailer.extract(
                     context,
                     Uri.fromFile(File(finalVideoPath)),
                     thumbFile,
-                    targetWidth = 720
+                    targetWidth = 720,
+                    frameTimeMs = coverTimeMs?.let { com.vivid.app.util.VideoCoverTiming.exportedTime(it, trimStartMs, trimEndMs) }
                 )
+
+                check(coverTimeMs == null || extractedCover != null) { "No se pudo generar la portada seleccionada. Elige otro fotograma." }
 
                 // 4. Subir video a B2 (URL firmada para bucket privado)
                 _state.value = CreateReelUiState.Uploading(0)
@@ -165,7 +171,8 @@ class CreateReelViewModel @Inject constructor(
 
                 // 5. Metadata
                 _state.value = CreateReelUiState.SavingMetadata
-                writeReelMetadata(user.uid, publicUrl, thumbUrl, caption, remoteKey)
+                writeReelMetadata(user.uid, publicUrl, thumbUrl, caption, remoteKey,
+                    VideoThumbnailer.durationMs(context, Uri.fromFile(File(finalVideoPath))), thumbKey)
 
                 firestore.collection("users").document(user.uid).update(
                     "reelsCount", FieldValue.increment(1),
@@ -174,6 +181,8 @@ class CreateReelViewModel @Inject constructor(
 
                 _state.value = CreateReelUiState.Success
                 Log.d(TAG, "Reel publicado OK")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.e(TAG, "Error publicando reel", e)
                 _state.value = CreateReelUiState.Error(e.message ?: "Error subiendo reel")
@@ -186,7 +195,9 @@ class CreateReelViewModel @Inject constructor(
         videoUrl: String,
         thumbnailUrl: String,
         caption: String,
-        storageKey: String
+        storageKey: String,
+        durationMs: Long,
+        thumbnailStorageKey: String
     ) {
         val userDoc = firestore.collection("users").document(uid).get().await()
         val username = userDoc.getString("username")
@@ -203,6 +214,8 @@ class CreateReelViewModel @Inject constructor(
             "isPrivate" to isPrivate,
             "videoUrl" to videoUrl,
             "thumbnailUrl" to thumbnailUrl,
+            "thumbnailStorageKey" to thumbnailStorageKey,
+            "durationMs" to durationMs,
             "storageKey" to storageKey,
             "provider" to "backblaze-direct",
             "caption" to caption.trim(),
@@ -217,7 +230,8 @@ class CreateReelViewModel @Inject constructor(
     }
 
     fun reset() {
-        _state.value = CreateReelUiState.Idle
+        if (_state.value is CreateReelUiState.Error || _state.value is CreateReelUiState.Success)
+            _state.value = CreateReelUiState.Idle
     }
 
     companion object {
