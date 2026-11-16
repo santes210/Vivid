@@ -1,0 +1,29 @@
+name: Worker tests
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Worker unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Tests use Node's built-in runner; no secrets or install are required.
+      - name: Test storage routes
+        working-directory: cloudflare-worker
+        run: npm test
