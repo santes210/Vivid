@@ -482,6 +482,7 @@ fun VividNavigation(
             }
             sharedComposable(Screen.Profile.route) {
                 ProfileScreen(
+                    onOpenProfile = { uid -> navController.navigate("profile/${Uri.encode(uid)}") },
                     userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty(),
                     onLogout = {
                         navController.navigate(Screen.Auth.route) {
@@ -489,7 +490,12 @@ fun VividNavigation(
                         }
                     },
                     onEditProfile = { navController.navigate("edit_profile") },
-                    onSettings = { navController.navigate(Screen.Settings.route) }
+                    onSettings = { navController.navigate(Screen.Settings.route) },
+                    onNavigateToChat = { chatId, receiverId, receiverName ->
+                        navController.navigate(
+                            "chat/${Uri.encode(chatId)}/${Uri.encode(receiverId)}/${Uri.encode(receiverName)}"
+                        ) { launchSingleTop = true }
+                    }
                 )
             }
             sharedComposable(
@@ -498,6 +504,7 @@ fun VividNavigation(
             ) { backStackEntry ->
                 val userId = backStackEntry.arguments?.getString("userId") ?: ""
                 ProfileScreen(
+                    onOpenProfile = { uid -> navController.navigate("profile/${Uri.encode(uid)}") },
                     userId = userId,
                     onLogout = { navController.popBackStack() },
                     onEditProfile = {},

@@ -214,9 +214,8 @@ fun ReelsScreen(
         ExtendedFloatingActionButton(
             onClick = onCreateReel,
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                // safeDrawing: en nav de 3 botones el FAB ya no se pinta
-                // detrás de la barra; en gestual el inset es mínimo.
+                .align(Alignment.TopEnd)
+                // Keep creation clear of the lower share/audio controls.
                 .safeDrawingPadding()
                 .padding(20.dp),
             containerColor = MaterialTheme.colorScheme.primaryContainer,

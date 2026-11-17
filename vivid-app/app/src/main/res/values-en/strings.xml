@@ -463,4 +463,20 @@
     <string name="own_content_delete_failed">Could not confirm deletion. Check your connection and retry.</string>
     <string name="own_content_deleted">Content deleted</string>
     <string name="own_content_deleted_cleanup">Post deleted. Some file or local data cleanup could not be completed.</string>
+    <string name="profile_followers_title">Followers</string>
+    <string name="profile_following_title">Following</string>
+    <string name="profile_connections_refresh">Refresh</string>
+    <string name="profile_connections_error">Could not load the list. Check your connection and try again.</string>
+    <string name="profile_connections_retry">Retry</string>
+    <string name="profile_connections_more">Load more</string>
+    <string name="profile_followers_empty">You have no followers yet.</string>
+    <string name="profile_following_empty">You are not following anyone yet.</string>
+    <string name="discovery_not_interested">Not interested</string>
+    <string name="discovery_mute_author">Mute account in Home</string>
+    <string name="discovery_manage">Home preferences</string>
+    <string name="discovery_reset">Reset</string>
+    <string name="discovery_reset_explanation">Hidden posts and muted accounts will appear in Home again. These preferences are saved for your account on this device only. They do not affect who you follow or messages.</string>
+    <string name="feed_for_you_tab">For you</string>
+    <string name="feed_following_tab">Following</string>
+    <string name="feed_following_empty">No posts to show from the accounts you follow. Follow more people or refresh for updates.</string>
 </resources>

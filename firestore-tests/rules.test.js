@@ -203,6 +203,22 @@ describe("posts", () => {
     await assertFails(doc.update({ caption: "modificado" }));
   });
 
+  test("following feed queries only accepted authors including private posts", async () => {
+    await seedUser("alice", { isPrivate: true });
+    await seedUser("carol", { isPrivate: true });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.doc("users/alice/followers/bob").set({ userId: "bob" });
+      await db.doc("users/carol/followers/bob").set({ userId: "bob" });
+      await db.doc("posts/follow-a").set({ userId: "alice", isPrivate: true, timestamp: 2 });
+      await db.doc("posts/follow-c").set({ userId: "carol", isPrivate: true, timestamp: 1 });
+    });
+    const query = (uid) => env.authenticatedContext(uid).firestore().collection("posts")
+      .where("userId", "in", ["alice", "carol"]).orderBy("timestamp", "desc").limit(21);
+    await assertSucceeds(query("bob").get());
+    await assertFails(query("eve").get());
+  });
+
   test("borrar post: solo el autor", async () => {
     await seedUser("alice");
     await seedPost("p1");
