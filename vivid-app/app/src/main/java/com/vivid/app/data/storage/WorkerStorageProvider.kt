@@ -4,6 +4,8 @@ import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.vivid.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.CertificatePinner
@@ -119,13 +121,16 @@ class WorkerStorageProvider(
 
         val sha1 = sha1Hex(file)
 
+        val uploadContext = currentCoroutineContext()
         val uploadRequest = Request.Builder()
             .url(uploadUrl)
             .header("Authorization", uploadToken)
             .header("X-Bz-File-Name", b2EncodeFileName(effectiveKey))
             .header("Content-Type", contentType)
             .header("X-Bz-Content-Sha1", sha1)
-            .post(file.asRequestBody(contentType.toMediaType()))
+            .post(UploadProgressBody(file.asRequestBody(contentType.toMediaType()),
+                checkActive = { uploadContext.ensureActive() },
+                progress = { percent -> onProgress(20 + percent * 70 / 100) }))
             .build()
 
         client.newCall(uploadRequest).execute().use { response ->
@@ -152,7 +157,8 @@ class WorkerStorageProvider(
         } catch (e: IOException) {
             val message = e.message.orEmpty().lowercase()
 
-            if (message.contains("quota") || message.contains("too large")) {
+            if ((e is StorageRequestException && e.statusCode in setOf(403, 413)) ||
+                message.contains("quota") || message.contains("too large")) {
                 runCatching { deleteFile(effectiveKey) }
                 throw e
             }
@@ -207,9 +213,10 @@ class WorkerStorageProvider(
 
     private suspend fun callWorker(
         path: String,
-        body: JSONObject
+        body: JSONObject,
+        refreshSession: Boolean = false
     ): JSONObject {
-        val idToken = currentIdToken()
+        val idToken = currentIdToken(refreshSession)
 
         val request = Request.Builder()
             .url("$baseUrl/$path")
@@ -220,15 +227,12 @@ class WorkerStorageProvider(
         client.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
 
-            if (!response.isSuccessful) {
-                val message = runCatching {
-                    JSONObject(raw).optString("error")
-                }.getOrNull()
-                    ?.takeIf { it.isNotBlank() }
-                    ?: raw.take(200)
-
-                throw IOException("$path → ${response.code}: $message")
+            if (response.code == 401 && !refreshSession && path == "storage/sign") {
+                response.close()
+                // Only replay the read-only signing request, never uploads or deletes.
+                return callWorker(path, body, refreshSession = true)
             }
+            if (!response.isSuccessful) throw StorageRequestException(response.code)
 
             return runCatching {
                 JSONObject(raw)
@@ -238,11 +242,11 @@ class WorkerStorageProvider(
         }
     }
 
-    private suspend fun currentIdToken(): String {
+    private suspend fun currentIdToken(forceRefresh: Boolean = false): String {
         val user = auth.currentUser
             ?: throw IOException("Necesitas iniciar sesión para subir o ver archivos")
 
-        val result = user.getIdToken(false).await()
+        val result = user.getIdToken(forceRefresh).await()
 
         return result.token
             ?: throw IOException("No se pudo obtener el token de sesión")

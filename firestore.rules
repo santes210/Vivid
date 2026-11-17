@@ -280,9 +280,30 @@ service cloud.firestore {
 
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 
+      match /comments/{commentId} {
+        function canComment() {
+          let story = get(/databases/$(database)/documents/stories/$(storyId)).data;
+          return canReadOwnedContent(story.userId, story.get('isPrivate', true))
+            && story.get('expiresAt', 0) > request.time.toMillis();
+        }
+        allow read: if canComment();
+        allow create: if canComment()
+          && request.resource.data.keys().hasOnly(['userId', 'username', 'text', 'createdAt'])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.username is string && request.resource.data.username.size() <= 100
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if signedIn() && (resource.data.userId == request.auth.uid
+          || get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid);
+      }
+
       // Vistas: quién vio la story
       match /viewers/{viewerId} {
-        allow read: if canReadOwnedContent(
+        allow read: if (isUser(viewerId)
+          || get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid)
+          && canReadOwnedContent(
           get(/databases/$(database)/documents/stories/$(storyId)).data.userId,
           get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true)
         );
@@ -290,7 +311,8 @@ service cloud.firestore {
             get(/databases/$(database)/documents/stories/$(storyId)).data.userId,
             get(/databases/$(database)/documents/stories/$(storyId)).data.get('isPrivate', true)
           ) && isUser(viewerId)
-          && request.resource.data.get('uid', viewerId) == viewerId;
+          && request.resource.data.get('uid', viewerId) == viewerId
+          && request.resource.data.get('liked', false) is bool;
         allow delete: if isUser(viewerId)
           || get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
       }

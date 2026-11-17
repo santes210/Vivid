@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.vivid.app.R
 
 @Composable
-internal fun ZoomablePostImage(content: ChatReelVideo, onRetry: () -> Unit) {
+internal fun ZoomablePostImage(content: ChatReelVideo, onRetry: () -> Unit, onDeleted: () -> Unit = {}) {
     var zoom by remember(content.id, content.url) { mutableStateOf(ImageZoom()) }
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var fill by remember { mutableStateOf(false) }
@@ -41,8 +41,8 @@ internal fun ZoomablePostImage(content: ChatReelVideo, onRetry: () -> Unit) {
     }
     LaunchedEffect(viewport, fill) { zoom = ImageZoom() }
     if (share) com.vivid.app.presentation.reels.ContentShareSheet(
-        content = com.vivid.app.presentation.reels.ShareContent("vivid://post/${content.id}", content.caption),
-        playbackControls = false, onDismiss = { share = false }
+        content = com.vivid.app.presentation.reels.ShareContent("vivid://post/${content.id}", content.caption, content.ownerId),
+        onDeleted = onDeleted, playbackControls = false, onDismiss = { share = false }
     )
     if (failed) {
         Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,

@@ -18,6 +18,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
+import com.vivid.app.R
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,7 +79,8 @@ data class StoryViewer(
     val username: String,
     val avatarUrl: String,
     val avatarBase64: String,
-    val viewedAt: Long
+    val viewedAt: Long,
+    val liked: Boolean = false
 )
 
 @UnstableApi
@@ -91,7 +97,10 @@ fun StoryViewerRoute(
     var stories by remember { mutableStateOf<List<ViewerStory>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var currentIndex by remember { mutableStateOf(0) }
+    var showComments by remember { mutableStateOf(false) }
     var showViewersSheet by remember { mutableStateOf(false) }
+    val interactions: StoryInteractionViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    var replyFocused by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf("") }
     var isSendingReply by remember { mutableStateOf(false) }
     var viewers by remember { mutableStateOf<List<StoryViewer>>(emptyList()) }
@@ -173,6 +182,31 @@ fun StoryViewerRoute(
     val isOwner = currentStory?.userId == currentUserId
     val playbackPolicy = rememberPlaybackPolicy()
 
+    var liked by remember(currentStory?.id) { mutableStateOf(false) }
+    var likeReady by remember(currentStory?.id) { mutableStateOf(false) }
+    var liking by remember(currentStory?.id) { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var resumed by remember(lifecycleOwner) { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+            resumed = lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val paused = !resumed || replyFocused || replyText.isNotBlank() || isSendingReply || liking || showViewersSheet || showComments
+    LaunchedEffect(currentStory?.id) { replyText = ""; replyFocused = false }
+    DisposableEffect(currentStory?.id, currentUserId) {
+        val registration = if (currentStory != null && !isOwner && currentUserId.isNotBlank())
+            db.collection("stories").document(currentStory.id).collection("viewers").document(currentUserId)
+                .addSnapshotListener { snapshot, error ->
+                    likeReady = error == null && snapshot?.exists() == true
+                    if (error == null) liked = snapshot?.getBoolean("liked") == true
+                }
+        else null
+        onDispose { registration?.remove() }
+    }
+
     // Precarga la siguiente foto solo en Wi-Fi (no gasta datos móviles).
     LaunchedEffect(currentIndex, stories, playbackPolicy.prefetchNextMedia) {
         if (!playbackPolicy.prefetchNextMedia) return@LaunchedEffect
@@ -195,17 +229,20 @@ fun StoryViewerRoute(
                 val username = userSnap.getString("username") ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "usuario"
                 val avatarUrl = userSnap.getString("avatarUrl").orEmpty()
                 val avatarBase64 = userSnap.getString("avatarBase64").orEmpty()
-                val exists = viewerRef.get().await().exists()
-                viewerRef.set(mapOf(
-                    "uid" to currentUserId,
-                    "username" to username,
-                    "avatarUrl" to avatarUrl,
-                    "avatarBase64" to avatarBase64,
-                    "viewedAt" to System.currentTimeMillis()
-                )).await()
-                if (!exists) {
-                    db.collection("stories").document(story.id).update("viewersCount", FieldValue.increment(1)).await()
-                }
+                db.runTransaction { txn ->
+                    val exists = txn.get(viewerRef).exists()
+                    txn.set(viewerRef, mapOf(
+                        "uid" to currentUserId,
+                        "username" to username,
+                        "avatarUrl" to avatarUrl,
+                        "avatarBase64" to avatarBase64,
+                        "viewedAt" to System.currentTimeMillis()
+                    ), com.google.firebase.firestore.SetOptions.merge())
+                    if (!exists) {
+                        txn.update(db.collection("stories").document(story.id), "viewersCount", FieldValue.increment(1))
+                    }
+                    null
+                }.await()
             }
         }
     }
@@ -223,7 +260,8 @@ fun StoryViewerRoute(
                             username = d.getString("username") ?: "usuario",
                             avatarUrl = d.getString("avatarUrl").orEmpty(),
                             avatarBase64 = d.getString("avatarBase64").orEmpty(),
-                            viewedAt = d.getLong("viewedAt") ?: 0L
+                            viewedAt = d.getLong("viewedAt") ?: 0L,
+                            liked = d.getBoolean("liked") == true
                         )
                     } ?: emptyList()
                     viewers = list
@@ -244,9 +282,9 @@ fun StoryViewerRoute(
         onDispose { reg?.remove() }
     }
 
-    LaunchedEffect(currentStory?.id, currentStory?.type, stories.size) {
+    LaunchedEffect(currentStory?.id, currentStory?.type, stories.size, paused) {
         val story = currentStory ?: return@LaunchedEffect
-        if (story.type != "video") {
+        if (story.type != "video" && !paused) {
             delay(5_500)
             if (currentIndex >= stories.lastIndex) onClose() else currentIndex++
         }
@@ -256,9 +294,10 @@ fun StoryViewerRoute(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(stories, currentIndex) {
+            .pointerInput(stories, currentIndex, paused) {
                 detectTapGestures(
-                    onTap = { offset ->
+                    onTap = tap@{ offset ->
+                        if (paused) return@tap
                         if (offset.x < size.width / 3f) {
                             currentIndex = (currentIndex - 1).coerceAtLeast(0)
                         } else if (offset.x > 2 * size.width / 3f) {
@@ -283,6 +322,7 @@ fun StoryViewerRoute(
                 when (currentStory.type) {
                     "video" -> VideoStoryPlayer(
                         story = currentStory,
+                        paused = paused,
                         onCompleted = {
                             if (currentIndex >= stories.lastIndex) onClose() else currentIndex++
                         }
@@ -302,13 +342,17 @@ fun StoryViewerRoute(
                 )
 
                 // Bottom interaction bar — Material You 3
-                Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(VividSpace.s)) {
+                Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding().navigationBarsPadding().padding(VividSpace.s)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(onClick = { showComments = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.story_comments))
+                        }
                     if (isOwner) {
                         // Owner: viewers pill + caption
                         if (viewersCount > 0 || true) {
                             FilledTonalButton(
                                 onClick = { showViewersSheet = true },
-                                modifier = Modifier.align(Alignment.Center),
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
                                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = Color.White),
                                 shape = VividExpressiveShapes.SearchBar
                             ) {
@@ -331,9 +375,10 @@ fun StoryViewerRoute(
                             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedTextField(
                                     value = replyText,
-                                    onValueChange = { replyText = it },
-                                    modifier = Modifier.weight(1f),
-                                    placeholder = { Text("Responder a ${currentStory.username}…", color = Color.White.copy(alpha = 0.7f)) },
+                                    onValueChange = { replyText = it.take(2000) },
+                                    enabled = !isSendingReply,
+                                    modifier = Modifier.weight(1f).onFocusChanged { replyFocused = it.isFocused },
+                                    placeholder = { Text(stringResource(R.string.story_reply_private), color = Color.White.copy(alpha = 0.7f)) },
                                     maxLines = 1,
                                     singleLine = true,
                                     shape = VividExpressiveShapes.SearchBar,
@@ -348,57 +393,37 @@ fun StoryViewerRoute(
                                     ),
                                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
                                 )
+                                IconToggleButton(checked = liked, enabled = likeReady && !liking,
+                                    onCheckedChange = { wanted ->
+                                        liking = true
+                                        scope.launch {
+                                            try {
+                                                kotlinx.coroutines.withTimeout(15_000) {
+                                                    db.collection("stories").document(currentStory.id).collection("viewers")
+                                                        .document(currentUserId).update("liked", wanted).await()
+                                                }
+                                            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                                                snackbarHostState.showSnackbar(context.getString(R.string.story_like_failed))
+                                            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                                            catch (_: Exception) { snackbarHostState.showSnackbar(context.getString(R.string.story_like_failed)) }
+                                            finally { liking = false }
+                                        }
+                                    }) {
+                                    Icon(if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        stringResource(if (liked) R.string.story_unlike else R.string.story_like),
+                                        tint = if (liked) MaterialTheme.colorScheme.primary else Color.White)
+                                }
                                 Spacer(Modifier.width(VividSpace.xs))
                                 FilledIconButton(
                                     onClick = {
                                         val txt = replyText.trim()
                                         if (txt.isBlank() || isSendingReply) return@FilledIconButton
                                         isSendingReply = true
-                                        scope.launch {
-                                            try {
-                                                // Send as chat message to story owner
-                                                val chatId = ChatRepository.buildChatId(currentUserId, currentStory.userId)
-                                                val db2 = FirebaseFirestore.getInstance()
-                                                // Ensure chat exists minimal
-                                                val meName = db2.collection("users").document(currentUserId).get().await().getString("username") ?: "Usuario"
-                                                // Use repository directly via Firestore write (avoid Hilt in this screen)
-                                                val now = System.currentTimeMillis()
-                                                val msgId = db2.collection("chats").document(chatId).collection("messages").document().id
-                                                val otherName = currentStory.username
-                                                // Create chat doc if needed (merge)
-                                                db2.collection("chats").document(chatId).set(
-                                                    mapOf(
-                                                        "participants" to listOf(currentUserId, currentStory.userId),
-                                                        "participantNames" to mapOf(currentUserId to meName, currentStory.userId to otherName),
-                                                        "updatedAt" to now,
-                                                        "lastMessage" to "↳ Respondió a tu story: $txt",
-                                                        "lastMessageType" to "story_reply",
-                                                        "lastSenderId" to currentUserId,
-                                                        "lastTimestamp" to now,
-                                                        "unreadCounts.${currentStory.userId}" to FieldValue.increment(1)
-                                                    ),
-                                                    com.google.firebase.firestore.SetOptions.merge()
-                                                ).await()
-                                                db2.collection("chats").document(chatId).collection("messages").document(msgId).set(
-                                                    mapOf(
-                                                        "text" to txt,
-                                                        "senderId" to currentUserId,
-                                                        "receiverId" to currentStory.userId,
-                                                        "timestamp" to now,
-                                                        "type" to "story_reply",
-                                                        "isRead" to false,
-                                                        "isDelivered" to false,
-                                                        "replyToStoryId" to currentStory.id
-                                                    )
-                                                ).await()
-                                                PushSender.message(chatId, msgId)
-                                                replyText = ""
-                                                snackbarHostState.showSnackbar("Respuesta enviada ✓")
-                                            } catch (e: Exception) {
-                                                snackbarHostState.showSnackbar(e.message ?: "No se pudo enviar")
-                                            } finally {
-                                                isSendingReply = false
-                                            }
+                                        interactions.reply(currentStory.id, currentStory.userId, txt) { success ->
+                                            isSendingReply = false
+                                            if (success) replyText = ""
+                                            scope.launch { snackbarHostState.showSnackbar(context.getString(
+                                                if (success) R.string.story_reply_sent else R.string.story_reply_failed)) }
                                         }
                                     },
                                     enabled = replyText.isNotBlank() && !isSendingReply,
@@ -413,11 +438,15 @@ fun StoryViewerRoute(
                     }
                 }
 
+                }
                 VividSnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
             }
         }
     }
 
+    if (showComments && currentStory != null) {
+        key(currentStory.id) { StoryCommentsSheet(currentStory.id, currentStory.userId) { showComments = false } }
+    }
     if (showViewersSheet) {
         ViewersBottomSheet(
             viewers = viewers,
@@ -494,7 +523,7 @@ private fun ViewersRow(v: StoryViewer) {
             Text(v.username, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
             Text(timeAgo(v.viewedAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        AssistChip(onClick = {}, label = { Text("Ver perfil") }, leadingIcon = { Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(14.dp)) })
+        if (v.liked) Icon(Icons.Default.Favorite, stringResource(R.string.story_liked), tint = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -578,17 +607,17 @@ private fun StoryHeaderAvatar(story: ViewerStory) {
 
 @UnstableApi
 @Composable
-private fun VideoStoryPlayer(story: ViewerStory, onCompleted: () -> Unit) {
-    val context = LocalContext.current
+private fun VideoStoryPlayer(story: ViewerStory, paused: Boolean, onCompleted: () -> Unit) {
+    val latestCompleted by rememberUpdatedState(onCompleted)
     val player = com.vivid.app.util.rememberPooledExoPlayer(
         mediaUrl = story.videoUrl,
-        playWhenReady = true,
+        playWhenReady = !paused,
         repeatMode = Player.REPEAT_MODE_OFF
     )
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) onCompleted()
+                if (playbackState == Player.STATE_ENDED) latestCompleted()
             }
         }
         player.addListener(listener)
@@ -605,19 +634,21 @@ private fun PhotoStoryView(story: ViewerStory) {
         story.mediaUrl.isNotBlank() -> com.vivid.app.ui.components.VividAsyncImage(
             model = story.mediaUrl,
             contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 100.dp),
+            contentScale = ContentScale.Fit,
             placeholderColor = Color.Black,
             errorColor = Color.Black
         )
-        bitmap != null -> Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        bitmap != null -> Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 100.dp), contentScale = ContentScale.Fit)
         story.thumbnailUrl.isNotBlank() -> com.vivid.app.ui.components.VividAsyncImage(
             model = story.thumbnailUrl,
             contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 100.dp),
+            contentScale = ContentScale.Fit,
             placeholderColor = Color.Black,
             errorColor = Color.Black
         )
-        else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Story", color = Color.White) }
+        else -> Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 100.dp), contentAlignment = Alignment.Center) { Text("Story", color = Color.White) }
     }
 }
 

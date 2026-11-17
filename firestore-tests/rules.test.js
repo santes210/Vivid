@@ -14,7 +14,7 @@
  */
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { increment } from "firebase/firestore";
+import { increment, serverTimestamp } from "firebase/firestore";
 import { readFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 
@@ -286,6 +286,64 @@ describe("posts: audiencia por publicación", () => {
 // ---------------------------------------------------------------------------
 
 describe("stories y reels", () => {
+  test("only reel author can delete and atomically unpin it", async () => {
+    await seedUser("alice", { pinnedContent: ["reels/r-delete"] });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("reels/r-delete").set({ userId: "alice", isPrivate: false });
+    });
+    const bob = env.authenticatedContext("bob").firestore();
+    await assertFails(bob.doc("reels/r-delete").delete());
+    const alice = env.authenticatedContext("alice").firestore();
+    const batch = alice.batch();
+    batch.delete(alice.doc("reels/r-delete"));
+    batch.update(alice.doc("users/alice"), { pinnedContent: [] });
+    await assertSucceeds(batch.commit());
+  });
+
+  test("story comments enforce audience expiry authorship and moderation", async () => {
+    await seedUser("alice", { isPrivate: true });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("stories/private-comment").set({ userId: "alice", isPrivate: true, expiresAt: Date.now() + 3600000 });
+      await ctx.firestore().doc("users/alice/followers/bob").set({ uid: "bob" });
+      await ctx.firestore().doc("stories/expired-comment").set({ userId: "alice", isPrivate: false, expiresAt: Date.now() - 1000 });
+    });
+    const bob = env.authenticatedContext("bob").firestore();
+    const eve = env.authenticatedContext("eve").firestore();
+    const alice = env.authenticatedContext("alice").firestore();
+    const payload = { userId: "bob", username: "Bob", text: "Hello", createdAt: serverTimestamp() };
+    const ref = bob.doc("stories/private-comment/comments/c1");
+    await assertSucceeds(ref.set(payload));
+    await assertSucceeds(bob.collection("stories/private-comment/comments").orderBy("createdAt", "desc").limit(50).get());
+    await assertFails(eve.doc("stories/private-comment/comments/c1").get());
+    await assertFails(eve.doc("stories/private-comment/comments/forged").set(payload));
+    await assertFails(ref.update({ text: "Changed" }));
+    await assertFails(eve.doc("stories/private-comment/comments/c1").delete());
+    await assertFails(bob.doc("stories/expired-comment/comments/c1").set(payload));
+    await assertFails(bob.doc("stories/private-comment/comments/large").set({ ...payload, text: "x".repeat(1001) }));
+    await assertSucceeds(alice.doc("stories/private-comment/comments/c1").delete());
+    await assertSucceeds(ref.set(payload));
+    await assertSucceeds(ref.delete());
+  });
+
+  test("story hearts: only own reaction and owner can read viewers", async () => {
+    await seedUser("alice");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("stories/s-heart").set({ userId: "alice", isPrivate: false });
+    });
+    const bob = env.authenticatedContext("bob").firestore();
+    const alice = env.authenticatedContext("alice").firestore();
+    const eve = env.authenticatedContext("eve").firestore();
+    const ref = bob.doc("stories/s-heart/viewers/bob");
+    await assertSucceeds(ref.set({ uid: "bob", viewedAt: 1, liked: true }));
+    await assertSucceeds(ref.update({ liked: false }));
+    await assertFails(ref.update({ liked: "yes" }));
+    await assertSucceeds(ref.get());
+    await assertSucceeds(alice.doc("stories/s-heart/viewers/bob").get());
+    await assertSucceeds(alice.collection("stories/s-heart/viewers").get());
+    await assertFails(eve.doc("stories/s-heart/viewers/bob").get());
+    await assertFails(eve.doc("stories/s-heart/viewers/bob").update({ liked: true }));
+  });
+
   test("story: viewersCount solo incrementa de a 1", async () => {
     await seedUser("alice");
     await env.withSecurityRulesDisabled(async (ctx) => {
