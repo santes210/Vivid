@@ -58,7 +58,9 @@ internal fun ProfileHeader(
     isFollowActionLoading: Boolean,
     isVerified: Boolean = false,
     onToggleFollow: () -> Unit,
-    onEditProfile: () -> Unit
+    onEditProfile: () -> Unit,
+    onFollowers: (() -> Unit)? = null,
+    onFollowing: (() -> Unit)? = null
 ) {
     val haptics = rememberVividHaptics()
     var showAvatarViewer by remember(profile.uid) { mutableStateOf(false) }
@@ -226,8 +228,8 @@ internal fun ProfileHeader(
         ) {
             ProfileStat(profile.postsCount?.toString() ?: "—", "Posts", Modifier.weight(1f))
             ProfileStat(profile.reelsCount?.toString() ?: "—", "Reels", Modifier.weight(1f))
-            ProfileStat(profile.followersCount.toString(), "Seguidores", Modifier.weight(1f))
-            ProfileStat(profile.followingCount.toString(), "Siguiendo", Modifier.weight(1f))
+            ProfileStat(profile.followersCount.toString(), "Seguidores", Modifier.weight(1f), onClick = onFollowers)
+            ProfileStat(profile.followingCount.toString(), "Siguiendo", Modifier.weight(1f), onClick = onFollowing)
         }
 
         Spacer(Modifier.height(VividSpace.m))

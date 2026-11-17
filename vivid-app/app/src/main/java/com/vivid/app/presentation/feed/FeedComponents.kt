@@ -379,7 +379,9 @@ internal fun PostCard(
     onImageUrlExpired: (PostData) -> Unit = {},
     onMusicUrlExpired: (PostData) -> Unit = {},
     onVideoUrlExpired: (PostData) -> Unit = {},
-    onHashtagClick: (String) -> Unit = {}
+    onHashtagClick: (String) -> Unit = {},
+    onNotInterested: ((PostData) -> Unit)? = null,
+    onMuteAuthor: ((PostData) -> Unit)? = null
 ) {
     val haptics = rememberVividHaptics()
 
@@ -420,6 +422,16 @@ internal fun PostCard(
                     }
                 ) { Icon(Icons.Default.MoreVert, stringResource(R.string.feed_more_options)) }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    if (post.userId != currentUserId) {
+                        onNotInterested?.let { action ->
+                            DropdownMenuItem(text = { Text(stringResource(R.string.discovery_not_interested)) },
+                                onClick = { showMenu = false; action(post) })
+                        }
+                        onMuteAuthor?.let { action ->
+                            DropdownMenuItem(text = { Text(stringResource(R.string.discovery_mute_author)) },
+                                onClick = { showMenu = false; action(post) })
+                        }
+                    }
                     if (post.userId == currentUserId) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.feed_edit)) }, onClick = { showMenu = false; onEditPost(post) }, leadingIcon = { Icon(Icons.Default.Edit, null) })
                         DropdownMenuItem(

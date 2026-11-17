@@ -66,6 +66,7 @@ fun ProfileScreen(
     onEditProfile: () -> Unit = {},
     onSettings: () -> Unit = {},
     onNavigateToChat: (chatId: String, receiverId: String, name: String) -> Unit = { _, _, _ -> },
+    onOpenProfile: (String) -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -82,6 +83,7 @@ fun ProfileScreen(
     var savedCollections by remember(userId, currentUserId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var selectedCollection by remember(userId, currentUserId) { mutableStateOf<String?>(null) }
     var organizePost by remember(userId, currentUserId) { mutableStateOf<ProfilePost?>(null) }
+    var connections by remember(userId, currentUserId) { mutableStateOf<Boolean?>(null) }
     var showShareProfile by remember(userId) { mutableStateOf(false) }
     var savedPosts by remember(userId, currentUserId) { mutableStateOf<List<ProfilePost>>(emptyList()) }
     var selectedPost by remember(userId, currentUserId) { mutableStateOf<ProfilePost?>(null) }
@@ -528,7 +530,9 @@ fun ProfileScreen(
                         isFollowActionLoading = isFollowActionLoading,
                         isVerified = profile.isVerified,
                         onToggleFollow = { viewModel.toggleFollow(userId) },
-                        onEditProfile = onEditProfile
+                        onEditProfile = onEditProfile,
+                        onFollowers = if (isOwnProfile) ({ connections = true }) else null,
+                        onFollowing = if (isOwnProfile) ({ connections = false }) else null
                     )
                 } else if (!isProfileLoaded) {
                     ProfileHeaderSkeleton()
@@ -672,6 +676,18 @@ fun ProfileScreen(
         }
     }
 
+    connections?.let { followers ->
+        if (isOwnProfile) ProfileConnectionsSheet(userId, followers,
+            onDismiss = { connections = null }, onOpenProfile = onOpenProfile,
+            onMessage = { person ->
+                val sender = auth.currentUser?.uid.orEmpty()
+                if (sender.isNotBlank() && sender == userId && person.uid.isNotBlank() && person.uid != sender) {
+                    connections = null
+                    val chatId = com.vivid.app.domain.repository.ChatRepository.buildChatId(sender, person.uid)
+                    onNavigateToChat(chatId, person.uid, person.displayName.ifBlank { person.username })
+                }
+            })
+    }
     if (showShareProfile) ProfileShareDialog(userId, profile.username) { showShareProfile = false }
     organizePost?.let { post ->
         SavedCollectionDialog(initialName = savedCollections[post.id].orEmpty(),

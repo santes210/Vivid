@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import com.vivid.app.ui.components.VividPullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -61,16 +63,46 @@ fun FeedScreen(
     onOpenStoryViewer: (storyId: String) -> Unit = {},
     onCreateStory: () -> Unit = {}
 ) {
+    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    var followingOnly by rememberSaveable(uid) { mutableStateOf(false) }
+    val stateHolder = rememberSaveableStateHolder()
+    key(uid, followingOnly) {
+        stateHolder.SaveableStateProvider("$uid/$followingOnly") {
+            FeedContent(onOpenMessages, onOpenRequests, onOpenProfile, onOpenUserProfile,
+                onOpenHashtag, onOpenStoryViewer, onCreateStory, followingOnly,
+                onSelectFollowing = {
+                    com.vivid.app.util.ExoPlayerPool.pauseAll()
+                    followingOnly = it
+                })
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FeedContent(
+    onOpenMessages: () -> Unit,
+    onOpenRequests: () -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenUserProfile: (String) -> Unit,
+    onOpenHashtag: (String) -> Unit,
+    onOpenStoryViewer: (String) -> Unit,
+    onCreateStory: () -> Unit,
+    followingOnly: Boolean,
+    onSelectFollowing: (Boolean) -> Unit
+) {
     val feedViewModel: FeedViewModel = hiltViewModel()
     val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
     val blockedUsersState by blockedUsersViewModel.state.collectAsState()
     val blockedUserIds = blockedUsersState.userIds
     val currentUserId = feedViewModel.currentUserId
     val context = LocalContext.current
+    val (discovery, discoveryStore) = rememberFeedPreferences(currentUserId)
+    var showResetDiscovery by remember(currentUserId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember(currentUserId) { SnackbarHostState() }
 
-    val returning = remember(currentUserId) { feedViewModel.returnState?.takeIf { it.userId == currentUserId } }
+    val returning = remember(currentUserId) { feedViewModel.returnStates[followingOnly]?.takeIf { it.userId == currentUserId } }
     var posts by remember(currentUserId) { mutableStateOf(returning?.posts.orEmpty()) }
     var isLoading by remember(currentUserId) { mutableStateOf(true) }
     var isError by remember(currentUserId) { mutableStateOf(false) }
@@ -96,11 +128,17 @@ fun FeedScreen(
 
     var queryAudience by remember(currentUserId) { mutableStateOf(returning?.let { it.following to it.blocked }) }
     SideEffect {
-        if (blockedUsersState.isLoaded) feedViewModel.returnState = FeedReturnState(
+        if (blockedUsersState.isLoaded) feedViewModel.returnStates[followingOnly] = FeedReturnState(
             currentUserId, posts, paginatedIds, lastVisibleDoc, hasMore, followingUserIds, blockedUserIds
         )
     }
-    val listState = rememberLazyListState()
+    val savedScroll = feedViewModel.returnScrolls[followingOnly]?.takeIf { it.first == currentUserId }
+    val listState = rememberLazyListState(savedScroll?.second ?: 0, savedScroll?.third ?: 0)
+    DisposableEffect(currentUserId, listState) {
+        onDispose {
+            feedViewModel.returnScrolls[followingOnly] = Triple(currentUserId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        }
+    }
     val postIds = remember(posts) { posts.mapTo(hashSetOf()) { it.id } }
     val firstPostVisible by remember(postIds, listState) {
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key in postIds } }
@@ -120,8 +158,8 @@ fun FeedScreen(
     var reportReason by remember(currentUserId) { mutableStateOf(context.getString(R.string.report_reason_inappropriate)) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    val displayPosts = remember(posts, savedPostIds, likedPostIds) {
-        posts.map { post ->
+    val displayPosts = remember(posts, savedPostIds, likedPostIds, discovery, followingUserIds, followingOnly, blockedUserIds) {
+        posts.filter { discovery.allows(it) && it.userId !in blockedUserIds && (!followingOnly || it.userId in followingUserIds) }.map { post ->
             val saved = post.id in savedPostIds
             post.copy(isSaved = saved, isLiked = likedPostIds?.contains(post.id) ?: post.isLiked)
         }
@@ -238,7 +276,7 @@ fun FeedScreen(
 
     // ── Room cache (offline / fast startup) ──
     LaunchedEffect(currentUserId) {
-        if (currentUserId.isNotBlank()) {
+        if (currentUserId.isNotBlank() && !followingOnly) {
             runCatching {
                 val cached = feedViewModel.getCachedPosts()
                 if (cached.isNotEmpty()) {
@@ -264,6 +302,36 @@ fun FeedScreen(
     DisposableEffect(currentUserId, blockedUserIds, blockedUsersState.isLoaded, followingUserIds, retryKey) {
         if (currentUserId.isBlank() || !blockedUsersState.isLoaded) {
             onDispose { }
+        } else if (followingOnly) {
+            val audience = followingUserIds to blockedUserIds
+            // Retain an unchanged tab's pages on return; refresh explicitly or on audience changes.
+            if (queryAudience == audience && returning != null && (returning.cursor != null || !returning.hasMore) && retryKey == 0) {
+                isLoading = false
+                onDispose { }
+            } else {
+                queryAudience = audience
+                isLoading = true
+                isError = false
+                paginationFailed = false
+                val job = scope.launch {
+                    try {
+                        val result = kotlinx.coroutines.withTimeout(20_000) {
+                            loadFollowingPage(currentUserId, null, likedPostIds, followingUserIds - blockedUserIds)
+                        }
+                        posts = result.posts
+                        lastVisibleDoc = result.lastDoc
+                        hasMore = result.hasMore
+                        paginatedIds = result.posts.map { it.id }.toSet()
+                    } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                        isError = true
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        isError = true
+                    } finally { isLoading = false; isRefreshing = false }
+                }
+                onDispose { job.cancel() }
+            }
         } else {
             isLoading = posts.isEmpty()
             isError = false
@@ -445,7 +513,8 @@ fun FeedScreen(
             isLoadingMore = true
             try {
                 val result = kotlinx.coroutines.withTimeout(15_000) {
-                    loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, blockedUserIds, followingUserIds)
+                    if (followingOnly) loadFollowingPage(currentUserId, lastVisibleDoc, likedPostIds, followingUserIds - blockedUserIds)
+                    else loadMorePostsFromFirebase(currentUserId, lastVisibleDoc, likedPostIds, blockedUserIds, followingUserIds)
                 }
                 val existingIds = posts.mapTo(hashSetOf()) { it.id }
                 paginatedIds = paginatedIds + result.posts.filterNot { it.id in existingIds }.map { it.id }
@@ -513,7 +582,18 @@ fun FeedScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            PrimaryTabRow(selectedTabIndex = if (followingOnly) 1 else 0) {
+                Tab(selected = !followingOnly, onClick = { onSelectFollowing(false) },
+                    text = { Text(stringResource(R.string.feed_for_you_tab)) })
+                Tab(selected = followingOnly, onClick = { onSelectFollowing(true) },
+                    text = { Text(stringResource(R.string.feed_following_tab)) })
+            }
             VividOfflineBannerHost()
+            if (discovery.hiddenPosts.isNotEmpty() || discovery.mutedAuthors.isNotEmpty()) {
+                TextButton(onClick = { showResetDiscovery = true }) {
+                    Text(stringResource(R.string.discovery_manage))
+                }
+            }
 
             VividPullToRefreshBox(
                 isRefreshing = isRefreshing,
@@ -553,7 +633,11 @@ fun FeedScreen(
                             }
                         }
                         isError && displayPosts.isEmpty() -> { item(key = "error") { FeedErrorState(onRetry = { retryKey++ }) } }
-                        displayPosts.isEmpty() -> { item(key = "empty") { FeedEmptyState() } }
+                        displayPosts.isEmpty() -> { item(key = "empty") {
+                            if (followingOnly) Text(stringResource(R.string.feed_following_empty), modifier = Modifier.padding(24.dp))
+                            else FeedEmptyState()
+                            if (paginationFailed) FeedErrorState(onRetry = { paginationFailed = false; paginationRetry++ })
+                        } }
                         else -> {
                             if (isError) {
                                 item(key = "refresh_error") {
@@ -586,6 +670,8 @@ fun FeedScreen(
                                         onToggleLike = onToggleLike,
                                         onShare = onSharePost,
                                         onReportPost = onReportPost,
+                                        onNotInterested = { discoveryStore.hide(it.id) },
+                                        onMuteAuthor = { discoveryStore.mute(it.userId) },
                                         onImageUrlExpired = onImageUrlExpired,
                                         onMusicUrlExpired = onMusicUrlExpired,
                                         onVideoUrlExpired = onVideoUrlExpired,
@@ -611,6 +697,16 @@ fun FeedScreen(
             }
         }
     }
+
+    if (showResetDiscovery) AlertDialog(
+        onDismissRequest = { showResetDiscovery = false },
+        title = { Text(stringResource(R.string.discovery_manage)) },
+        text = { Text(stringResource(R.string.discovery_reset_explanation)) },
+        confirmButton = { TextButton(onClick = { discoveryStore.reset(); showResetDiscovery = false }) {
+            Text(stringResource(R.string.discovery_reset))
+        } },
+        dismissButton = { TextButton(onClick = { showResetDiscovery = false }) { Text(stringResource(R.string.action_cancel)) } }
+    )
 
     // ── Dialogs ──
     selectedPostForComments?.let { post -> PostCommentsSheet(post = post, viewModel = feedViewModel, onDismiss = { selectedPostForComments = null }) }
@@ -737,7 +833,7 @@ private suspend fun loadMorePostsFromFirebase(
     FeedPageResult(visiblePosts, cursor, sourcePageWasFull)
 }
 
-private suspend fun mapPostDoc(
+internal suspend fun mapPostDoc(
     doc: DocumentSnapshot,
     currentUserId: String,
     likedPostIds: Set<String>?,

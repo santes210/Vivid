@@ -479,4 +479,20 @@
     <string name="own_content_delete_failed">No se pudo confirmar la eliminación. Comprueba la conexión y reintenta.</string>
     <string name="own_content_deleted">Contenido eliminado</string>
     <string name="own_content_deleted_cleanup">Publicación eliminada. No se pudo completar la limpieza de algunos archivos o datos locales.</string>
+    <string name="profile_followers_title">Seguidores</string>
+    <string name="profile_following_title">Siguiendo</string>
+    <string name="profile_connections_refresh">Actualizar</string>
+    <string name="profile_connections_error">No se pudo cargar la lista. Comprueba tu conexión y vuelve a intentarlo.</string>
+    <string name="profile_connections_retry">Reintentar</string>
+    <string name="profile_connections_more">Ver más</string>
+    <string name="profile_followers_empty">Todavía no tienes seguidores.</string>
+    <string name="profile_following_empty">Todavía no sigues a nadie.</string>
+    <string name="discovery_not_interested">No me interesa</string>
+    <string name="discovery_mute_author">Silenciar cuenta en Inicio</string>
+    <string name="discovery_manage">Preferencias de Inicio</string>
+    <string name="discovery_reset">Restablecer</string>
+    <string name="discovery_reset_explanation">Volverás a ver las publicaciones ocultas y las cuentas silenciadas en Inicio. Estas preferencias se guardan para tu cuenta solo en este dispositivo. No afectan a quién sigues ni a los mensajes.</string>
+    <string name="feed_for_you_tab">Para ti</string>
+    <string name="feed_following_tab">Siguiendo</string>
+    <string name="feed_following_empty">No hay publicaciones para mostrar de las cuentas que sigues. Sigue a más personas o actualiza para ver novedades.</string>
 </resources>

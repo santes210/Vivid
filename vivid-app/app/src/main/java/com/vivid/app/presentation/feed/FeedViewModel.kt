@@ -32,7 +32,8 @@ class FeedViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    internal var returnState: FeedReturnState? = null
+    internal val returnStates = mutableMapOf<Boolean, FeedReturnState>()
+    internal val returnScrolls = mutableMapOf<Boolean, Triple<String, Int, Int>>()
 
     // Room cache (future offline feature). Firestore→Room loading is
     // on-demand; FeedScreen shows its own live data.
