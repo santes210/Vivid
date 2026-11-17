@@ -14,7 +14,7 @@ import javax.inject.Inject
 
 sealed interface ChatReelState {
     data object Loading : ChatReelState
-    data object Unavailable : ChatReelState
+    data class Unavailable(val reason: MediaOpenFailure) : ChatReelState
     data class Ready(val video: ChatReelVideo) : ChatReelState
 }
 
@@ -31,11 +31,11 @@ class ChatReelViewModel @Inject constructor(private val repository: ChatReelRepo
             try {
                 _state.value = ChatReelState.Ready(withTimeout(15_000) { repository.load(id, collection) })
             } catch (_: TimeoutCancellationException) {
-                _state.value = ChatReelState.Unavailable
+                _state.value = ChatReelState.Unavailable(MediaOpenFailure.NETWORK)
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                _state.value = ChatReelState.Unavailable
+            } catch (error: Exception) {
+                _state.value = ChatReelState.Unavailable(mediaOpenFailure(error))
             }
         }
     }

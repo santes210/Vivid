@@ -641,6 +641,7 @@ fun ProfileScreen(
                 }
             } else {
                 items(currentDisplayList, key = { "${it.collection}/${it.id}" }) { post ->
+                    Box {
                     ProfilePostThumbnail(post = post, onClick = { selectedPost = post },
                         onOrganize = if (isOwnProfile && selectedTabIndex == 2) ({ organizePost = post }) else null,
                         pinned = post.contentKey() in profile.pinnedContent,
@@ -655,6 +656,17 @@ fun ProfileScreen(
                                 scope.launch { snackbarHostState.showSnackbar(context.getString(message)) }
                             }
                         }) else null)
+                    if (isOwnProfile && selectedTabIndex != 2) {
+                        com.vivid.app.presentation.common.DeleteContentAction(
+                            collection = post.collection, id = post.id, ownerId = userId,
+                            compact = true, modifier = Modifier.align(Alignment.BottomStart),
+                            onDeleted = {
+                                photoPosts = photoPosts.filterNot { it.contentKey() == post.contentKey() }
+                                reelPosts = reelPosts.filterNot { it.contentKey() == post.contentKey() }
+                                if (selectedPost?.contentKey() == post.contentKey()) selectedPost = null
+                            })
+                    }
+                    }
                 }
             }
         }

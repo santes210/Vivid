@@ -8,7 +8,7 @@ import com.vivid.app.presentation.reels.ShareContent
 @Composable
 internal fun PostShareSheet(post: PostData, onDismiss: () -> Unit) {
     ContentShareSheet(
-        content = ShareContent("vivid://post/${post.id}", post.caption),
+        content = ShareContent("vivid://post/${post.id}", post.caption, post.userId),
         playbackControls = false,
         onDismiss = onDismiss
     )

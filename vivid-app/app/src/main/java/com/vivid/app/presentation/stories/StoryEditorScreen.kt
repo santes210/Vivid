@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
@@ -21,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -150,14 +154,18 @@ fun StoryEditorScreen(
         },
         bottomBar = {
             Surface(
+                modifier = Modifier.padding(12.dp),
+                shape = MaterialTheme.shapes.extraLarge,
                 tonalElevation = 4.dp,
-                color = MaterialTheme.colorScheme.surface
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .navigationBarsPadding()
                         .padding(horizontal = VividSpace.m, vertical = VividSpace.s),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     EditorToolButton(
                         icon = Icons.Default.TextFields,
@@ -193,15 +201,15 @@ fun StoryEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Black)
-                .onSizeChanged { canvasSize = it },
+                .background(Color.Black),
             contentAlignment = Alignment.Center
         ) {
             // Base: foto o video
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(9f / 16f)
+                    .aspectRatio(if (!isVideo && baseBitmap != null)
+                        baseBitmap!!.width.toFloat() / baseBitmap!!.height.coerceAtLeast(1) else 9f / 16f)
+                    .onSizeChanged { canvasSize = it }
                     .clip(VividExpressiveShapes.Media)
             ) {
                 if (isVideo && videoPlayer != null) {
@@ -219,7 +227,7 @@ fun StoryEditorScreen(
                         bitmap = baseBitmap!!.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Fit
                     )
                 }
 
@@ -250,7 +258,7 @@ fun StoryEditorScreen(
                 if (text.isNotBlank()) {
                     overlays = overlays + StoryOverlay.TextOverlay(
                         text = text,
-                        color = Color.White.value.toInt()
+                        color = Color.White.toArgb()
                     )
                 }
                 showTextDialog = false
@@ -275,7 +283,7 @@ fun StoryEditorScreen(
         ColorPickerDialog(
             onPick = { color ->
                 overlays = overlays.map {
-                    when (it) {
+                    if (it.id != selectedOverlayId) it else when (it) {
                         is StoryOverlay.TextOverlay -> it.copy(color = color)
                         is StoryOverlay.StickerOverlay -> it.copy(color = color)
                     }
@@ -360,18 +368,11 @@ private fun EditorToolButton(
     onClick: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.onSurface
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(VividExpressiveShapes.Media)
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onClick() })
-            }
-            .padding(VividSpace.xs)
-    ) {
-        Icon(icon, contentDescription = label, tint = tint)
-        Spacer(Modifier.height(VividSpace.xxs))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = tint)
+    FilledTonalButton(onClick = onClick, shape = MaterialTheme.shapes.extraLarge,
+        colors = ButtonDefaults.filledTonalButtonColors(contentColor = tint)) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -425,9 +426,7 @@ private fun StickerPickerContent(onPick: (String) -> Unit) {
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                             .padding(VividSpace.s)
-                            .pointerInput(emoji) {
-                                detectTapGestures(onTap = { onPick(emoji) })
-                            }
+                            .clickable { onPick(emoji) }
                     )
                 }
             }
@@ -454,7 +453,7 @@ private fun ColorPickerDialog(onPick: (Int) -> Unit, onDismiss: () -> Unit) {
                             .clip(CircleShape)
                             .background(c)
                             .pointerInput(c) {
-                                detectTapGestures(onTap = { onPick(c.value.toInt()) })
+                                detectTapGestures(onTap = { onPick(c.toArgb()) })
                             }
                     )
                 }

@@ -62,11 +62,11 @@ internal fun ChatReelViewer(
                 }
                 when (val current = state) {
                     ChatReelState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    ChatReelState.Unavailable -> ChatReelError { viewModel.load(reelId, collection) }
+                    is ChatReelState.Unavailable -> ChatReelError(reason = current.reason) { viewModel.load(reelId, collection) }
                     is ChatReelState.Ready -> if (current.video.id == reelId && current.video.collection == collection) {
                         key(current.video.id, current.video.url) {
-                            if (current.video.isVideo) ChatReelPlayer(current.video, onRetry = { viewModel.load(reelId, collection) })
-                            else ZoomablePostImage(current.video, onRetry = { viewModel.load(reelId, collection) })
+                            if (current.video.isVideo) ChatReelPlayer(current.video, onDeleted = onClose, onRetry = { viewModel.load(reelId, collection) })
+                            else ZoomablePostImage(current.video, onDeleted = onClose, onRetry = { viewModel.load(reelId, collection) })
                         }
                     } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 }
@@ -76,15 +76,22 @@ internal fun ChatReelViewer(
 }
 
 @Composable
-private fun ChatReelError(onRetry: () -> Unit) {
+private fun ChatReelError(reason: MediaOpenFailure? = null, onRetry: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(stringResource(R.string.content_video_unavailable))
+        Text(stringResource(when (reason) {
+            MediaOpenFailure.SESSION -> R.string.media_open_session
+            MediaOpenFailure.ACCESS -> R.string.media_open_access
+            MediaOpenFailure.SIGNING -> R.string.media_open_signing
+            MediaOpenFailure.NETWORK -> R.string.media_open_network
+            else -> R.string.content_video_unavailable
+        }))
+        if (reason != null) Text("Código: ${reason.name}", style = MaterialTheme.typography.labelSmall)
         TextButton(onClick = onRetry) { Text(stringResource(R.string.reel_share_retry)) }
     }
 }
 
 @Composable
-private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
+private fun ChatReelPlayer(video: ChatReelVideo, onDeleted: () -> Unit, onRetry: () -> Unit) {
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val animationsEnabled = com.vivid.app.theme.LocalVividAnimationsEnabled.current
     var playRequested by remember { mutableStateOf(true) }
@@ -137,7 +144,8 @@ private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
     if (showShare) {
         com.vivid.app.presentation.reels.ContentShareSheet(
             content = com.vivid.app.presentation.reels.ShareContent(
-                "vivid://${if (video.collection == "posts") "post" else "reel"}/${video.id}", video.caption),
+                "vivid://${if (video.collection == "posts") "post" else "reel"}/${video.id}", video.caption, video.ownerId),
+            onDeleted = onDeleted,
             speed = speed, onSpeed = { speed = it }, muted = muted, onMuted = { muted = it },
             repeat = repeat, onRepeat = { repeat = it },
             onRestart = { seek(0); playRequested = true; showShare = false },
@@ -156,7 +164,7 @@ private fun ChatReelPlayer(video: ChatReelVideo, onRetry: () -> Unit) {
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    if (failed) ChatReelError(onRetry)
+    if (failed) ChatReelError(onRetry = onRetry)
     else AdaptiveVideoLayout(showControls = controlsVisible && !locked, media = { mediaModifier ->
         Box(mediaModifier.clip(MaterialTheme.shapes.extraLarge).background(Color.Black)) {
             AndroidView(

@@ -33,6 +33,7 @@ class ChatReelRepositoryTest {
         every { doc.exists() } returns true
         every { doc.getString("storageKey") } returns "reels/author/video.mp4"
         every { doc.getString("username") } returns "author"
+        every { doc.getString("userId") } returns "author-id"
         every { doc.getString("caption") } returns "Caption"
         every { doc.getString("altText") } returns "Image description"
         coEvery { storage.signDownloadUrl(any(), any()) } returns "https://media.example/video.mp4"
@@ -112,6 +113,19 @@ class ChatReelRepositoryTest {
         try { repository.load("r1", "posts"); fail("Expected invalid video") }
         catch (_: IllegalArgumentException) { }
         verify(exactly = 0) { doc.getString("imageBase64") }
+    }
+
+    @Test fun `storage denial never falls back to saved media URL`() = runTest {
+        coEvery { storage.signDownloadUrl(any(), any()) } throws com.vivid.app.data.storage.StorageRequestException(403)
+        try { repository.load("r1"); fail("Expected access failure") }
+        catch (error: MediaOpenException) { assertEquals(MediaOpenFailure.ACCESS, error.reason) }
+        verify(exactly = 0) { doc.getString("videoUrl") }
+    }
+
+    @Test fun `storage outage identifies the signing stage`() = runTest {
+        coEvery { storage.signDownloadUrl(any(), any()) } throws com.vivid.app.data.storage.StorageRequestException(503)
+        try { repository.load("r1"); fail("Expected signing failure") }
+        catch (error: MediaOpenException) { assertEquals(MediaOpenFailure.SIGNING, error.reason) }
     }
 
 }

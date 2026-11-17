@@ -28,7 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.vivid.app.R
 import com.vivid.app.theme.VividExpressiveShapes
 
-data class ShareContent(val link: String, val caption: String)
+data class ShareContent(val link: String, val caption: String, val ownerId: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +43,7 @@ internal fun ContentShareSheet(
     onRestart: () -> Unit = {},
     playbackControls: Boolean = true,
     onDismiss: () -> Unit,
+    onDeleted: () -> Unit = {},
     viewModel: ReelShareViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -106,6 +107,11 @@ internal fun ContentShareSheet(
                         Text(content.caption, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
+                val reference = Regex("vivid://(post|reel)/([A-Za-z0-9_-]{1,128})").matchEntire(content.link)
+                if (reference != null) com.vivid.app.presentation.common.DeleteContentAction(
+                    collection = if (reference.groupValues[1] == "post") "posts" else "reels",
+                    id = reference.groupValues[2], ownerId = content.ownerId,
+                    onDeleted = { onDismiss(); onDeleted() })
                 OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = VividExpressiveShapes.SearchBar,
                     label = { Text(stringResource(R.string.share_search)) }, leadingIcon = { Icon(Icons.Default.Search, null) },

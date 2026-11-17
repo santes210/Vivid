@@ -131,7 +131,7 @@ internal fun ReelPage(
     LaunchedEffect(exoPlayer, playbackSpeed) { exoPlayer.setPlaybackSpeed(playbackSpeed) }
     if (showShare) {
         ContentShareSheet(
-            ShareContent(ReelLinks.create(reel.id), reel.caption), playbackSpeed, onSpeed = { playbackSpeed = it },
+            ShareContent(ReelLinks.create(reel.id), reel.caption, reel.userId), playbackSpeed, onSpeed = { playbackSpeed = it },
             muted = isMuted, onMuted = { isMuted = it },
             repeat = repeatVideo, onRepeat = { repeatVideo = it },
             onRestart = {
@@ -140,6 +140,7 @@ internal fun ReelPage(
                 isPausedByUser = false
                 showShare = false
             },
+            onDeleted = { exoPlayer.pause(); showShare = false },
             onDismiss = { showShare = false }
         )
     }
